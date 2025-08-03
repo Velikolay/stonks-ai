@@ -3,7 +3,6 @@ version: '3.8'
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: rag_postgres
     environment:
       POSTGRES_DB: rag_db
       POSTGRES_USER: rag_user
@@ -12,7 +11,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
       interval: 10s
@@ -21,7 +19,6 @@ services:
 
   rag_api:
     build: .
-    container_name: rag_api
     ports:
       - "8000:8000"
     environment:
@@ -32,7 +29,28 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
+      - .:/app
+      - /app/venv
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/.mypy_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app"]
+
+  db_migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      - DATABASE_URL=postgresql://rag_user:rag_password@postgres:5432/rag_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrate
 
 volumes:
   postgres_data:

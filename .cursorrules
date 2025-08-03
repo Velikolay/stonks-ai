@@ -1,4 +1,6 @@
 # Cursor Rules for Python Development
+- Stay concise in code, documentation, and testing
+- Don't do more than I ask you to and generally do the minimal version of what I command
 
 ## Code Style and Formatting
 - Always use Black formatter with 88 character line length
@@ -24,6 +26,9 @@
 - Separate concerns (API, business logic, data access)
 - Use relative imports within the project
 - Keep configuration in environment variables or config files
+- Build a logical package structure to organize the project
+- Avoid creating example python scripts when you can add a simple main function
+- Don't add any .sh scripts, try keeping all commands in a single Makefile
 
 ## API Development
 - Use FastAPI for REST APIs
@@ -34,11 +39,10 @@
 - Document APIs with docstrings and type hints
 
 ## Testing
-- Write unit tests for all functions
+- Write unit tests for key modules and APIs only
 - Use pytest for testing framework
 - Mock external dependencies
 - Test both success and error cases
-- Aim for high test coverage
 - Use descriptive test names
 
 ## Documentation
@@ -47,6 +51,8 @@
 - Include setup and usage instructions
 - Add inline comments for complex logic
 - Keep documentation up to date
+- Keep documentation short and to the point
+- Keep all documentation in a single README.md file
 
 ## Security
 - Never commit API keys or secrets

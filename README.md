@@ -10,6 +10,7 @@ A Python application that implements a Retrieval-Augmented Generation (RAG) syst
 - **API**: FastAPI-based REST API for easy integration
 - **Document Management**: Upload and manage documents through the API
 - **Persistence**: Documents and embeddings are stored in PostgreSQL
+- **Database Migrations**: Alembic-based migration system for schema management
 - **Docker**: Complete containerized setup with Docker Compose
 
 ## Prerequisites
@@ -40,6 +41,11 @@ OPENAI_API_KEY=your_openai_api_key_here
 docker-compose up -d
 ```
 
+4. **Run database migrations:**
+```bash
+docker-compose --profile migrate up db_migrate
+```
+
 The API will be available at `http://localhost:8000`
 
 ## Manual Installation (without Docker)
@@ -52,7 +58,7 @@ pip install -r requirements.txt
 2. **Set up PostgreSQL with pgvector:**
    - Install PostgreSQL
    - Install pgvector extension
-   - Create database and run `init.sql`
+   - Create database
 
 3. **Set environment variables:**
 ```bash
@@ -60,9 +66,63 @@ cp env.example .env
 # Edit .env with your OpenAI API key and database URL
 ```
 
-4. **Run the application:**
+4. **Initialize database:**
+```bash
+python db.py init
+```
+
+5. **Run the application:**
 ```bash
 python app.py
+```
+
+## Database Management
+
+The project uses Alembic for database migrations. Here are the available commands:
+
+### Using Make (recommended):
+```bash
+# Initialize database with migrations
+make db-init
+
+# Reset database (drop and recreate)
+make db-reset
+
+# Show migration status
+make db-status
+
+# Show migration history
+make db-history
+```
+
+### Using Python directly:
+```bash
+# Initialize database
+python db.py init
+
+# Reset database
+python db.py reset
+
+# Show status
+python db.py status
+
+# Show history
+python db.py history
+```
+
+### Docker commands:
+```bash
+# Start services
+make docker-up
+
+# Run migrations
+make docker-migrate
+
+# Stop services
+make docker-down
+
+# View logs
+make docker-logs
 ```
 
 ## Development
