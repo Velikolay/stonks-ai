@@ -1,0 +1,88 @@
+# Cursor Rules for Python Development
+
+## Code Style and Formatting
+- Always use Black formatter with 88 character line length
+- Use isort for import sorting with Black profile
+- Follow PEP 8 style guidelines
+- Use type hints for all function parameters and return values
+- Use docstrings for all functions, classes, and modules
+- Prefer f-strings over .format() or % formatting
+
+## Python Best Practices
+- Use virtual environments for all projects
+- Use requirements.txt or pyproject.toml for dependencies
+- Implement proper error handling with try/except blocks
+- Use logging instead of print statements for debugging
+- Follow the principle of least surprise
+- Write self-documenting code with clear variable names
+- Use list/dict comprehensions when appropriate
+- Prefer pathlib over os.path for file operations
+
+## Project Structure
+- Keep related files together in modules
+- Use __init__.py files to define module exports
+- Separate concerns (API, business logic, data access)
+- Use relative imports within the project
+- Keep configuration in environment variables or config files
+
+## API Development
+- Use FastAPI for REST APIs
+- Implement proper request/response models with Pydantic
+- Use proper HTTP status codes
+- Implement error handling and validation
+- Use async/await for I/O operations
+- Document APIs with docstrings and type hints
+
+## Testing
+- Write unit tests for all functions
+- Use pytest for testing framework
+- Mock external dependencies
+- Test both success and error cases
+- Aim for high test coverage
+- Use descriptive test names
+
+## Documentation
+- Write clear README files
+- Document API endpoints
+- Include setup and usage instructions
+- Add inline comments for complex logic
+- Keep documentation up to date
+
+## Security
+- Never commit API keys or secrets
+- Use environment variables for configuration
+- Validate all user inputs
+- Use HTTPS in production
+- Implement proper authentication when needed
+
+## Performance
+- Use async/await for I/O operations
+- Profile code when performance is critical
+- Use appropriate data structures
+- Cache expensive operations
+- Optimize database queries
+
+## Git and Version Control
+- Write clear commit messages
+- Use feature branches for development
+- Keep commits atomic and focused
+- Use .gitignore for sensitive files
+- Tag releases appropriately
+
+## AI-Assisted Development
+- Review and understand AI-generated code
+- Test AI-generated functions thoroughly
+- Refactor AI code to match project style
+- Use AI for repetitive tasks and boilerplate
+- Always validate AI suggestions
+
+## Specific to This RAG Project
+- Use proper error handling for API calls
+- Implement retry logic for external services
+- Cache embeddings when possible
+- Use appropriate chunk sizes for documents
+- Monitor API usage and costs
+- Implement proper logging for debugging
+- Use type hints for all LlamaIndex components
+- Handle large documents efficiently
+- Implement proper cleanup for resources
