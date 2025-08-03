@@ -65,6 +65,66 @@ cp env.example .env
 python app.py
 ```
 
+## Development
+
+This project uses several tools to maintain code quality:
+
+### Code Formatting and Linting
+
+The project uses:
+- **Black**: Code formatter (88 character line length)
+- **isort**: Import sorting
+- **flake8**: Linting with custom configuration
+
+### Development Commands
+
+Using Make (recommended):
+```bash
+# Install dependencies
+make install
+
+# Format code
+make format
+
+# Run linting
+make lint
+
+# Run tests
+make test
+
+# Run all checks
+make all
+
+# Clean up cache files
+make clean
+```
+
+Or using the Python script:
+```bash
+# Run formatting and linting
+python format_code.py
+```
+
+### Manual Commands
+
+```bash
+# Format code
+black .
+isort .
+
+# Run linting
+flake8 .
+
+# Run tests
+python test_setup.py
+```
+
+### Configuration Files
+
+- `.flake8`: Flake8 configuration
+- `pyproject.toml`: Black, isort, and mypy configuration
+- `Makefile`: Common development commands
+
 ## API Documentation
 
 Once the server is running, you can access the interactive API documentation at:
@@ -227,31 +287,4 @@ docker-compose exec postgres psql -U rag_user -d rag_db
 1. **Missing OpenAI API Key**: Ensure `OPENAI_API_KEY` is set in your `.env` file
 2. **Database Connection Issues**: Check if PostgreSQL container is running and healthy
 3. **Import Errors**: Make sure all dependencies are installed with `pip install -r requirements.txt`
-4. **Port Already in Use**: Change the port in `docker-compose.yml` if 8000 is occupied
-
-### Logs
-
-The application logs important events. Check the logs with:
-```bash
-docker-compose logs rag_api
-```
-
-### Database Reset
-
-To reset the database:
-```bash
-docker-compose down -v
-docker-compose up -d
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
+4. **Port Already in Use**: Change the port in `

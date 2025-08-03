@@ -37,7 +37,7 @@ def test_imports():
         return False
 
     try:
-        import llama_index.vector_stores.postgres
+        import llama_index.vector_stores.postgres  # noqa: F401
 
         print("✅ llama_index.vector_stores.postgres imported successfully")
     except ImportError as e:
@@ -45,7 +45,7 @@ def test_imports():
         return False
 
     try:
-        import fastapi
+        import fastapi  # noqa: F401
 
         print("✅ fastapi imported successfully")
     except ImportError as e:
@@ -53,7 +53,7 @@ def test_imports():
         return False
 
     try:
-        import uvicorn
+        import uvicorn  # noqa: F401
 
         print("✅ uvicorn imported successfully")
     except ImportError as e:
@@ -61,7 +61,7 @@ def test_imports():
         return False
 
     try:
-        import openai
+        import openai  # noqa: F401
 
         print("✅ openai imported successfully")
     except ImportError as e:
@@ -69,7 +69,7 @@ def test_imports():
         return False
 
     try:
-        import pg8000
+        import pg8000  # noqa: F401
 
         print("✅ pg8000 imported successfully")
     except ImportError as e:
@@ -77,7 +77,7 @@ def test_imports():
         return False
 
     try:
-        import requests
+        import requests  # noqa: F401
 
         print("✅ requests imported successfully")
     except ImportError as e:
@@ -120,7 +120,7 @@ def test_rag_system():
             del os.environ["OPENAI_API_KEY"]
 
         try:
-            rag = RAGSystem()
+            rag = RAGSystem()  # noqa: F841
             print("❌ RAGSystem initialized without API key (unexpected)")
             return False
         except ValueError as e:
