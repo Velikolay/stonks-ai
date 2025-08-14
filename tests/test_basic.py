@@ -9,12 +9,9 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client() -> TestClient:
     """Create a test client for the FastAPI app."""
-    try:
-        from app import app
+    from app import app
 
-        return TestClient(app)
-    except ImportError as e:
-        pytest.skip(f"App import failed: {e}")
+    return TestClient(app)
 
 
 def test_health_check(client: TestClient) -> None:
