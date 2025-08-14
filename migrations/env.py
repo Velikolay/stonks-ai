@@ -5,9 +5,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from dotenv import load_dotenv
-from sqlalchemy import engine_from_config, pool
-
-from models import Base
+from sqlalchemy import MetaData, engine_from_config, pool
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +21,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-target_metadata = Base.metadata
+target_metadata = MetaData()
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

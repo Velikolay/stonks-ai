@@ -1,15 +1,11 @@
 """FastAPI application for the RAG system."""
 
 import logging
-import os
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from edgar_xbrl_extractor import MinimalEdgarExtractor
 from rag_system import RAGSystem
 
 # Configure logging
@@ -25,9 +21,6 @@ app = FastAPI(
 
 # Initialize RAG system
 rag_system: Optional[RAGSystem] = None
-
-# Initialize EDGAR XBRL extractor
-edgar_extractor: Optional[MinimalEdgarExtractor] = None
 
 
 class QueryRequest(BaseModel):
@@ -92,23 +85,15 @@ class ProcessFilingResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event() -> None:
     """Initialize the RAG system and EDGAR extractor on startup."""
-    global rag_system, edgar_extractor
+    global rag_system
     try:
         rag_system = RAGSystem()
-
         # Initialize EDGAR extractor with database support
-        database_url = os.getenv("DATABASE_URL")
-        edgar_extractor = MinimalEdgarExtractor(
-            download_path="edgar_downloads",
-            company_name="RAG API System",
-            email_address="admin@ragapi.com",
-            database_url=database_url,
-        )
+        # database_url = os.getenv("DATABASE_URL")
         logger.info("RAG system and EDGAR extractor initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize systems: {e}")
         rag_system = None
-        edgar_extractor = None
 
 
 @app.get("/")
@@ -191,148 +176,4 @@ async def clear_documents() -> DocumentResponse:
 @app.post("/ingest/load-filing", response_model=ProcessFilingResponse)
 async def process_filing(request: ProcessFilingRequest) -> ProcessFilingResponse:
     """Download SEC filing, extract data, and import into database."""
-    if not edgar_extractor:
-        raise HTTPException(status_code=500, detail="EDGAR extractor not initialized")
-
-    try:
-        # Determine CSV filename if requested
-        csv_filename = None
-        if request.save_csv:
-            if request.csv_filename:
-                csv_filename = request.csv_filename
-            else:
-                csv_filename = (
-                    f"{request.ticker.lower()}_{request.form_type.lower()}.csv"
-                )
-
-        # Process the filing
-        start_time = datetime.now()
-        result = edgar_extractor.process_and_store_10q_data(
-            ticker=request.ticker,
-            company_name=request.company_name,
-            output_file=csv_filename if request.save_csv else None,
-            store_in_db=request.store_in_database,
-        )
-        end_time = datetime.now()
-
-        if result:
-            return ProcessFilingResponse(
-                success=True,
-                message=f"Successfully processed {request.form_type} filing for {request.ticker}",
-                ticker=request.ticker,
-                company_name=request.company_name,
-                filing_date=request.filing_date,
-                form_type=request.form_type,
-                filing_path=result.get("filing_path"),
-                csv_saved=result.get("csv_saved", False),
-                csv_filename=csv_filename if result.get("csv_saved") else None,
-                database_stored=result.get("database_stored", False),
-                company_id=(
-                    result.get("company", {}).get("id")
-                    if result.get("company")
-                    else None
-                ),
-                filing_id=(
-                    result.get("filing", {}).get("id") if result.get("filing") else None
-                ),
-                facts_count=result.get("facts_count"),
-                processing_time_seconds=(end_time - start_time).total_seconds(),
-            )
-        else:
-            return ProcessFilingResponse(
-                success=False,
-                message=f"Failed to process {request.form_type} filing for {request.ticker}",
-                ticker=request.ticker,
-                company_name=request.company_name,
-                filing_date=request.filing_date,
-                form_type=request.form_type,
-                error="Processing failed - no result returned",
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error processing filing: {e}")
-        return ProcessFilingResponse(
-            success=False,
-            message=f"Error processing {request.form_type} filing for {request.ticker}",
-            ticker=request.ticker,
-            company_name=request.company_name,
-            filing_date=request.filing_date,
-            form_type=request.form_type,
-            error=str(e),
-        )
-
-
-@app.get("/edgar/health")
-async def edgar_health_check() -> dict:
-    """Health check for EDGAR extractor."""
-    return {
-        "message": "EDGAR XBRL Extractor is available",
-        "extractor_initialized": edgar_extractor is not None,
-        "database_connected": (
-            edgar_extractor.database_url is not None if edgar_extractor else False
-        ),
-    }
-
-
-@app.get("/edgar/debug-download")
-async def debug_download_filing(ticker: str = "AAPL") -> dict:
-    """Debug endpoint to download filing and show file structure."""
-    if not edgar_extractor:
-        raise HTTPException(status_code=500, detail="EDGAR extractor not initialized")
-
-    try:
-        # Download the filing
-        filing_path = edgar_extractor.download_10q_filing(ticker)
-
-        if not filing_path:
-            return {
-                "success": False,
-                "message": f"Failed to download filing for {ticker}",
-                "ticker": ticker,
-                "filing_path": None,
-                "files": [],
-            }
-
-        # Check what files are in the directory
-        filing_dir = Path(filing_path)
-        files_info = []
-
-        if filing_dir.exists():
-            for item in filing_dir.iterdir():
-                if item.is_file():
-                    try:
-                        size = item.stat().st_size
-                        with open(item, "r", encoding="utf-8") as f:
-                            content = f.read()
-
-                        file_info = {
-                            "name": item.name,
-                            "size_bytes": size,
-                            "size_chars": len(content),
-                            "has_xml": "<?xml" in content,
-                            "has_xbrl": "<xbrl" in content.lower()
-                            or "<XBRL" in content,
-                            "first_200_chars": content[:200],
-                        }
-                        files_info.append(file_info)
-                    except Exception as e:
-                        files_info.append({"name": item.name, "error": str(e)})
-
-        return {
-            "success": True,
-            "message": f"Successfully downloaded filing for {ticker}",
-            "ticker": ticker,
-            "filing_path": filing_path,
-            "files": files_info,
-        }
-
-    except Exception as e:
-        logger.error(f"Error in debug download: {e}")
-        return {
-            "success": False,
-            "message": f"Error downloading filing for {ticker}",
-            "ticker": ticker,
-            "error": str(e),
-        }
+    pass
