@@ -1,6 +1,7 @@
 """FastAPI application for the RAG system."""
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -12,15 +13,37 @@ from rag_system import RAGSystem
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize RAG system
+rag_system: Optional[RAGSystem] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app."""
+    global rag_system
+    try:
+        rag_system = RAGSystem()
+        # Initialize EDGAR extractor with database support
+        # database_url = os.getenv("DATABASE_URL")
+        logger.info("RAG system and EDGAR extractor initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize systems: {e}")
+        rag_system = None
+
+    yield
+
+    # Cleanup on shutdown
+    if rag_system:
+        logger.info("Shutting down RAG system")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="RAG API with GPT-4o mini",
     description="A RAG system using OpenAI GPT-4o mini and PostgreSQL with pgvector",
     version="1.0.0",
+    lifespan=lifespan,
 )
-
-# Initialize RAG system
-rag_system: Optional[RAGSystem] = None
 
 
 class QueryRequest(BaseModel):
@@ -80,20 +103,6 @@ class ProcessFilingResponse(BaseModel):
     # Processing details
     processing_time_seconds: Optional[float] = None
     error: Optional[str] = None
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Initialize the RAG system and EDGAR extractor on startup."""
-    global rag_system
-    try:
-        rag_system = RAGSystem()
-        # Initialize EDGAR extractor with database support
-        # database_url = os.getenv("DATABASE_URL")
-        logger.info("RAG system and EDGAR extractor initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize systems: {e}")
-        rag_system = None
 
 
 @app.get("/")
