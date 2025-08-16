@@ -1,29 +1,279 @@
-from dotenv import load_dotenv
-from edgar import Company
+"""SEC 10-Q XBRL Parser using edgartools."""
 
-# from edgar.xbrl import XBRLS
+import logging
+from datetime import date
+from decimal import Decimal
+from typing import List, Optional
 
-load_dotenv()
+import pandas as pd
+from edgar import Company, Filing
 
-company = Company("AAPL")
+from ..models import FinancialFact, FinancialFactAbstract
 
-filings = company.get_filings(form="10-Q")
+logger = logging.getLogger(__name__)
 
-# Parse XBRL data
-# xbrls = XBRLS.from_filings(filings)
-xbrl = filings.latest().xbrl()
 
-xbrl.statements.income_statement()
+class SEC10QParser:
+    """Parser for SEC 10-Q filings using edgartools."""
 
-df = (
-    xbrl.query()
-    .by_concept("Revenue")
-    .by_dimension("ProductOrServiceAxis")
-    .to_dataframe()
-)
+    def __init__(self):
+        """Initialize the parser."""
+        pass
 
-disaggregated_revenue = df.loc[
-    df.groupby("dim_srt_ProductOrServiceAxis")["period_start"].idxmax()
-]
+    def parse_filing(self, filing: Filing) -> List[FinancialFact]:
+        """Parse a 10-Q filing and extract financial facts.
 
-print(disaggregated_revenue)
+        Args:
+            filing: The edgartools Filing object
+
+        Returns:
+            List of FinancialFact objects
+        """
+        try:
+            # Get XBRL data from the filing
+            xbrl = filing.xbrl()
+
+            facts = []
+
+            # Parse income statement
+            income_facts = self._parse_statement(
+                xbrl.statements.income_statement().to_dataframe(), "Income Statement"
+            )
+            facts.extend(income_facts)
+
+            # Parse balance sheet
+            balance_facts = self._parse_statement(
+                xbrl.statements.balance_sheet().to_dataframe(), "Balance Sheet"
+            )
+            facts.extend(balance_facts)
+
+            # Parse cash flow statement
+            cashflow_facts = self._parse_statement(
+                xbrl.statements.cashflow_statement().to_dataframe(),
+                "Cash Flow Statement",
+            )
+            facts.extend(cashflow_facts)
+
+            logger.info(
+                f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
+            )
+            return facts
+
+        except Exception as e:
+            logger.error(f"Error parsing filing {filing.accession_number}: {e}")
+            return []
+
+    def _parse_statement(
+        self, statement_df: pd.DataFrame, statement_type: str
+    ) -> List[FinancialFact]:
+        """Parse a financial statement dataframe and extract facts.
+
+        Args:
+            statement_df: DataFrame from edgartools statement
+            statement_type: Type of statement (Income Statement, Balance Sheet, etc.)
+
+        Returns:
+            List of FinancialFact objects
+        """
+        facts = []
+
+        if statement_df is None or statement_df.empty:
+            logger.warning(f"No data found for {statement_type}")
+            return facts
+
+        try:
+            # Get the column names to identify period columns
+            columns = statement_df.columns.tolist()
+
+            # Find the first numeric column (period column)
+            first_period_col = None
+            for col in columns:
+                if isinstance(col, str) and ("-" in col or "/" in col):
+                    first_period_col = col
+                    break
+
+            if not first_period_col:
+                logger.warning(f"No period columns found in {statement_type}")
+                return facts
+
+            # Extract date from column name like "2025-06-28 (Q2)"
+            date_str = first_period_col.split(" ")[
+                0
+            ]  # Get "2025-06-28" from "2025-06-28 (Q2)"
+
+            # Track the hierarchy of abstracts
+            abstract_hierarchy = []
+
+            # Iterate through each row in the statement
+            for _, row in statement_df.iterrows():
+                level = row.get("level", 1)
+                concept = row.get("concept", "")
+                label = row.get("label", "")
+                value = row.get(first_period_col)
+
+                # Detect abstract by lack of numeric value
+                is_abstract = (
+                    value is None
+                    or value == 0
+                    or (isinstance(value, str) and not value.strip())
+                )
+
+                # Update abstract hierarchy based on level
+                while (
+                    len(abstract_hierarchy) > 0
+                    and abstract_hierarchy[-1]["level"] >= level
+                ):
+                    abstract_hierarchy.pop()
+
+                # Add current abstract to hierarchy if it's an abstract
+                if is_abstract:
+                    abstract_hierarchy.append(
+                        {"level": level, "concept": concept, "label": label}
+                    )
+
+                # Create fact if there's a value (not an abstract)
+                if value is not None and value != 0 and not is_abstract:
+                    fact = self._create_financial_fact_with_hierarchy(
+                        row,
+                        statement_type,
+                        first_period_col,
+                        date_str,
+                        abstract_hierarchy,
+                    )
+                    if fact:
+                        facts.append(fact)
+
+        except Exception as e:
+            logger.error(f"Error parsing {statement_type}: {e}")
+
+        return facts
+
+    def _create_financial_fact_with_hierarchy(
+        self,
+        row,
+        statement_type: str,
+        period_col: str,
+        date_str: str,
+        abstract_hierarchy: list,
+    ) -> Optional[FinancialFact]:
+        """Create a FinancialFact from a statement row with hierarchical abstracts.
+
+        Args:
+            row: DataFrame row from statement
+            statement_type: Type of financial statement
+            period_col: The period column name (e.g., "2025-06-28 (Q2)")
+            date_str: The date string (e.g., "2025-06-28")
+            abstract_hierarchy: List of parent abstracts in hierarchy
+
+        Returns:
+            FinancialFact object or None if invalid
+        """
+        try:
+            # Extract basic information
+            concept = row.get("concept", "")
+            label = row.get("label", concept)
+            value = row.get(period_col)
+
+            # Skip if no value or concept
+            if not value or not concept:
+                return None
+
+            # Convert value to Decimal
+            try:
+                decimal_value = Decimal(str(value))
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid value for concept {concept}: {value}")
+                return None
+
+            # Parse the date
+            period_end = self._parse_date(date_str)
+
+            # Create abstracts from hierarchy (only parent abstracts, not the element itself)
+            abstracts = []
+
+            # Add parent abstracts from hierarchy
+            for abstract in abstract_hierarchy:
+                abstracts.append(
+                    FinancialFactAbstract(
+                        concept=abstract["concept"], label=abstract["label"]
+                    )
+                )
+
+            # Create the financial fact
+            fact = FinancialFact(
+                id=0,  # Will be set by database
+                filing_id=0,  # Will be set by caller
+                concept=concept,
+                label=label,
+                value=decimal_value,
+                unit="USD",  # Default unit, could be extracted from data if available
+                axis=None,  # Could be extracted from dimension data if available
+                member=None,  # Could be extracted from dimension data if available
+                statement=statement_type,
+                period_end=period_end,
+                period_start=None,  # Could be calculated if needed
+                abstracts=abstracts if abstracts else None,
+            )
+
+            return fact
+
+        except Exception as e:
+            logger.error(f"Error creating financial fact from row: {e}")
+            return None
+
+    def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
+        """Parse date string to date object.
+
+        Args:
+            date_str: Date string from XBRL
+
+        Returns:
+            date object or None if invalid
+        """
+        if not date_str:
+            return None
+
+        try:
+            # Handle common XBRL date formats
+            if "T" in date_str:
+                # ISO format with time: 2024-09-28T00:00:00
+                date_str = date_str.split("T")[0]
+
+            return date.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid date format: {date_str}")
+            return None
+
+    def parse_company_filings(
+        self, ticker: str, form: str = "10-Q", limit: int = 5
+    ) -> List[FinancialFact]:
+        """Parse multiple filings for a company.
+
+        Args:
+            ticker: Company ticker symbol
+            form: Form type (default: 10-Q)
+            limit: Maximum number of filings to parse
+
+        Returns:
+            List of FinancialFact objects
+        """
+        try:
+            company = Company(ticker)
+            filings = company.get_filings(form=form)
+
+            all_facts = []
+            # Limit the number of filings to process
+            for i, filing in enumerate(filings):
+                if i >= limit:
+                    break
+                facts = self.parse_filing(filing)
+                all_facts.extend(facts)
+
+            logger.info(
+                f"Parsed {len(all_facts)} total facts from {min(len(filings), limit)} filings for {ticker}"
+            )
+            return all_facts
+
+        except Exception as e:
+            logger.error(f"Error parsing filings for {ticker}: {e}")
+            return []
