@@ -1,16 +1,8 @@
 """Database models package."""
 
-from .base import (
-    Company,
-    CompanyBase,
-    CompanyCreate,
-    Filing,
-    FilingBase,
-    FilingCreate,
-    FinancialFact,
-    FinancialFactBase,
-    FinancialFactCreate,
-)
+from .company import Company, CompanyBase, CompanyCreate
+from .filing import Filing, FilingBase, FilingCreate
+from .financial_fact import FinancialFact, FinancialFactBase, FinancialFactCreate
 
 __all__ = [
     "CompanyBase",

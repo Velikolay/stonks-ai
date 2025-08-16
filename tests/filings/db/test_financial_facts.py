@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from db import FilingCreate, FinancialFact, FinancialFactCreate
+from filings import FilingCreate, FinancialFact, FinancialFactCreate
 
 
 class TestFinancialFactOperations:

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from db import CompanyCreate, Database, FilingCreate, FinancialFactCreate
+from filings import CompanyCreate, FilingCreate, FilingsDatabase, FinancialFactCreate
 
 
 @pytest.fixture(scope="session")
@@ -55,9 +55,9 @@ def clean_tables(test_engine: Engine):
 
 
 @pytest.fixture(scope="function")
-def db(test_engine: Engine) -> Database:
+def db(test_engine: Engine) -> FilingsDatabase:
     """Test database instance."""
-    return Database("postgresql://rag_user:rag_password@localhost:5432/rag_db")
+    return FilingsDatabase("postgresql://rag_user:rag_password@localhost:5432/rag_db")
 
 
 @pytest.fixture(scope="function")

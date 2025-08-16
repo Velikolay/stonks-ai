@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from db import CompanyCreate, Database, FilingCreate, FinancialFactCreate
+from filings import CompanyCreate, FilingCreate, FilingsDatabase, FinancialFactCreate
 
 # Database connection string (update with your actual database URL)
 DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
@@ -13,7 +13,7 @@ def example_usage():
     """Example of how to use the database module."""
 
     # Initialize database
-    with Database(DATABASE_URL) as db:
+    with FilingsDatabase(DATABASE_URL) as db:
 
         # 1. Create a company
         print("1. Creating company...")

@@ -1,33 +1,12 @@
-"""Database module with unified interface for all operations."""
+"""Database operations package."""
 
-from .models.base import (
-    Company,
-    CompanyCreate,
-    Filing,
-    FilingCreate,
-    FinancialFact,
-    FinancialFactCreate,
-)
-from .operations.base import DatabaseManager
-from .operations.companies import CompanyOperations
-from .operations.filings import FilingOperations
-from .operations.financial_facts import FinancialFactOperations
-
-__all__ = [
-    "DatabaseManager",
-    "CompanyOperations",
-    "FilingOperations",
-    "FinancialFactOperations",
-    "Company",
-    "CompanyCreate",
-    "Filing",
-    "FilingCreate",
-    "FinancialFact",
-    "FinancialFactCreate",
-]
+from .base import DatabaseManager
+from .companies import CompanyOperations
+from .filings import FilingOperations
+from .financial_facts import FinancialFactOperations
 
 
-class Database:
+class FilingsDatabase:
     """Unified database interface combining all operations."""
 
     def __init__(self, database_url: str):

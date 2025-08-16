@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from db import Filing, FilingCreate
+from filings import Filing, FilingCreate
 
 
 class TestFilingOperations:

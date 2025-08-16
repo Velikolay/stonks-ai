@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from db import CompanyCreate, FilingCreate, FinancialFactCreate
+from filings import CompanyCreate, FilingCreate, FinancialFactCreate
 
 
 class TestDatabaseIntegration:

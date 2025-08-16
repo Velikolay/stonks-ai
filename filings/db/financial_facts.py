@@ -7,7 +7,7 @@ from sqlalchemy import MetaData, Table, insert, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models.base import FinancialFact, FinancialFactCreate
+from ..models import FinancialFact, FinancialFactCreate
 
 logger = logging.getLogger(__name__)
 

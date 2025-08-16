@@ -4,7 +4,9 @@
 
 ## Code Style and Formatting
 - Always use Black formatter with 88 character line length
+- Follow the linter rules in the .flake8 file
 - Use isort for import sorting with Black profile
+- Clean up unused imports and dead code after making changes / refactoring
 - Follow PEP 8 style guidelines
 - Use type hints for all function parameters and return values
 - Use docstrings for all functions, classes, and modules
@@ -27,7 +29,7 @@
 - Use relative imports within the project
 - Keep configuration in environment variables or config files
 - Build a logical package structure to organize the project
-- Avoid creating example python scripts when you can add a simple main function
+- Skip creating example python scripts to demonstrate functionality, rather create tests
 - Don't add any .sh scripts, try keeping all commands in a single Makefile
 
 ## API Development

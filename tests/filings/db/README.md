@@ -5,7 +5,7 @@ This directory contains comprehensive tests for the database module.
 ## Test Structure
 
 ```
-tests/db/
+tests/filings/db/
 ├── __init__.py              # Package initialization
 ├── conftest.py              # Pytest configuration and fixtures
 ├── test_companies.py        # Company operations tests
@@ -67,23 +67,23 @@ tests/db/
 
 ```bash
 # From the project root
-python tests/db/run_tests.py
+python tests/filings/db/run_tests.py
 ```
 
 ### Method 2: Using pytest directly
 
 ```bash
 # From the project root
-pytest tests/db/ -v
+pytest tests/filings/db/ -v
 
 # Run specific test file
-pytest tests/db/test_companies.py -v
+pytest tests/filings/db/test_companies.py -v
 
 # Run specific test class
-pytest tests/db/test_companies.py::TestCompanyOperations -v
+pytest tests/filings/db/test_companies.py::TestCompanyOperations -v
 
 # Run specific test method
-pytest tests/db/test_companies.py::TestCompanyOperations::test_insert_company -v
+pytest tests/filings/db/test_companies.py::TestCompanyOperations::test_insert_company -v
 ```
 
 ### Method 3: Using pytest with coverage
@@ -93,7 +93,7 @@ pytest tests/db/test_companies.py::TestCompanyOperations::test_insert_company -v
 pip install pytest-cov
 
 # Run tests with coverage
-pytest tests/db/ -v --cov=db --cov-report=html
+pytest tests/filings/db/ -v --cov=db --cov-report=html
 ```
 
 ## Test Database Configuration
@@ -165,7 +165,7 @@ test_integration.py::TestDatabaseIntegration::test_full_workflow PASSED
 Run tests with more verbose output:
 
 ```bash
-pytest tests/db/ -v -s --tb=long
+pytest tests/filings/db/ -v -s --tb=long
 ```
 
 This will show:

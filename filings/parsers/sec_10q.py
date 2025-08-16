@@ -13,6 +13,8 @@ filings = company.get_filings(form="10-Q")
 # xbrls = XBRLS.from_filings(filings)
 xbrl = filings.latest().xbrl()
 
+xbrl.statements.income_statement()
+
 df = (
     xbrl.query()
     .by_concept("Revenue")

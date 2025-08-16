@@ -1,6 +1,6 @@
 """Tests for company database operations."""
 
-from db import Company, CompanyCreate
+from filings import Company, CompanyCreate
 
 
 class TestCompanyOperations:
