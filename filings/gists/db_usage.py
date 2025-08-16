@@ -3,7 +3,13 @@
 from datetime import date
 from decimal import Decimal
 
-from filings import CompanyCreate, FilingCreate, FilingsDatabase, FinancialFactCreate
+from filings import (
+    CompanyCreate,
+    FilingCreate,
+    FilingsDatabase,
+    FinancialFactAbstract,
+    FinancialFactCreate,
+)
 
 # Database connection string (update with your actual database URL)
 DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
@@ -45,28 +51,50 @@ def example_usage():
 
         # 3. Create financial facts
         print("\n3. Creating financial facts...")
+
+        # Create abstracts for revenue
+        revenue_abstracts = [
+            FinancialFactAbstract(concept="us-gaap:Revenues", label="Revenues"),
+            FinancialFactAbstract(
+                concept="us-gaap:SalesRevenueNet", label="Sales Revenue, Net"
+            ),
+        ]
+
+        # Create abstracts for net income
+        net_income_abstracts = [
+            FinancialFactAbstract(
+                concept="us-gaap:NetIncomeLoss", label="Net Income (Loss)"
+            ),
+            FinancialFactAbstract(concept="us-gaap:ProfitLoss", label="Profit (Loss)"),
+        ]
+
         facts_data = [
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Revenue",
+                concept="us-gaap:Revenues",
+                label="Revenues",
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                abstracts=revenue_abstracts,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Net Income",
+                concept="us-gaap:NetIncomeLoss",
+                label="Net Income (Loss)",
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                abstracts=net_income_abstracts,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Total Assets",
+                concept="us-gaap:Assets",
+                label="Total Assets",
                 value=Decimal("352755.0"),
                 unit="USD",
                 statement="Balance Sheet",
@@ -92,12 +120,24 @@ def example_usage():
         facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
         print(f"Financial facts for filing: {len(facts)}")
 
+        # Get financial facts by concept
+        revenue_facts = db.financial_facts.get_financial_facts_by_concept(
+            company.id, "us-gaap:Revenues"
+        )
+        print(f"Revenue facts for {company.name}: {len(revenue_facts)}")
+
         # 5. Display some results
         print("\n5. Sample data:")
         if facts:
             print("Financial facts:")
             for fact in facts[:3]:  # Show first 3 facts
-                print(f"  - {fact.metric}: {fact.value} {fact.unit}")
+                print(f"  - {fact.concept} ({fact.label}): {fact.value} {fact.unit}")
+                if fact.abstracts:
+                    print(f"    Abstracts: {len(fact.abstracts)} items")
+                    for abstract in fact.abstracts:
+                        print(f"      - {abstract.concept}: {abstract.label}")
+                else:
+                    print("    No abstracts")
 
 
 if __name__ == "__main__":

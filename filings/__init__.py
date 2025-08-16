@@ -9,6 +9,7 @@ from .models import (
     FilingBase,
     FilingCreate,
     FinancialFact,
+    FinancialFactAbstract,
     FinancialFactBase,
     FinancialFactCreate,
 )
@@ -24,4 +25,5 @@ __all__ = [
     "FinancialFactBase",
     "FinancialFactCreate",
     "FinancialFact",
+    "FinancialFactAbstract",
 ]

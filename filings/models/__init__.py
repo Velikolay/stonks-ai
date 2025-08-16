@@ -2,7 +2,12 @@
 
 from .company import Company, CompanyBase, CompanyCreate
 from .filing import Filing, FilingBase, FilingCreate
-from .financial_fact import FinancialFact, FinancialFactBase, FinancialFactCreate
+from .financial_fact import (
+    FinancialFact,
+    FinancialFactAbstract,
+    FinancialFactBase,
+    FinancialFactCreate,
+)
 
 __all__ = [
     "CompanyBase",
@@ -14,4 +19,5 @@ __all__ = [
     "FinancialFactBase",
     "FinancialFactCreate",
     "FinancialFact",
+    "FinancialFactAbstract",
 ]

@@ -40,7 +40,8 @@ class TestDatabaseIntegration:
         facts_data = [
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Revenue",
+                concept="us-gaap:Revenues",
+                label="Revenues",
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -49,7 +50,8 @@ class TestDatabaseIntegration:
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Net Income",
+                concept="us-gaap:NetIncomeLoss",
+                label="Net Income (Loss)",
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -69,15 +71,15 @@ class TestDatabaseIntegration:
         # Get filing facts
         facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
         assert len(facts) >= 2
-        assert any(f.metric == "Revenue" for f in facts)
-        assert any(f.metric == "Net Income" for f in facts)
+        assert any(f.concept == "us-gaap:Revenues" for f in facts)
+        assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
 
-        # Get facts by metric
-        revenue_facts = db.financial_facts.get_financial_facts_by_metric(
-            company.id, "Revenue"
+        # Get facts by concept
+        revenue_facts = db.financial_facts.get_financial_facts_by_concept(
+            company.id, "us-gaap:Revenues"
         )
         assert len(revenue_facts) >= 1
-        assert all(f.metric == "Revenue" for f in revenue_facts)
+        assert all(f.concept == "us-gaap:Revenues" for f in revenue_facts)
 
     def test_multiple_companies_and_filings(self, db):
         """Test working with multiple companies and filings."""
@@ -113,7 +115,8 @@ class TestDatabaseIntegration:
         for filing in filings:
             fact_data = FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Revenue",
+                concept="us-gaap:Revenues",
+                label="Revenues",
                 value=Decimal("50000.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -197,7 +200,8 @@ class TestDatabaseIntegration:
         fact_id = db.financial_facts.insert_financial_fact(
             FinancialFactCreate(
                 filing_id=filing.id,
-                metric="Revenue",
+                concept="us-gaap:Revenues",
+                label="Revenues",
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -237,7 +241,8 @@ class TestDatabaseIntegration:
         # Test inserting financial fact with non-existent filing
         fact_data = FinancialFactCreate(
             filing_id=99999,  # Non-existent filing
-            metric="Revenue",
+            concept="us-gaap:Revenues",
+            label="Revenues",
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",

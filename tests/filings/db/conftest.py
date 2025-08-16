@@ -7,7 +7,13 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from filings import CompanyCreate, FilingCreate, FilingsDatabase, FinancialFactCreate
+from filings import (
+    CompanyCreate,
+    FilingCreate,
+    FilingsDatabase,
+    FinancialFactAbstract,
+    FinancialFactCreate,
+)
 
 
 @pytest.fixture(scope="session")
@@ -87,10 +93,33 @@ def sample_financial_fact() -> FinancialFactCreate:
     """Sample financial fact data for testing."""
     return FinancialFactCreate(
         filing_id=1,  # Will be set in tests
-        metric="Revenue",
+        concept="us-gaap:Revenues",
+        label="Revenues",
         value=Decimal("89498.0"),
         unit="USD",
         statement="Income Statement",
         period_end=date(2024, 9, 28),
         period_start=date(2024, 6, 30),
+    )
+
+
+@pytest.fixture(scope="function")
+def sample_financial_fact_with_abstracts() -> FinancialFactCreate:
+    """Sample financial fact data with abstracts for testing."""
+    abstracts = [
+        FinancialFactAbstract(concept="us-gaap:Revenues", label="Revenues"),
+        FinancialFactAbstract(
+            concept="us-gaap:NetIncomeLoss", label="Net Income (Loss)"
+        ),
+    ]
+    return FinancialFactCreate(
+        filing_id=1,  # Will be set in tests
+        concept="us-gaap:Revenues",
+        label="Revenues",
+        value=Decimal("89498.0"),
+        unit="USD",
+        statement="Income Statement",
+        period_end=date(2024, 9, 28),
+        period_start=date(2024, 6, 30),
+        abstracts=abstracts,
     )

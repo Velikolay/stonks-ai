@@ -8,6 +8,7 @@ Create Date: 2024-12-19 12:00:00.000000
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision = "0002"
@@ -58,12 +59,14 @@ def upgrade() -> None:
         "financial_facts",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("filing_id", sa.Integer(), nullable=False),
-        sa.Column("metric", sa.String(), nullable=False),
+        sa.Column("concept", sa.String(), nullable=False),
+        sa.Column("label", sa.String(), nullable=True),
         sa.Column("value", sa.Numeric(), nullable=False),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("axis", sa.String(), nullable=True),
         sa.Column("member", sa.String(), nullable=True),
         sa.Column("statement", sa.String(), nullable=True),
+        sa.Column("abstracts", JSONB(), nullable=True),
         sa.Column("period_end", sa.Date(), nullable=True),
         sa.Column("period_start", sa.Date(), nullable=True),
         sa.ForeignKeyConstraint(

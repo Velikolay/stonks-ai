@@ -33,7 +33,8 @@ class FinancialFactOperations:
                     insert(self.financial_facts_table)
                     .values(
                         filing_id=fact.filing_id,
-                        metric=fact.metric,
+                        concept=fact.concept,
+                        label=fact.label,
                         value=fact.value,
                         unit=fact.unit,
                         axis=fact.axis,
@@ -41,6 +42,11 @@ class FinancialFactOperations:
                         statement=fact.statement,
                         period_end=fact.period_end,
                         period_start=fact.period_start,
+                        abstracts=(
+                            [abstract.model_dump() for abstract in fact.abstracts]
+                            if fact.abstracts is not None
+                            else None
+                        ),
                     )
                     .returning(self.financial_facts_table.c.id)
                 )
@@ -50,7 +56,7 @@ class FinancialFactOperations:
                 conn.commit()
 
                 logger.info(
-                    f"Inserted financial fact: {fact.metric} with ID: {fact_id}"
+                    f"Inserted financial fact: {fact.concept} with ID: {fact_id}"
                 )
                 return fact_id
 
@@ -70,7 +76,8 @@ class FinancialFactOperations:
                         insert(self.financial_facts_table)
                         .values(
                             filing_id=fact.filing_id,
-                            metric=fact.metric,
+                            concept=fact.concept,
+                            label=fact.label,
                             value=fact.value,
                             unit=fact.unit,
                             axis=fact.axis,
@@ -78,6 +85,11 @@ class FinancialFactOperations:
                             statement=fact.statement,
                             period_end=fact.period_end,
                             period_start=fact.period_start,
+                            abstracts=(
+                                [abstract.model_dump() for abstract in fact.abstracts]
+                                if fact.abstracts is not None
+                                else None
+                            ),
                         )
                         .returning(self.financial_facts_table.c.id)
                     )
@@ -110,7 +122,8 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             filing_id=row.filing_id,
-                            metric=row.metric,
+                            concept=row.concept,
+                            label=row.label,
                             value=row.value,
                             unit=row.unit,
                             axis=row.axis,
@@ -118,6 +131,7 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
+                            abstracts=row.abstracts,
                         )
                     )
                 return facts
@@ -126,10 +140,10 @@ class FinancialFactOperations:
             logger.error(f"Error getting financial facts by filing: {e}")
             return []
 
-    def get_financial_facts_by_metric(
-        self, company_id: int, metric: str, limit: int = 10
+    def get_financial_facts_by_concept(
+        self, company_id: int, concept: str, limit: int = 10
     ) -> List[FinancialFact]:
-        """Get financial facts by company and metric."""
+        """Get financial facts by company and concept."""
         try:
             with self.engine.connect() as conn:
                 stmt = (
@@ -141,7 +155,7 @@ class FinancialFactOperations:
                     )
                     .where(
                         (self.filings_table.c.company_id == company_id)
-                        & (self.financial_facts_table.c.metric == metric)
+                        & (self.financial_facts_table.c.concept == concept)
                     )
                     .order_by(self.filings_table.c.filing_date.desc())
                     .limit(limit)
@@ -155,7 +169,8 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             filing_id=row.filing_id,
-                            metric=row.metric,
+                            concept=row.concept,
+                            label=row.label,
                             value=row.value,
                             unit=row.unit,
                             axis=row.axis,
@@ -163,10 +178,11 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
+                            abstracts=row.abstracts,
                         )
                     )
                 return facts
 
         except SQLAlchemyError as e:
-            logger.error(f"Error getting financial facts by metric: {e}")
+            logger.error(f"Error getting financial facts by concept: {e}")
             return []
