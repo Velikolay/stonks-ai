@@ -23,7 +23,7 @@ class TestFilingsLoader:
 
     def test_loader_initialization_with_custom_parser(self):
         """Test loader initialization with custom parser."""
-        mock_database = Mock(spec=FilingsDatabase)
+        mock_database = Mock()
         mock_parser = Mock()
         loader = FilingsLoader(mock_database, parser=mock_parser)
 
@@ -103,9 +103,9 @@ class TestFilingsLoader:
             mock_facts
         )
 
-        result = loader._load_single_filing(mock_filing, 1)
+        result = loader._load_single_filing(mock_filing, 1, override=False)
 
-        assert result == 2
+        assert result[0] == 2
         mock_database.filings.insert_filing.assert_called_once()
 
         # Verify that insert_filing was called with the correct fiscal quarter
@@ -141,8 +141,8 @@ class TestFilingsLoader:
             mock_facts
         )
 
-        result = loader._load_single_filing(mock_filing_q2, 1)
-        assert result == 1
+        result = loader._load_single_filing(mock_filing_q2, 1, override=False)
+        assert result[0] == 1
 
         # Verify Q2 was calculated correctly
         call_args = mock_database.filings.insert_filing.call_args[0][0]
@@ -157,8 +157,8 @@ class TestFilingsLoader:
         mock_filing_q4.period_of_report = "2024-12-31"  # Q4 end date
         mock_filing_q4.url = "https://example.com/filing"
 
-        result = loader._load_single_filing(mock_filing_q4, 1)
-        assert result == 1
+        result = loader._load_single_filing(mock_filing_q4, 1, override=False)
+        assert result[0] == 1
 
         # Verify Q4 was calculated correctly
         call_args = mock_database.filings.insert_filing.call_args[0][0]
@@ -179,12 +179,140 @@ class TestFilingsLoader:
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
 
-        result = loader._load_single_filing(mock_filing, 1)
+        result = loader._load_single_filing(mock_filing, 1, override=False)
 
-        assert result == 0
+        assert result[0] == 0
         mock_database.filings.get_filing_by_number.assert_called_once_with(
             "SEC", "0001193125-24-000001"
         )
+
+    def test_load_single_filing_with_override(self):
+        """Test loading a filing with override enabled."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)  # No constructor override
+
+        # Mock existing filing
+        existing_filing = Mock()
+        existing_filing.id = 1
+        mock_database.filings.get_filing_by_number.return_value = existing_filing
+
+        # Mock filing object
+        mock_filing = Mock()
+        mock_filing.accession_number = "0001193125-24-000001"
+        mock_filing.form = "10-Q"
+        mock_filing.filing_date = "2024-01-15"
+        mock_filing.period_of_report = "2024-03-31"
+        mock_filing.url = "https://example.com/filing"
+
+        # Mock parser returning facts
+        mock_facts = [Mock(spec=FinancialFact), Mock(spec=FinancialFact)]
+        loader.parser.parse_filing = Mock(return_value=mock_facts)
+
+        # Mock database operations - use delete and insert methods
+        mock_db_filing = Mock(spec=Filing)
+        mock_db_filing.id = 2  # New filing ID after override
+        mock_database.filings.insert_filing.return_value = mock_db_filing
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = (
+            mock_facts
+        )
+        mock_database.financial_facts.delete_facts_by_filing_id.return_value = True
+        mock_database.filings.delete_filing.return_value = True
+
+        result, was_updated = loader._load_single_filing(mock_filing, 1, override=True)
+
+        assert result == 2
+        assert was_updated is True
+        # Should call delete methods first, then insert
+        mock_database.financial_facts.delete_facts_by_filing_id.assert_called_once_with(
+            1
+        )
+        mock_database.filings.delete_filing.assert_called_once_with(1)
+        mock_database.filings.insert_filing.assert_called_once()
+        mock_database.financial_facts.insert_financial_facts_batch.assert_called_once()
+
+    def test_load_company_filings_method_override(self):
+        """Test loading company filings with method-level override."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)  # No constructor override
+
+        # Mock company
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_company.name = "Apple Inc."
+        mock_company.ticker = "AAPL"
+        mock_database.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock edgar company and filings
+        mock_edgar_company = Mock()
+        mock_filing = Mock()
+        mock_filing.accession_number = "0001193125-24-000001"
+        mock_edgar_company.get_filings.return_value = [mock_filing]
+        with patch("filings.filings_loader.Company") as mock_company_class:
+            mock_company_class.return_value = mock_edgar_company
+
+            # Mock loading single filing with override
+            loader._load_single_filing = Mock(
+                return_value=(5, True)
+            )  # 5 facts, was updated
+
+            result = loader.load_company_filings("AAPL", "10-Q", limit=1, override=True)
+
+            assert result["ticker"] == "AAPL"
+            assert result["form"] == "10-Q"
+            assert result["filings_loaded"] == 1
+            assert result["filings_updated"] == 1
+            assert result["total_facts"] == 5
+            assert result["company_id"] == 1
+            assert result["override_mode"] is True
+
+    @patch("filings.filings_loader.Company")
+    def test_load_company_filings_no_filings(self, mock_company_class):
+        """Test loading when no filings are found."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)
+
+        # Mock company
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_company.name = "Apple Inc."
+        mock_company.ticker = "AAPL"
+        mock_database.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock no filings
+        mock_edgar_company = Mock()
+        mock_edgar_company.get_filings.return_value = []
+        mock_company_class.return_value = mock_edgar_company
+
+        result = loader.load_company_filings("AAPL", "10-Q", limit=5)
+
+        assert "message" in result
+        assert "No 10-Q filings found" in result["message"]
+
+    def test_load_company_filings_company_error(self):
+        """Test loading when company creation fails."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)
+
+        # Mock company creation failure
+        mock_database.companies.get_company_by_ticker.return_value = None
+        mock_database.companies.get_or_create_company.return_value = None
+
+        result = loader.load_company_filings("INVALID", "10-Q", limit=5)
+
+        assert "error" in result
+        assert "Failed to get or create company" in result["error"]
 
     def test_calculate_fiscal_quarter(self):
         """Test fiscal quarter calculation from period end date."""
@@ -234,83 +362,3 @@ class TestFilingsLoader:
             mock_parse.return_value.month = 13  # Invalid month
             result = loader._calculate_fiscal_quarter("2024-01-31")
             assert result is None
-
-    @patch("filings.filings_loader.Company")
-    def test_load_company_filings_success(self, mock_company_class):
-        """Test successful loading of company filings."""
-        mock_database = Mock()
-        mock_database.companies = Mock()
-        mock_database.filings = Mock()
-        mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
-
-        # Mock company
-        mock_company = Mock()
-        mock_company.id = 1
-        mock_company.name = "Apple Inc."
-        mock_company.ticker = "AAPL"
-        mock_database.companies.get_company_by_ticker.return_value = mock_company
-
-        # Mock edgar company and filings
-        mock_edgar_company = Mock()
-        mock_filing1 = Mock()
-        mock_filing1.accession_number = "0001193125-24-000001"
-        mock_filing2 = Mock()
-        mock_filing2.accession_number = "0001193125-24-000002"
-
-        mock_edgar_company.get_filings.return_value = [mock_filing1, mock_filing2]
-        mock_company_class.return_value = mock_edgar_company
-
-        # Mock loading single filings
-        loader._load_single_filing = Mock(side_effect=[5, 3])
-
-        result = loader.load_company_filings("AAPL", "10-Q", limit=2)
-
-        assert result["ticker"] == "AAPL"
-        assert result["form"] == "10-Q"
-        assert result["filings_loaded"] == 2
-        assert result["total_facts"] == 8
-        assert result["company_id"] == 1
-
-    @patch("filings.filings_loader.Company")
-    def test_load_company_filings_no_filings(self, mock_company_class):
-        """Test loading when no filings are found."""
-        mock_database = Mock()
-        mock_database.companies = Mock()
-        mock_database.filings = Mock()
-        mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
-
-        # Mock company
-        mock_company = Mock()
-        mock_company.id = 1
-        mock_company.name = "Apple Inc."
-        mock_company.ticker = "AAPL"
-        mock_database.companies.get_company_by_ticker.return_value = mock_company
-
-        # Mock no filings
-        mock_edgar_company = Mock()
-        mock_edgar_company.get_filings.return_value = []
-        mock_company_class.return_value = mock_edgar_company
-
-        result = loader.load_company_filings("AAPL", "10-Q", limit=5)
-
-        assert "message" in result
-        assert "No 10-Q filings found" in result["message"]
-
-    def test_load_company_filings_company_error(self):
-        """Test loading when company creation fails."""
-        mock_database = Mock()
-        mock_database.companies = Mock()
-        mock_database.filings = Mock()
-        mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
-
-        # Mock company creation failure
-        mock_database.companies.get_company_by_ticker.return_value = None
-        mock_database.companies.get_or_create_company.return_value = None
-
-        result = loader.load_company_filings("INVALID", "10-Q", limit=5)
-
-        assert "error" in result
-        assert "Failed to get or create company" in result["error"]

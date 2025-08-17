@@ -99,7 +99,7 @@ class FinancialFactOperations:
                     fact_ids.append(fact_id)
 
                 conn.commit()
-                logger.info(f"Inserted {len(facts)} financial facts")
+                logger.info(f"Inserted {len(fact_ids)} financial facts")
                 return fact_ids
 
         except SQLAlchemyError as e:
@@ -186,3 +186,69 @@ class FinancialFactOperations:
         except SQLAlchemyError as e:
             logger.error(f"Error getting financial facts by concept: {e}")
             return []
+
+    def get_financial_facts_by_filing_id(self, filing_id: int) -> List[FinancialFact]:
+        """Get all financial facts for a specific filing."""
+        try:
+            with self.engine.connect() as conn:
+                stmt = select(self.financial_facts_table).where(
+                    self.financial_facts_table.c.filing_id == filing_id
+                )
+                result = conn.execute(stmt)
+                rows = result.fetchall()
+
+                facts = []
+                for row in rows:
+                    fact = FinancialFact(
+                        id=row.id,
+                        filing_id=row.filing_id,
+                        concept=row.concept,
+                        label=row.label,
+                        value=row.value,
+                        unit=row.unit,
+                        axis=row.axis,
+                        member=row.member,
+                        statement=row.statement,
+                        period_end=row.period_end,
+                        period_start=row.period_start,
+                        abstracts=row.abstracts,
+                    )
+                    facts.append(fact)
+
+                logger.info(
+                    f"Retrieved {len(facts)} financial facts for filing {filing_id}"
+                )
+                return facts
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Error retrieving financial facts for filing {filing_id}: {e}"
+            )
+            return []
+
+    def delete_facts_by_filing_id(self, filing_id: int) -> bool:
+        """Delete all financial facts for a specific filing.
+
+        Args:
+            filing_id: ID of the filing whose facts should be deleted
+
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            with self.engine.connect() as conn:
+                stmt = self.financial_facts_table.delete().where(
+                    self.financial_facts_table.c.filing_id == filing_id
+                )
+                result = conn.execute(stmt)
+                deleted_count = result.rowcount
+                conn.commit()
+
+                logger.info(
+                    f"Deleted {deleted_count} financial facts for filing {filing_id}"
+                )
+                return True
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error deleting financial facts for filing {filing_id}: {e}")
+            return False

@@ -31,7 +31,7 @@ class FilingsLoader:
         self.parser = parser or SEC10QParser()
 
     def load_company_filings(
-        self, ticker: str, form: str = "10-Q", limit: int = 5
+        self, ticker: str, form: str = "10-Q", limit: int = 5, override: bool = False
     ) -> dict:
         """Download and persist filings for a company.
 
@@ -39,12 +39,15 @@ class FilingsLoader:
             ticker: Company ticker symbol
             form: Form type (e.g., "10-Q", "10-K")
             limit: Maximum number of filings to load
+            override: If True, replace existing filing data
 
         Returns:
             Dictionary with loading results
         """
         try:
-            logger.info(f"Loading {form} filings for {ticker} (limit: {limit})")
+            logger.info(
+                f"Loading {form} filings for {ticker} (limit: {limit}, override: {override})"
+            )
 
             # Get or create company
             company = self._get_or_create_company(ticker)
@@ -62,18 +65,24 @@ class FilingsLoader:
             # Load filings up to limit
             loaded_count = 0
             total_facts = 0
+            updated_count = 0
 
             for filing in filings:
                 if loaded_count >= limit:
                     break
 
                 try:
-                    facts_count = self._load_single_filing(filing, company.id)
+                    facts_count, was_updated = self._load_single_filing(
+                        filing, company.id, override
+                    )
                     if facts_count > 0:
                         loaded_count += 1
                         total_facts += facts_count
+                        if was_updated:
+                            updated_count += 1
                         logger.info(
                             f"Loaded filing {filing.accession_number} with {facts_count} facts"
+                            + (" (updated)" if was_updated else " (new)")
                         )
                     else:
                         logger.warning(
@@ -88,8 +97,10 @@ class FilingsLoader:
                 "ticker": ticker,
                 "form": form,
                 "filings_loaded": loaded_count,
+                "filings_updated": updated_count,
                 "total_facts": total_facts,
                 "company_id": company.id,
+                "override_mode": override,
             }
 
         except Exception as e:
@@ -167,26 +178,43 @@ class FilingsLoader:
             logger.warning(f"Invalid month {month} for fiscal quarter calculation")
             return None
 
-    def _load_single_filing(self, filing, company_id: int) -> int:
+    def _load_single_filing(
+        self, filing, company_id: int, override: bool
+    ) -> tuple[int, bool]:
         """Load a single filing and persist its data.
 
         Args:
             filing: edgartools Filing object
             company_id: Database company ID
+            override: If True, replace existing filing data. If False, skip.
 
         Returns:
-            Number of facts extracted and persisted
+            Tuple of (number of facts extracted and persisted, was updated)
         """
         try:
             # Check if filing already exists
             existing_filing = self.database.filings.get_filing_by_number(
                 "SEC", filing.accession_number
             )
-            if existing_filing:
+
+            if existing_filing and not override:
                 logger.info(
-                    f"Filing {filing.accession_number} already exists, skipping"
+                    f"Filing {filing.accession_number} already exists and override is False, skipping"
                 )
-                return 0
+                return 0, False
+
+            # If filing exists and override is True, delete existing data
+            if existing_filing and override:
+                logger.info(f"Overriding existing filing {filing.accession_number}")
+                # Delete existing financial facts first (due to foreign key constraint)
+                self.database.financial_facts.delete_facts_by_filing_id(
+                    existing_filing.id
+                )
+                # Delete the filing
+                self.database.filings.delete_filing(existing_filing.id)
+                logger.info(
+                    f"Deleted existing filing {filing.accession_number} and its facts"
+                )
 
             # Calculate fiscal quarter from period end date
             fiscal_quarter = self._calculate_fiscal_quarter(filing.period_of_report)
@@ -209,9 +237,10 @@ class FilingsLoader:
             )
 
             filing_id = self.database.filings.insert_filing(filing_data)
+
             if not filing_id:
                 logger.error(f"Failed to insert filing {filing.accession_number}")
-                return 0
+                return 0, False
 
             # Parse financial facts
             facts = self.parser.parse_filing(filing)
@@ -219,7 +248,7 @@ class FilingsLoader:
                 logger.warning(
                     f"No facts extracted from filing {filing.accession_number}"
                 )
-                return 0
+                return 0, False
 
             # Set filing_id for all facts
             for fact in facts:
@@ -229,20 +258,23 @@ class FilingsLoader:
             inserted_facts = self.database.financial_facts.insert_financial_facts_batch(
                 facts
             )
+
             if inserted_facts:
+                was_updated = existing_filing is not None and override
                 logger.info(
                     f"Inserted {len(inserted_facts)} facts for filing {filing.accession_number}"
+                    + (" (updated)" if was_updated else " (new)")
                 )
-                return len(inserted_facts)
+                return len(inserted_facts), was_updated
             else:
                 logger.error(
                     f"Failed to insert facts for filing {filing.accession_number}"
                 )
-                return 0
+                return 0, False
 
         except Exception as e:
             logger.error(f"Error loading filing {filing.accession_number}: {e}")
-            return 0
+            return 0, False
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
         """Parse date string to date object.
