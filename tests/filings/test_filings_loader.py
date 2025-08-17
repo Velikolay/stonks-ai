@@ -1,5 +1,6 @@
 """Tests for the FilingsLoader."""
 
+from datetime import date
 from unittest.mock import Mock, patch
 
 from filings import FilingsDatabase
@@ -87,9 +88,7 @@ class TestFilingsLoader:
         mock_filing.accession_number = "0001193125-24-000001"
         mock_filing.form = "10-Q"
         mock_filing.filing_date = "2024-01-15"
-        mock_filing.period_of_report = (
-            "2024-01-15"  # This will be converted to date in the loader
-        )
+        mock_filing.period_of_report = "2024-03-31"  # Q1 end date
         mock_filing.url = "https://example.com/filing"
 
         # Mock parser returning facts
@@ -108,7 +107,62 @@ class TestFilingsLoader:
 
         assert result == 2
         mock_database.filings.insert_filing.assert_called_once()
+
+        # Verify that insert_filing was called with the correct fiscal quarter
+        call_args = mock_database.filings.insert_filing.call_args[0][0]
+        assert call_args.fiscal_quarter == 1  # March 31st should be Q1
+        assert call_args.fiscal_period_end == date(2024, 3, 31)
+
         mock_database.financial_facts.insert_financial_facts_batch.assert_called_once()
+
+    def test_load_single_filing_different_quarters(self):
+        """Test loading filings with different fiscal quarters."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)
+
+        # Test Q2 filing
+        mock_database.filings.get_filing_by_number.return_value = None
+        mock_filing_q2 = Mock()
+        mock_filing_q2.accession_number = "0001193125-24-000002"
+        mock_filing_q2.form = "10-Q"
+        mock_filing_q2.filing_date = "2024-05-15"
+        mock_filing_q2.period_of_report = "2024-06-30"  # Q2 end date
+        mock_filing_q2.url = "https://example.com/filing"
+
+        mock_facts = [Mock(spec=FinancialFact)]
+        loader.parser.parse_filing = Mock(return_value=mock_facts)
+        mock_db_filing = Mock(spec=Filing)
+        mock_db_filing.id = 1
+        mock_database.filings.insert_filing.return_value = mock_db_filing
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = (
+            mock_facts
+        )
+
+        result = loader._load_single_filing(mock_filing_q2, 1)
+        assert result == 1
+
+        # Verify Q2 was calculated correctly
+        call_args = mock_database.filings.insert_filing.call_args[0][0]
+        assert call_args.fiscal_quarter == 2  # June 30th should be Q2
+
+        # Test Q4 filing
+        mock_database.filings.get_filing_by_number.return_value = None
+        mock_filing_q4 = Mock()
+        mock_filing_q4.accession_number = "0001193125-24-000003"
+        mock_filing_q4.form = "10-K"
+        mock_filing_q4.filing_date = "2024-12-15"
+        mock_filing_q4.period_of_report = "2024-12-31"  # Q4 end date
+        mock_filing_q4.url = "https://example.com/filing"
+
+        result = loader._load_single_filing(mock_filing_q4, 1)
+        assert result == 1
+
+        # Verify Q4 was calculated correctly
+        call_args = mock_database.filings.insert_filing.call_args[0][0]
+        assert call_args.fiscal_quarter == 4  # December 31st should be Q4
 
     def test_load_single_filing_exists(self):
         """Test loading an existing filing."""
@@ -131,6 +185,55 @@ class TestFilingsLoader:
         mock_database.filings.get_filing_by_number.assert_called_once_with(
             "SEC", "0001193125-24-000001"
         )
+
+    def test_calculate_fiscal_quarter(self):
+        """Test fiscal quarter calculation from period end date."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)
+
+        # Test Q1 (Jan, Feb, Mar)
+        assert loader._calculate_fiscal_quarter("2024-01-31") == 1
+        assert loader._calculate_fiscal_quarter("2024-02-29") == 1
+        assert loader._calculate_fiscal_quarter("2024-03-31") == 1
+
+        # Test Q2 (Apr, May, Jun)
+        assert loader._calculate_fiscal_quarter("2024-04-30") == 2
+        assert loader._calculate_fiscal_quarter("2024-05-31") == 2
+        assert loader._calculate_fiscal_quarter("2024-06-30") == 2
+
+        # Test Q3 (Jul, Aug, Sep)
+        assert loader._calculate_fiscal_quarter("2024-07-31") == 3
+        assert loader._calculate_fiscal_quarter("2024-08-31") == 3
+        assert loader._calculate_fiscal_quarter("2024-09-30") == 3
+
+        # Test Q4 (Oct, Nov, Dec)
+        assert loader._calculate_fiscal_quarter("2024-10-31") == 4
+        assert loader._calculate_fiscal_quarter("2024-11-30") == 4
+        assert loader._calculate_fiscal_quarter("2024-12-31") == 4
+
+        # Test edge cases
+        assert loader._calculate_fiscal_quarter(None) is None
+        assert loader._calculate_fiscal_quarter("") is None
+        assert loader._calculate_fiscal_quarter("invalid-date") is None
+
+    def test_calculate_fiscal_quarter_invalid_month(self):
+        """Test fiscal quarter calculation with invalid month."""
+        mock_database = Mock()
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = FilingsLoader(mock_database)
+
+        # This should return None for invalid month (though this case is unlikely)
+        # We'll test with a date that would have an invalid month if parsed incorrectly
+        with patch.object(loader, "_parse_date") as mock_parse:
+            mock_parse.return_value = Mock()
+            mock_parse.return_value.month = 13  # Invalid month
+            result = loader._calculate_fiscal_quarter("2024-01-31")
+            assert result is None
 
     @patch("filings.filings_loader.Company")
     def test_load_company_filings_success(self, mock_company_class):

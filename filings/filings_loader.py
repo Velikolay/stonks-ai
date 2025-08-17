@@ -135,6 +135,38 @@ class FilingsLoader:
             logger.error(f"Error getting/creating company for {ticker}: {e}")
             return None
 
+    def _calculate_fiscal_quarter(
+        self, fiscal_period_end: Optional[str]
+    ) -> Optional[int]:
+        """Calculate fiscal quarter from fiscal period end date.
+
+        Args:
+            fiscal_period_end: Fiscal period end date string (YYYY-MM-DD format)
+
+        Returns:
+            Fiscal quarter (1-4) or None if date cannot be parsed
+        """
+        if not fiscal_period_end:
+            return None
+
+        parsed_date = self._parse_date(fiscal_period_end)
+        if not parsed_date:
+            return None
+
+        # Calculate quarter based on month
+        month = parsed_date.month
+        if month in [1, 2, 3]:
+            return 1
+        elif month in [4, 5, 6]:
+            return 2
+        elif month in [7, 8, 9]:
+            return 3
+        elif month in [10, 11, 12]:
+            return 4
+        else:
+            logger.warning(f"Invalid month {month} for fiscal quarter calculation")
+            return None
+
     def _load_single_filing(self, filing, company_id: int) -> int:
         """Load a single filing and persist its data.
 
@@ -156,6 +188,9 @@ class FilingsLoader:
                 )
                 return 0
 
+            # Calculate fiscal quarter from period end date
+            fiscal_quarter = self._calculate_fiscal_quarter(filing.period_of_report)
+
             # Create filing record
             filing_data = FilingCreate(
                 company_id=company_id,
@@ -169,7 +204,7 @@ class FilingsLoader:
                     if filing.period_of_report
                     else None
                 ),
-                fiscal_quarter=1,  # Default to Q1, could be enhanced to extract from filing
+                fiscal_quarter=fiscal_quarter,
                 public_url=filing.url,
             )
 
