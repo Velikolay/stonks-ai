@@ -54,6 +54,10 @@ class SEC10QParser:
             )
             facts.extend(cashflow_facts)
 
+            # Parse disaggregated revenues
+            disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
+            facts.extend(disaggregated_revenue_facts)
+
             logger.info(
                 f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
             )
@@ -147,6 +151,168 @@ class SEC10QParser:
             logger.error(f"Error parsing {statement_type}: {e}")
 
         return facts
+
+    def _parse_disaggregated_revenues(self, xbrl) -> List[FinancialFact]:
+        """Parse disaggregated revenues using XBRL queries.
+
+        Args:
+            xbrl: XBRL object from edgartools
+
+        Returns:
+            List of FinancialFact objects for disaggregated revenues
+        """
+        facts = []
+
+        try:
+            # Query disaggregated revenues by product/service
+            revenue_df = (
+                xbrl.query()
+                .by_concept("Revenue")
+                .by_dimension("ProductOrServiceAxis")
+                .to_dataframe()
+            )
+
+            if revenue_df is not None and not revenue_df.empty:
+                # Get the latest period for each product/service
+                disaggregated_revenue = revenue_df.loc[
+                    revenue_df.groupby("dim_srt_ProductOrServiceAxis")[
+                        "period_start"
+                    ].idxmax()
+                ]
+
+                for _, row in disaggregated_revenue.iterrows():
+                    fact = self._create_disaggregated_revenue_fact(
+                        row, dimension_type="Product"
+                    )
+                    if fact:
+                        facts.append(fact)
+
+            # Query disaggregated revenues by geographic region
+            geographic_revenue_df = (
+                xbrl.query()
+                .by_concept("Revenue")
+                .by_dimension("StatementGeographicAxis")
+                .to_dataframe()
+            )
+
+            if geographic_revenue_df is not None and not geographic_revenue_df.empty:
+                # Get the latest period for each geographic region
+                geographic_revenue = geographic_revenue_df.loc[
+                    geographic_revenue_df.groupby("dim_srt_StatementGeographicAxis")[
+                        "period_start"
+                    ].idxmax()
+                ]
+
+                for _, row in geographic_revenue.iterrows():
+                    fact = self._create_disaggregated_revenue_fact(
+                        row, dimension_type="Geographic"
+                    )
+                    if fact:
+                        facts.append(fact)
+
+            # Query disaggregated revenues by customer type
+            customer_revenue_df = (
+                xbrl.query()
+                .by_concept("Revenue")
+                .by_dimension("CustomerTypeAxis")
+                .to_dataframe()
+            )
+
+            if customer_revenue_df is not None and not customer_revenue_df.empty:
+                # Get the latest period for each customer type
+                customer_revenue = customer_revenue_df.loc[
+                    customer_revenue_df.groupby("dim_srt_CustomerTypeAxis")[
+                        "period_start"
+                    ].idxmax()
+                ]
+
+                for _, row in customer_revenue.iterrows():
+                    fact = self._create_disaggregated_revenue_fact(
+                        row, dimension_type="Customer"
+                    )
+                    if fact:
+                        facts.append(fact)
+
+            logger.info(f"Extracted {len(facts)} disaggregated revenue facts")
+
+        except Exception as e:
+            logger.error(f"Error parsing disaggregated revenues: {e}")
+
+        return facts
+
+    def _create_disaggregated_revenue_fact(
+        self, row, dimension_type
+    ) -> Optional[FinancialFact]:
+        """Create a FinancialFact for disaggregated revenue.
+
+        Args:
+            row: DataFrame row from XBRL query
+            dimension_type: Type of dimension (Product, Geographic, Customer)
+
+        Returns:
+            FinancialFact object or None if invalid
+        """
+        try:
+            # Extract basic information
+            concept = row.get("concept", "Revenue")
+            value = row.get("value")
+
+            # Get the original label from the XBRL data
+            original_label = row.get("label", concept)
+
+            # Extract dimension information
+            if dimension_type == "Product":
+                axis = "ProductOrServiceAxis"
+                member = row.get("dim_srt_ProductOrServiceAxis", "Unknown Product")
+            elif dimension_type == "Geographic":
+                axis = "StatementGeographicAxis"
+                member = row.get("dim_srt_StatementGeographicAxis", "Unknown Region")
+            elif dimension_type == "Customer":
+                axis = "CustomerTypeAxis"
+                member = row.get("dim_srt_CustomerTypeAxis", "Unknown Customer")
+            else:
+                axis = None
+                member = None
+
+            # Skip if no value
+            if not value:
+                return None
+
+            # Convert value to Decimal
+            try:
+                decimal_value = Decimal(str(value))
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid value for disaggregated revenue: {value}")
+                return None
+
+            # Parse dates
+            period_start = self._parse_date(row.get("period_start"))
+            period_end = self._parse_date(row.get("period_end"))
+
+            # Create label using original concept label and member
+            label = f"{original_label} - {member}" if member else original_label
+
+            # Create the financial fact
+            fact = FinancialFact(
+                id=0,  # Will be set by database
+                filing_id=0,  # Will be set by caller
+                concept=concept,
+                label=label,
+                value=decimal_value,
+                unit="USD",  # Default unit
+                axis=axis,
+                member=member,
+                statement=f"Disaggregated Revenue ({dimension_type})",
+                period_end=period_end,
+                period_start=period_start,
+                abstracts=None,  # No hierarchy for disaggregated data
+            )
+
+            return fact
+
+        except Exception as e:
+            logger.error(f"Error creating disaggregated revenue fact: {e}")
+            return None
 
     def _create_financial_fact_with_hierarchy(
         self,
