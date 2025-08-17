@@ -10,6 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      # Named volume for persistent database data
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
@@ -28,7 +29,9 @@ services:
       postgres:
         condition: service_healthy
     volumes:
+      # Mount application data directory
       - ./data:/app/data
+      # Mount source code for development
       - .:/app
       - /app/venv
       - /app/__pycache__
@@ -53,4 +56,7 @@ services:
       - migrate
 
 volumes:
+  # Named volume for persistent PostgreSQL data
+  # This volume will persist data even when containers are removed
   postgres_data:
+    driver: local
