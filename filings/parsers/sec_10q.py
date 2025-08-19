@@ -63,6 +63,12 @@ class SEC10QParser:
             disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
             facts.extend(disaggregated_revenue_facts)
 
+            # Parse disaggregated operating income
+            disaggregated_operating_income_facts = (
+                self._parse_disaggregated_operating_income(xbrl)
+            )
+            facts.extend(disaggregated_operating_income_facts)
+
             logger.info(
                 f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
             )
@@ -157,9 +163,108 @@ class SEC10QParser:
 
         return facts
 
-    def to_df_dim(self, sec_dim: str) -> str:
-        dim = sec_dim.replace(":", "_")
-        return f"dim_{dim}"
+    def _parse_disaggregated_metrics(self, xbrl, metric: str) -> List[FinancialFact]:
+        """Parse disaggregated metrics using XBRL queries.
+
+        Args:
+            xbrl: XBRL object from edgartools
+            metric: The metric to parse (e.g., "Revenue", "OperatingIncome", etc.)
+
+        Returns:
+            List of FinancialFact objects for disaggregated metrics
+        """
+        facts = []
+
+        try:
+            # Query disaggregated metrics by product/service
+            product_df = (
+                xbrl.query()
+                .by_concept(metric)
+                .by_dimension("ProductOrServiceAxis")
+                .to_dataframe()
+            )
+
+            if product_df is not None and not product_df.empty:
+                # Get the latest period for each product/service
+                product_metrics = product_df.loc[
+                    product_df.groupby(self._to_df_dim("srt:ProductOrServiceAxis"))[
+                        "period_start"
+                    ].idxmax()
+                ]
+
+                for _, row in product_metrics.iterrows():
+                    fact = self._create_disaggregated_metric_fact(
+                        row,
+                        metric=metric,
+                        dimension="srt:ProductOrServiceAxis",
+                        dimension_type="Product",
+                    )
+                    if fact:
+                        facts.append(fact)
+
+            # Query disaggregated metrics by geographic region
+            geographic_df = (
+                xbrl.query()
+                .by_concept(metric)
+                .by_dimension("StatementGeographicAxis")
+                .to_dataframe()
+            )
+
+            if geographic_df is not None and not geographic_df.empty:
+                # Get the latest period for each geographic region
+                geographic_metrics = geographic_df.loc[
+                    geographic_df.groupby(
+                        self._to_df_dim("srt:StatementGeographicAxis")
+                    )["period_start"].idxmax()
+                ]
+
+                for _, row in geographic_metrics.iterrows():
+                    fact = self._create_disaggregated_metric_fact(
+                        row,
+                        metric=metric,
+                        dimension="srt:StatementGeographicAxis",
+                        dimension_type="Geographic",
+                    )
+                    if fact:
+                        facts.append(fact)
+
+            # Query disaggregated metrics by business segments (geographic regions)
+            business_segments_df = (
+                xbrl.query()
+                .by_concept(metric)
+                .by_dimension("StatementBusinessSegmentsAxis")
+                .to_dataframe()
+            )
+
+            if business_segments_df is not None and not business_segments_df.empty:
+                # Get the latest period for each business segment
+                business_segments_metrics = business_segments_df.loc[
+                    business_segments_df.groupby(
+                        self._to_df_dim("us-gaap:StatementBusinessSegmentsAxis")
+                    )["period_start"].idxmax()
+                ]
+
+                for _, row in business_segments_metrics.iterrows():
+                    # Check if this business segment contains geographic region information
+                    segment_member = row.get(
+                        self._to_df_dim("us-gaap:StatementBusinessSegmentsAxis"), ""
+                    )
+                    if self.geography_parser.is_geography_text(segment_member):
+                        fact = self._create_disaggregated_metric_fact(
+                            row,
+                            metric=metric,
+                            dimension="us-gaap:StatementBusinessSegmentsAxis",
+                            dimension_type="Geographic",
+                        )
+                        if fact:
+                            facts.append(fact)
+
+            logger.info(f"Extracted {len(facts)} disaggregated {metric} facts")
+
+        except Exception as e:
+            logger.error(f"Error parsing disaggregated {metric}: {e}")
+
+        return facts
 
     def _parse_disaggregated_revenues(self, xbrl) -> List[FinancialFact]:
         """Parse disaggregated revenues using XBRL queries.
@@ -170,118 +275,43 @@ class SEC10QParser:
         Returns:
             List of FinancialFact objects for disaggregated revenues
         """
-        facts = []
+        return self._parse_disaggregated_metrics(xbrl, "Revenue")
 
-        try:
-            # Query disaggregated revenues by product/service
-            revenue_df = (
-                xbrl.query()
-                .by_concept("Revenue")
-                .by_dimension("ProductOrServiceAxis")
-                .to_dataframe()
-            )
+    def _parse_disaggregated_operating_income(self, xbrl) -> List[FinancialFact]:
+        """Parse disaggregated operating income using XBRL queries.
 
-            if revenue_df is not None and not revenue_df.empty:
-                # Get the latest period for each product/service
-                disaggregated_revenue = revenue_df.loc[
-                    revenue_df.groupby(self.to_df_dim("srt:ProductOrServiceAxis"))[
-                        "period_start"
-                    ].idxmax()
-                ]
+        Args:
+            xbrl: XBRL object from edgartools
 
-                for _, row in disaggregated_revenue.iterrows():
-                    fact = self._create_disaggregated_revenue_fact(
-                        row,
-                        dimension="srt:ProductOrServiceAxis",
-                        dimension_type="Product",
-                    )
-                    if fact:
-                        facts.append(fact)
+        Returns:
+            List of FinancialFact objects for disaggregated operating income
+        """
+        return self._parse_disaggregated_metrics(xbrl, "OperatingIncome")
 
-            # Query disaggregated revenues by geographic region
-            geographic_revenue_df = (
-                xbrl.query()
-                .by_concept("Revenue")
-                .by_dimension("StatementGeographicAxis")
-                .to_dataframe()
-            )
-
-            if geographic_revenue_df is not None and not geographic_revenue_df.empty:
-                # Get the latest period for each geographic region
-                geographic_revenue = geographic_revenue_df.loc[
-                    geographic_revenue_df.groupby(
-                        self.to_df_dim("srt:StatementGeographicAxis")
-                    )["period_start"].idxmax()
-                ]
-
-                for _, row in geographic_revenue.iterrows():
-                    fact = self._create_disaggregated_revenue_fact(
-                        row,
-                        dimension="srt:StatementGeographicAxis",
-                        dimension_type="Geographic",
-                    )
-                    if fact:
-                        facts.append(fact)
-
-            # Query disaggregated revenues by business segments (geographic regions)
-            business_segments_df = (
-                xbrl.query()
-                .by_concept("Revenue")
-                .by_dimension("StatementBusinessSegmentsAxis")
-                .to_dataframe()
-            )
-
-            if business_segments_df is not None and not business_segments_df.empty:
-                # Get the latest period for each business segment
-                business_segments = business_segments_df.loc[
-                    business_segments_df.groupby(
-                        self.to_df_dim("us-gaap:StatementBusinessSegmentsAxis")
-                    )["period_start"].idxmax()
-                ]
-
-                for _, row in business_segments.iterrows():
-                    # Check if this business segment contains geographic region information
-                    segment_member = row.get(
-                        self.to_df_dim("us-gaap:StatementBusinessSegmentsAxis"), ""
-                    )
-                    if self.geography_parser.is_geography_text(segment_member):
-                        fact = self._create_disaggregated_revenue_fact(
-                            row,
-                            dimension="us-gaap:StatementBusinessSegmentsAxis",
-                            dimension_type="Geographic",
-                        )
-                        if fact:
-                            facts.append(fact)
-
-            logger.info(f"Extracted {len(facts)} disaggregated revenue facts")
-
-        except Exception as e:
-            logger.error(f"Error parsing disaggregated revenues: {e}")
-
-        return facts
-
-    def _create_disaggregated_revenue_fact(
-        self, row, dimension: str, dimension_type: str
+    def _create_disaggregated_metric_fact(
+        self, row, metric: str, dimension: str, dimension_type: str
     ) -> Optional[FinancialFact]:
-        """Create a FinancialFact for disaggregated revenue.
+        """Create a FinancialFact for disaggregated metrics.
 
         Args:
             row: DataFrame row from XBRL query
+            dimension: The dimension axis
             dimension_type: Type of dimension (Product, Geographic)
+            metric: The metric being disaggregated (e.g., "Revenue", "OperatingIncome")
 
         Returns:
             FinancialFact object or None if invalid
         """
         try:
             # Extract basic information
-            concept = row.get("concept", "Revenue")
+            concept = row.get("concept", metric)
             value = row.get("value")
 
             # Get the original label from the XBRL data
             original_label = row.get("label", concept)
 
             axis = dimension
-            member = row.get(self.to_df_dim(dimension), "UnknownMember")
+            member = row.get(self._to_df_dim(dimension), "UnknownMember")
 
             # Skip if no value
             if not value:
@@ -291,7 +321,7 @@ class SEC10QParser:
             try:
                 decimal_value = Decimal(str(value))
             except (ValueError, TypeError):
-                logger.warning(f"Invalid value for disaggregated revenue: {value}")
+                logger.warning(f"Invalid value for disaggregated {metric}: {value}")
                 return None
 
             # Parse dates
@@ -311,7 +341,7 @@ class SEC10QParser:
                 unit="USD",  # Default unit
                 axis=axis,
                 member=member,
-                statement=f"Disaggregated Revenue ({dimension_type})",
+                statement=f"Disaggregated {metric} ({dimension_type})",
                 period_end=period_end,
                 period_start=period_start,
                 abstracts=None,  # No hierarchy for disaggregated data
@@ -320,8 +350,12 @@ class SEC10QParser:
             return fact
 
         except Exception as e:
-            logger.error(f"Error creating disaggregated revenue fact: {e}")
+            logger.error(f"Error creating disaggregated {metric} fact: {e}")
             return None
+
+    def _to_df_dim(self, sec_dim: str) -> str:
+        dim = sec_dim.replace(":", "_")
+        return f"dim_{dim}"
 
     def _create_financial_fact_with_hierarchy(
         self,

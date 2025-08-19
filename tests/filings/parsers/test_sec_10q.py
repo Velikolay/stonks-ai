@@ -37,8 +37,8 @@ class TestSEC10QParser:
         mock_query.to_dataframe.return_value = mock_revenue_df
         mock_xbrl.query.return_value = mock_query
 
-        # Mock the _create_disaggregated_revenue_fact method to return expected facts
-        with patch.object(parser, "_create_disaggregated_revenue_fact") as mock_create:
+        # Mock the _create_disaggregated_metric_fact method to return expected facts
+        with patch.object(parser, "_create_disaggregated_metric_fact") as mock_create:
             mock_facts = []
             for i, product in enumerate(["iPhone", "Mac", "iPad"]):
                 mock_fact = Mock()
@@ -121,8 +121,11 @@ class TestSEC10QParser:
             "dim_srt_ProductOrServiceAxis": "iPhone",
         }
 
-        fact = parser._create_disaggregated_revenue_fact(
-            row, dimension="srt:ProductOrServiceAxis", dimension_type="Product"
+        fact = parser._create_disaggregated_metric_fact(
+            row,
+            metric="Revenue",
+            dimension="srt:ProductOrServiceAxis",
+            dimension_type="Product",
         )
 
         assert fact.concept == "Revenue"
@@ -147,8 +150,11 @@ class TestSEC10QParser:
             "dim_srt_ProductOrServiceAxis": "iPhone",
         }
 
-        fact = parser._create_disaggregated_revenue_fact(
-            row, dimension="srt:ProductOrServiceAxis", dimension_type="Product"
+        fact = parser._create_disaggregated_metric_fact(
+            row,
+            metric="Revenue",
+            dimension="srt:ProductOrServiceAxis",
+            dimension_type="Product",
         )
 
         assert fact is None
@@ -283,3 +289,53 @@ class TestSEC10QParser:
 
         # Verify that the custom parser is used
         assert parser.geography_parser is custom_parser
+
+    def test_parse_disaggregated_metrics_operating_income(self):
+        """Test parsing disaggregated operating income by product."""
+        geography_parser = GeographyParser()
+        parser = SEC10QParser(geography_parser=geography_parser)
+
+        # Mock XBRL query result for operating income by product
+        mock_operating_income_df = pd.DataFrame(
+            {
+                "concept": ["OperatingIncome", "OperatingIncome", "OperatingIncome"],
+                "label": ["Operating Income", "Operating Income", "Operating Income"],
+                "value": [500000, 300000, 200000],
+                "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
+                "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
+                "dim_srt_ProductOrServiceAxis": ["iPhone", "Mac", "iPad"],
+            }
+        )
+
+        # Mock XBRL object
+        mock_xbrl = Mock()
+        mock_query = Mock()
+        mock_query.by_concept.return_value = mock_query
+        mock_query.by_dimension.return_value = mock_query
+        mock_query.to_dataframe.return_value = mock_operating_income_df
+        mock_xbrl.query.return_value = mock_query
+
+        # Mock the _create_disaggregated_metric_fact method to return expected facts
+        with patch.object(parser, "_create_disaggregated_metric_fact") as mock_create:
+            mock_facts = []
+            for i, product in enumerate(["iPhone", "Mac", "iPad"]):
+                mock_fact = Mock()
+                mock_fact.concept = "OperatingIncome"
+                mock_fact.member = product
+                mock_fact.value = Decimal(str(500000 - i * 100000))
+                mock_fact.axis = "srt:ProductOrServiceAxis"
+                mock_fact.statement = "Disaggregated OperatingIncome (Product)"
+                mock_fact.label = f"Operating Income - {product}"
+                mock_facts.append(mock_fact)
+
+            mock_create.side_effect = mock_facts
+
+            facts = parser._parse_disaggregated_metrics(mock_xbrl, "OperatingIncome")
+
+            assert len(facts) == 3
+            assert facts[0].concept == "OperatingIncome"
+            assert facts[0].member == "iPhone"
+            assert facts[0].value == Decimal("500000")
+            assert facts[0].axis == "srt:ProductOrServiceAxis"
+            assert facts[0].statement == "Disaggregated OperatingIncome (Product)"
+            assert facts[0].label == "Operating Income - iPhone"
