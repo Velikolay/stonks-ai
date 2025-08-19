@@ -9,6 +9,7 @@ import pandas as pd
 from edgar import Company, Filing
 
 from ..models import FinancialFact, FinancialFactAbstract
+from .geography_parser import GeographyParser
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +17,13 @@ logger = logging.getLogger(__name__)
 class SEC10QParser:
     """Parser for SEC 10-Q filings using edgartools."""
 
-    def __init__(self):
-        """Initialize the parser."""
-        pass
+    def __init__(self, geography_parser: GeographyParser):
+        """Initialize the parser.
+
+        Args:
+            geography_parser: Geography parser instance.
+        """
+        self.geography_parser = geography_parser
 
     def parse_filing(self, filing: Filing) -> List[FinancialFact]:
         """Parse a 10-Q filing and extract financial facts.
@@ -152,6 +157,10 @@ class SEC10QParser:
 
         return facts
 
+    def to_df_dim(self, sec_dim: str) -> str:
+        dim = sec_dim.replace(":", "_")
+        return f"dim_{dim}"
+
     def _parse_disaggregated_revenues(self, xbrl) -> List[FinancialFact]:
         """Parse disaggregated revenues using XBRL queries.
 
@@ -175,14 +184,16 @@ class SEC10QParser:
             if revenue_df is not None and not revenue_df.empty:
                 # Get the latest period for each product/service
                 disaggregated_revenue = revenue_df.loc[
-                    revenue_df.groupby("dim_srt_ProductOrServiceAxis")[
+                    revenue_df.groupby(self.to_df_dim("srt:ProductOrServiceAxis"))[
                         "period_start"
                     ].idxmax()
                 ]
 
                 for _, row in disaggregated_revenue.iterrows():
                     fact = self._create_disaggregated_revenue_fact(
-                        row, dimension_type="Product"
+                        row,
+                        dimension="srt:ProductOrServiceAxis",
+                        dimension_type="Product",
                     )
                     if fact:
                         facts.append(fact)
@@ -198,40 +209,49 @@ class SEC10QParser:
             if geographic_revenue_df is not None and not geographic_revenue_df.empty:
                 # Get the latest period for each geographic region
                 geographic_revenue = geographic_revenue_df.loc[
-                    geographic_revenue_df.groupby("dim_srt_StatementGeographicAxis")[
-                        "period_start"
-                    ].idxmax()
+                    geographic_revenue_df.groupby(
+                        self.to_df_dim("srt:StatementGeographicAxis")
+                    )["period_start"].idxmax()
                 ]
 
                 for _, row in geographic_revenue.iterrows():
                     fact = self._create_disaggregated_revenue_fact(
-                        row, dimension_type="Geographic"
+                        row,
+                        dimension="srt:StatementGeographicAxis",
+                        dimension_type="Geographic",
                     )
                     if fact:
                         facts.append(fact)
 
-            # Query disaggregated revenues by customer type
-            customer_revenue_df = (
+            # Query disaggregated revenues by business segments (geographic regions)
+            business_segments_df = (
                 xbrl.query()
                 .by_concept("Revenue")
-                .by_dimension("CustomerTypeAxis")
+                .by_dimension("StatementBusinessSegmentsAxis")
                 .to_dataframe()
             )
 
-            if customer_revenue_df is not None and not customer_revenue_df.empty:
-                # Get the latest period for each customer type
-                customer_revenue = customer_revenue_df.loc[
-                    customer_revenue_df.groupby("dim_srt_CustomerTypeAxis")[
-                        "period_start"
-                    ].idxmax()
+            if business_segments_df is not None and not business_segments_df.empty:
+                # Get the latest period for each business segment
+                business_segments = business_segments_df.loc[
+                    business_segments_df.groupby(
+                        self.to_df_dim("us-gaap:StatementBusinessSegmentsAxis")
+                    )["period_start"].idxmax()
                 ]
 
-                for _, row in customer_revenue.iterrows():
-                    fact = self._create_disaggregated_revenue_fact(
-                        row, dimension_type="Customer"
+                for _, row in business_segments.iterrows():
+                    # Check if this business segment contains geographic region information
+                    segment_member = row.get(
+                        self.to_df_dim("us-gaap:StatementBusinessSegmentsAxis"), ""
                     )
-                    if fact:
-                        facts.append(fact)
+                    if self.geography_parser.is_geography_text(segment_member):
+                        fact = self._create_disaggregated_revenue_fact(
+                            row,
+                            dimension="us-gaap:StatementBusinessSegmentsAxis",
+                            dimension_type="Geographic",
+                        )
+                        if fact:
+                            facts.append(fact)
 
             logger.info(f"Extracted {len(facts)} disaggregated revenue facts")
 
@@ -241,13 +261,13 @@ class SEC10QParser:
         return facts
 
     def _create_disaggregated_revenue_fact(
-        self, row, dimension_type
+        self, row, dimension: str, dimension_type: str
     ) -> Optional[FinancialFact]:
         """Create a FinancialFact for disaggregated revenue.
 
         Args:
             row: DataFrame row from XBRL query
-            dimension_type: Type of dimension (Product, Geographic, Customer)
+            dimension_type: Type of dimension (Product, Geographic)
 
         Returns:
             FinancialFact object or None if invalid
@@ -260,19 +280,8 @@ class SEC10QParser:
             # Get the original label from the XBRL data
             original_label = row.get("label", concept)
 
-            # Extract dimension information
-            if dimension_type == "Product":
-                axis = "ProductOrServiceAxis"
-                member = row.get("dim_srt_ProductOrServiceAxis", "Unknown Product")
-            elif dimension_type == "Geographic":
-                axis = "StatementGeographicAxis"
-                member = row.get("dim_srt_StatementGeographicAxis", "Unknown Region")
-            elif dimension_type == "Customer":
-                axis = "CustomerTypeAxis"
-                member = row.get("dim_srt_CustomerTypeAxis", "Unknown Customer")
-            else:
-                axis = None
-                member = None
+            axis = dimension
+            member = row.get(self.to_df_dim(dimension), "UnknownMember")
 
             # Skip if no value
             if not value:
