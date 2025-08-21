@@ -1,6 +1,6 @@
 """Tests for the geography parser."""
 
-from filings.parsers.geography_parser import GeographyParser
+from filings.parsers.geography import GeographyParser
 
 
 class TestGeographyParser:

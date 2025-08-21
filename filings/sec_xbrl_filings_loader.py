@@ -1,4 +1,4 @@
-"""Loaders for downloading and persisting SEC filings."""
+"""Loaders for downloading and persisting SEC XBRL filings."""
 
 import logging
 from datetime import date
@@ -10,26 +10,26 @@ from edgar import Company
 from filings import FilingsDatabase
 from filings.models.company import CompanyCreate
 from filings.models.filing import FilingCreate
-from filings.parsers.geography_parser import GeographyParser
-from filings.parsers.sec_10q import SEC10QParser
+from filings.parsers.geography import GeographyParser
+from filings.parsers.sec_xbrl import SECXBRLParser
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 
-class FilingsLoader:
-    """Loader for downloading and persisting SEC filings."""
+class SECXBRLFilingsLoader:
+    """Loader for downloading and persisting SEC XBRL filings."""
 
-    def __init__(self, database: FilingsDatabase, parser: SEC10QParser = None):
-        """Initialize the filings loader.
+    def __init__(self, database: FilingsDatabase, parser: SECXBRLParser = None):
+        """Initialize the XBRL filings loader.
 
         Args:
             database: FilingsDatabase instance to use for database operations
             parser: Parser instance for extracting financial facts from filings
         """
         self.database = database
-        self.parser = parser or SEC10QParser(GeographyParser())
+        self.parser = parser or SECXBRLParser(GeographyParser())
 
     def load_company_filings(
         self, ticker: str, form: str = "10-Q", limit: int = 5, override: bool = False

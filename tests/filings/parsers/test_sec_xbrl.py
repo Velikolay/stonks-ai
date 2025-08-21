@@ -5,17 +5,17 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 
-from filings.parsers.geography_parser import GeographyParser
-from filings.parsers.sec_10q import SEC10QParser
+from filings.parsers.geography import GeographyParser
+from filings.parsers.sec_xbrl import SECXBRLParser
 
 
-class TestSEC10QParser:
-    """Test the SEC 10-Q parser."""
+class TestSECXBRLParser:
+    """Test the SEC XBRL parser."""
 
     def test_parse_disaggregated_revenues_product(self):
         """Test parsing disaggregated revenues by product."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL query result for product revenue
         mock_revenue_df = pd.DataFrame(
@@ -65,7 +65,7 @@ class TestSEC10QParser:
     def test_parse_disaggregated_revenues_geographic(self):
         """Test parsing disaggregated revenues by geographic region."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL query result for geographic revenue
         mock_revenue_df = pd.DataFrame(
@@ -109,7 +109,7 @@ class TestSEC10QParser:
     def test_create_disaggregated_revenue_fact(self):
         """Test creating disaggregated revenue fact."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock row data
         row = {
@@ -138,7 +138,7 @@ class TestSEC10QParser:
     def test_create_disaggregated_revenue_fact_invalid_value(self):
         """Test creating disaggregated revenue fact with invalid value."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock row data with invalid value
         row = {
@@ -162,7 +162,7 @@ class TestSEC10QParser:
     def test_parse_disaggregated_revenues_empty_data(self):
         """Test parsing disaggregated revenues with empty data."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL object with empty results
         mock_xbrl = Mock()
@@ -179,7 +179,7 @@ class TestSEC10QParser:
     def test_parse_disaggregated_revenues_business_segment(self):
         """Test parsing disaggregated revenues by business segments (geographic regions)."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL query result for business segment revenue
         mock_revenue_df = pd.DataFrame(
@@ -237,7 +237,7 @@ class TestSEC10QParser:
     def test_parse_disaggregated_revenues_business_segment_non_region(self):
         """Test that business segments without region information are ignored."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL query result for business segment revenue with non-region segments
         mock_revenue_df = pd.DataFrame(
@@ -280,12 +280,12 @@ class TestSEC10QParser:
         assert len(facts) == 0
 
     def test_constructor_with_custom_geography_parser(self):
-        """Test that SEC10QParser can accept a custom geography parser."""
+        """Test that SECXBRLParser can accept a custom geography parser."""
         # Create a custom geography parser
         custom_parser = GeographyParser()
 
-        # Create SEC10QParser with custom geography parser
-        parser = SEC10QParser(geography_parser=custom_parser)
+        # Create SECXBRLParser with custom geography parser
+        parser = SECXBRLParser(geography_parser=custom_parser)
 
         # Verify that the custom parser is used
         assert parser.geography_parser is custom_parser
@@ -293,7 +293,7 @@ class TestSEC10QParser:
     def test_parse_disaggregated_metrics_operating_income(self):
         """Test parsing disaggregated operating income by product."""
         geography_parser = GeographyParser()
-        parser = SEC10QParser(geography_parser=geography_parser)
+        parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Mock XBRL query result for operating income by product
         mock_operating_income_df = pd.DataFrame(

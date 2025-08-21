@@ -1,11 +1,11 @@
-"""Example usage of the SEC 10-Q XBRL parser."""
+"""Example usage of the SEC XBRL parser."""
 
 import logging
 
 from edgar import set_identity
 
-from filings.parsers.geography_parser import GeographyParser
-from filings.parsers.sec_10q import SEC10QParser
+from filings.parsers.geography import GeographyParser
+from filings.parsers.sec_xbrl import SECXBRLParser
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +20,7 @@ def example_parse_company_filings():
     set_identity("felinephonix@gmail.com")
 
     try:
-        parser = SEC10QParser(GeographyParser())
+        parser = SECXBRLParser(GeographyParser())
 
         # Parse the latest 3 10-Q filings for Apple
         facts = parser.parse_company_filings(ticker, form="10-Q", limit=1)

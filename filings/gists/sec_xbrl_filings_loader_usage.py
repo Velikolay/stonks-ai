@@ -1,9 +1,9 @@
-"""Example usage of the FilingsLoader to download and persist SEC filings."""
+"""Example usage of the XBRLFilingsLoader to download and persist SEC XBRL filings."""
 
 import logging
 
 from filings import FilingsDatabase
-from filings.filings_loader import FilingsLoader
+from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -14,19 +14,19 @@ DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
 
 
 def example_load_aapl_filings():
-    """Example: Load Apple's 10-Q filings."""
-    logger.info("Loading Apple's 10-Q filings...")
+    """Example: Load Apple's 10-Q XBRL filings."""
+    logger.info("Loading Apple's 10-Q XBRL filings...")
 
     # Initialize database and loader
     database = FilingsDatabase(DATABASE_URL)
-    loader = FilingsLoader(database)
+    loader = SECXBRLFilingsLoader(database)
 
     try:
         # Process filings
         result = loader.load_company_filings(
             ticker="AAPL",
             form="10-Q",
-            limit=10,
+            limit=20,
         )
 
         if "error" in result:
@@ -41,12 +41,12 @@ def example_load_aapl_filings():
 
 
 def example_load_with_override():
-    """Example: Load filings with override to replace existing data."""
-    logger.info("Loading Apple's 10-Q filings with override...")
+    """Example: Load XBRL filings with override to replace existing data."""
+    logger.info("Loading Apple's 10-Q XBRL filings with override...")
 
     # Initialize database and loader
     database = FilingsDatabase(DATABASE_URL)
-    loader = FilingsLoader(database)
+    loader = SECXBRLFilingsLoader(database)
 
     try:
         # Process filings with override

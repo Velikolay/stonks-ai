@@ -9,13 +9,13 @@ import pandas as pd
 from edgar import Company, Filing
 
 from ..models import FinancialFact, FinancialFactAbstract
-from .geography_parser import GeographyParser
+from .geography import GeographyParser
 
 logger = logging.getLogger(__name__)
 
 
-class SEC10QParser:
-    """Parser for SEC 10-Q filings using edgartools."""
+class SECXBRLParser:
+    """Parser for SEC XBRL (10-Q, 10-K, etc.) filings using edgartools."""
 
     def __init__(self, geography_parser: GeographyParser):
         """Initialize the parser.
@@ -26,7 +26,7 @@ class SEC10QParser:
         self.geography_parser = geography_parser
 
     def parse_filing(self, filing: Filing) -> List[FinancialFact]:
-        """Parse a 10-Q filing and extract financial facts.
+        """Parse an XBRL filing and extract financial facts.
 
         Args:
             filing: The edgartools Filing object

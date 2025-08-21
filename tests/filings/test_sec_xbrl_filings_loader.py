@@ -1,22 +1,22 @@
-"""Tests for the FilingsLoader."""
+"""Tests for the XBRLFilingsLoader."""
 
 from datetime import date
 from unittest.mock import Mock, patch
 
 from filings import FilingsDatabase
-from filings.filings_loader import FilingsLoader
 from filings.models.company import Company
 from filings.models.filing import Filing
 from filings.models.financial_fact import FinancialFact
+from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 
-class TestFilingsLoader:
-    """Test the FilingsLoader class."""
+class TestXBRLFilingsLoader:
+    """Test the XBRLFilingsLoader class."""
 
     def test_loader_initialization(self):
         """Test loader initialization."""
         mock_database = Mock(spec=FilingsDatabase)
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         assert loader.parser is not None
         assert loader.database == mock_database
@@ -25,7 +25,7 @@ class TestFilingsLoader:
         """Test loader initialization with custom parser."""
         mock_database = Mock()
         mock_parser = Mock()
-        loader = FilingsLoader(mock_database, parser=mock_parser)
+        loader = SECXBRLFilingsLoader(mock_database, parser=mock_parser)
 
         assert loader.parser == mock_parser
         assert loader.database == mock_database
@@ -36,7 +36,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock existing company
         existing_company = Mock(spec=Company)
@@ -55,7 +55,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock no existing company
         mock_database.companies.get_company_by_ticker.return_value = None
@@ -78,7 +78,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock filing doesn't exist
         mock_database.filings.get_filing_by_number.return_value = None
@@ -121,7 +121,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Test Q2 filing
         mock_database.filings.get_filing_by_number.return_value = None
@@ -170,7 +170,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock filing already exists
         existing_filing = Mock(spec=Filing)
@@ -192,7 +192,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)  # No constructor override
+        loader = SECXBRLFilingsLoader(mock_database)  # No constructor override
 
         # Mock existing filing
         existing_filing = Mock()
@@ -239,7 +239,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)  # No constructor override
+        loader = SECXBRLFilingsLoader(mock_database)  # No constructor override
 
         # Mock company
         mock_company = Mock()
@@ -253,7 +253,7 @@ class TestFilingsLoader:
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
         mock_edgar_company.get_filings.return_value = [mock_filing]
-        with patch("filings.filings_loader.Company") as mock_company_class:
+        with patch("filings.sec_xbrl_filings_loader.Company") as mock_company_class:
             mock_company_class.return_value = mock_edgar_company
 
             # Mock loading single filing with override
@@ -271,14 +271,14 @@ class TestFilingsLoader:
             assert result["company_id"] == 1
             assert result["override_mode"] is True
 
-    @patch("filings.filings_loader.Company")
+    @patch("filings.sec_xbrl_filings_loader.Company")
     def test_load_company_filings_no_filings(self, mock_company_class):
         """Test loading when no filings are found."""
         mock_database = Mock()
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock company
         mock_company = Mock()
@@ -303,7 +303,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Mock company creation failure
         mock_database.companies.get_company_by_ticker.return_value = None
@@ -320,7 +320,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # Test Q1 (Jan, Feb, Mar)
         assert loader._calculate_fiscal_quarter("2024-01-31") == 1
@@ -353,7 +353,7 @@ class TestFilingsLoader:
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
-        loader = FilingsLoader(mock_database)
+        loader = SECXBRLFilingsLoader(mock_database)
 
         # This should return None for invalid month (though this case is unlikely)
         # We'll test with a date that would have an invalid month if parsed incorrectly

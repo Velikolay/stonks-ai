@@ -1,4 +1,4 @@
-from .geography_parser import GeographyInfo, GeographyParser
-from .sec_10q import SEC10QParser
+from .geography import GeographyInfo, GeographyParser
+from .sec_xbrl import SECXBRLParser
 
-__all__ = ["SEC10QParser", "GeographyParser", "GeographyInfo"]
+__all__ = ["SECXBRLParser", "GeographyParser", "GeographyInfo"]

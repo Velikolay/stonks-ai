@@ -13,6 +13,7 @@ from .models import (
     FinancialFactBase,
     FinancialFactCreate,
 )
+from .sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 __all__ = [
     "FilingsDatabase",
@@ -26,4 +27,5 @@ __all__ = [
     "FinancialFactCreate",
     "FinancialFact",
     "FinancialFactAbstract",
+    "SECXBRLFilingsLoader",
 ]
