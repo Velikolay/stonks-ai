@@ -26,7 +26,7 @@ def example_load_aapl_filings():
         result = loader.load_company_filings(
             ticker="AAPL",
             form="10-Q",
-            limit=2,
+            limit=10,
         )
 
         if "error" in result:
@@ -72,6 +72,6 @@ def example_load_with_override():
 
 if __name__ == "__main__":
     # Run examples
-    # example_load_aapl_filings()
+    example_load_aapl_filings()
     # print("\n" + "=" * 50 + "\n")
-    example_load_with_override()
+    # example_load_with_override()

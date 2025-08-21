@@ -57,7 +57,7 @@ class FilingsLoader:
 
             # Get company filings
             edgar_company = Company(ticker)
-            filings = edgar_company.get_filings(form=form)
+            filings = edgar_company.get_filings(form=form, is_xbrl=True)
 
             if not filings:
                 logger.info(f"No {form} filings found for {ticker}")
