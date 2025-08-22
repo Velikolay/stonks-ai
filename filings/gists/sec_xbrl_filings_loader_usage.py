@@ -27,6 +27,7 @@ def example_load_aapl_filings():
             ticker="AAPL",
             form="10-Q",
             limit=20,
+            # override=True,
         )
 
         if "error" in result:

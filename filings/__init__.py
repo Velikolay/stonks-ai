@@ -12,6 +12,8 @@ from .models import (
     FinancialFactAbstract,
     FinancialFactBase,
     FinancialFactCreate,
+    QuarterlyFinancial,
+    QuarterlyFinancialsFilter,
 )
 from .sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
@@ -27,5 +29,7 @@ __all__ = [
     "FinancialFactCreate",
     "FinancialFact",
     "FinancialFactAbstract",
+    "QuarterlyFinancial",
+    "QuarterlyFinancialsFilter",
     "SECXBRLFilingsLoader",
 ]

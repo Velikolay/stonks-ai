@@ -8,6 +8,7 @@ from .financial_fact import (
     FinancialFactBase,
     FinancialFactCreate,
 )
+from .quarterly_financials import QuarterlyFinancial, QuarterlyFinancialsFilter
 
 __all__ = [
     "CompanyBase",
@@ -20,4 +21,6 @@ __all__ = [
     "FinancialFactCreate",
     "FinancialFact",
     "FinancialFactAbstract",
+    "QuarterlyFinancial",
+    "QuarterlyFinancialsFilter",
 ]

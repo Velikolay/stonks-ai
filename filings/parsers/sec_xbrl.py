@@ -100,21 +100,23 @@ class SECXBRLParser:
             # Get the column names to identify period columns
             columns = statement_df.columns.tolist()
 
-            # Find the first numeric column (period column)
-            first_period_col = None
+            # Find the column with the latest date (period column)
+            period_columns = []
+
             for col in columns:
                 if isinstance(col, str) and ("-" in col or "/" in col):
-                    first_period_col = col
-                    break
+                    period_columns.append(col)
 
-            if not first_period_col:
+            if not period_columns:
                 logger.warning(f"No period columns found in {statement_type}")
                 return facts
 
-            # Extract date from column name like "2025-06-28 (Q2)"
-            date_str = first_period_col.split(" ")[
-                0
-            ]  # Get "2025-06-28" from "2025-06-28 (Q2)"
+            # Sort by date string (YYYY-MM-DD format sorts lexicographically)
+            latest_period_col = sorted(period_columns)[-1]
+
+            # Extract date from the latest period column
+            # Get "2025-06-28" from "2025-06-28 (Q2)"
+            date_str = latest_period_col.split(" ")[0]
 
             # Track the hierarchy of abstracts
             abstract_hierarchy = []
@@ -124,7 +126,7 @@ class SECXBRLParser:
                 level = row.get("level", 1)
                 concept = row.get("concept", "")
                 label = row.get("label", "")
-                value = row.get(first_period_col)
+                value = row.get(latest_period_col)
 
                 # Detect abstract by lack of numeric value
                 is_abstract = (
@@ -151,7 +153,7 @@ class SECXBRLParser:
                     fact = self._create_financial_fact_with_hierarchy(
                         row,
                         statement_type,
-                        first_period_col,
+                        latest_period_col,
                         date_str,
                         abstract_hierarchy,
                     )
