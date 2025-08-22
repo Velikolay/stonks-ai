@@ -57,7 +57,10 @@ class SECXBRLFilingsLoader:
 
             # Get company filings
             edgar_company = Company(ticker)
-            filings = edgar_company.get_filings(form=form, is_xbrl=True)
+            filings = edgar_company.get_filings(
+                form=form,
+                is_xbrl=True,
+            )
 
             if not filings:
                 logger.info(f"No {form} filings found for {ticker}")
@@ -167,13 +170,13 @@ class SECXBRLFilingsLoader:
 
         # Calculate quarter based on month
         month = parsed_date.month
-        if month in [1, 2, 3]:
+        if month in [3, 4, 5]:
             return 1
-        elif month in [4, 5, 6]:
+        elif month in [6, 7, 8]:
             return 2
-        elif month in [7, 8, 9]:
+        elif month in [9, 10, 11]:
             return 3
-        elif month in [10, 11, 12]:
+        elif month in [12, 1, 2]:
             return 4
         else:
             logger.warning(f"Invalid month {month} for fiscal quarter calculation")

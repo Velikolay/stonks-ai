@@ -323,23 +323,23 @@ class TestXBRLFilingsLoader:
         loader = SECXBRLFilingsLoader(mock_database)
 
         # Test Q1 (Jan, Feb, Mar)
-        assert loader._calculate_fiscal_quarter("2024-01-31") == 1
-        assert loader._calculate_fiscal_quarter("2024-02-29") == 1
+        assert loader._calculate_fiscal_quarter("2024-01-31") == 4
+        assert loader._calculate_fiscal_quarter("2024-02-29") == 4
         assert loader._calculate_fiscal_quarter("2024-03-31") == 1
 
         # Test Q2 (Apr, May, Jun)
-        assert loader._calculate_fiscal_quarter("2024-04-30") == 2
-        assert loader._calculate_fiscal_quarter("2024-05-31") == 2
+        assert loader._calculate_fiscal_quarter("2024-04-30") == 1
+        assert loader._calculate_fiscal_quarter("2024-05-31") == 1
         assert loader._calculate_fiscal_quarter("2024-06-30") == 2
 
         # Test Q3 (Jul, Aug, Sep)
-        assert loader._calculate_fiscal_quarter("2024-07-31") == 3
-        assert loader._calculate_fiscal_quarter("2024-08-31") == 3
+        assert loader._calculate_fiscal_quarter("2024-07-31") == 2
+        assert loader._calculate_fiscal_quarter("2024-08-31") == 2
         assert loader._calculate_fiscal_quarter("2024-09-30") == 3
 
         # Test Q4 (Oct, Nov, Dec)
-        assert loader._calculate_fiscal_quarter("2024-10-31") == 4
-        assert loader._calculate_fiscal_quarter("2024-11-30") == 4
+        assert loader._calculate_fiscal_quarter("2024-10-31") == 3
+        assert loader._calculate_fiscal_quarter("2024-11-30") == 3
         assert loader._calculate_fiscal_quarter("2024-12-31") == 4
 
         # Test edge cases
