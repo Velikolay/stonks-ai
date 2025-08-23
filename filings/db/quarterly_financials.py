@@ -59,6 +59,12 @@ class QuarterlyFinancialsOperations:
                         )
                     )
 
+                if filter_params.normalized_label is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.normalized_label
+                        == filter_params.normalized_label
+                    )
+
                 if filter_params.statement is not None:
                     conditions.append(
                         self.quarterly_financials_view.c.statement
@@ -94,6 +100,7 @@ class QuarterlyFinancialsOperations:
                         fiscal_year=row.fiscal_year,
                         fiscal_quarter=row.fiscal_quarter,
                         label=row.label,
+                        normalized_label=row.normalized_label,
                         value=row.value,
                         unit=row.unit,
                         statement=row.statement,
@@ -140,6 +147,15 @@ class QuarterlyFinancialsOperations:
         filter_params = QuarterlyFinancialsFilter(statement=statement, limit=limit)
         return self.get_quarterly_financials(filter_params)
 
+    def get_metrics_by_normalized_label(
+        self, normalized_label: str, limit: int = 100
+    ) -> List[QuarterlyFinancial]:
+        """Get quarterly metrics by normalized label."""
+        filter_params = QuarterlyFinancialsFilter(
+            normalized_label=normalized_label, limit=limit
+        )
+        return self.get_quarterly_financials(filter_params)
+
     def get_latest_metrics_by_company(
         self, company_id: int, limit: int = 20
     ) -> List[QuarterlyFinancial]:
@@ -167,6 +183,7 @@ class QuarterlyFinancialsOperations:
                         fiscal_year=row.fiscal_year,
                         fiscal_quarter=row.fiscal_quarter,
                         label=row.label,
+                        normalized_label=row.normalized_label,
                         value=row.value,
                         unit=row.unit,
                         statement=row.statement,

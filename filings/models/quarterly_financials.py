@@ -14,6 +14,7 @@ class QuarterlyFinancial(BaseModel):
     fiscal_year: int
     fiscal_quarter: int
     label: str
+    normalized_label: str
     value: Decimal
     unit: Optional[str] = None
     statement: Optional[str] = None
@@ -31,6 +32,7 @@ class QuarterlyFinancialsFilter(BaseModel):
     fiscal_year: Optional[int] = None
     fiscal_quarter: Optional[int] = None
     label: Optional[str] = None
+    normalized_label: Optional[str] = None
     statement: Optional[str] = None
     source_type: Optional[str] = None
     limit: Optional[int] = 100
