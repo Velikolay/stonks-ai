@@ -98,50 +98,22 @@ def upgrade() -> None:
                 'calculated' as source_type,
                 a.fiscal_period_end
             FROM annual_filings a
-            LEFT JOIN (
+            LEFT JOIN LATERAL (
                 -- Get the sum of the previous 3 10-Q filings for each 10-K filing
-                SELECT
-                    k.company_id,
-                    k.statement,
-                    k.concept,
-                    k.axis,
-                    k.member,
-                    k.fiscal_year,
-                    k.fiscal_quarter,
-                    SUM(q.value) as sum_value
-                FROM annual_filings k
-                JOIN (
-                    -- Get only the previous 3 quarters for each 10-K filing
-                    SELECT
-                        q.company_id,
-                        q.statement,
-                        q.concept,
-                        q.axis,
-                        q.member,
-                        q.value,
-                        q.fiscal_period_end,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY q.company_id, q.statement, q.concept, q.axis, q.member, k.fiscal_period_end
-                            ORDER BY q.fiscal_period_end DESC
-                        ) as rn
+                SELECT SUM(q.value) as sum_value
+                FROM (
+                    SELECT q.value
                     FROM quarterly_filings q
-                    CROSS JOIN annual_filings k
-                    WHERE q.company_id = k.company_id
-                        AND q.statement = k.statement
-                        AND q.concept = k.concept
-                        AND COALESCE(q.axis, '') = COALESCE(k.axis, '')
-                        AND COALESCE(q.member, '') = COALESCE(k.member, '')
-                        AND q.fiscal_period_end < k.fiscal_period_end
-                ) q ON q.rn <= 3
-                GROUP BY k.company_id, k.statement, k.concept, k.axis, k.member, k.fiscal_year, k.fiscal_quarter
-            ) prev_quarters_sum ON
-                a.company_id = prev_quarters_sum.company_id
-                AND a.statement = prev_quarters_sum.statement
-                AND a.concept = prev_quarters_sum.concept
-                AND COALESCE(a.axis, '') = COALESCE(prev_quarters_sum.axis, '')
-                AND COALESCE(a.member, '') = COALESCE(prev_quarters_sum.member, '')
-                AND a.fiscal_year = prev_quarters_sum.fiscal_year
-                AND a.fiscal_quarter = prev_quarters_sum.fiscal_quarter
+                    WHERE q.company_id = a.company_id
+                        AND q.statement = a.statement
+                        AND q.concept = a.concept
+                        AND COALESCE(q.axis, '') = COALESCE(a.axis, '')
+                        AND COALESCE(q.member, '') = COALESCE(a.member, '')
+                        AND q.fiscal_period_end < a.fiscal_period_end
+                    ORDER BY q.fiscal_period_end DESC
+                    LIMIT 3
+                ) q
+            ) prev_quarters_sum ON true
         )
         -- Combine all quarterly data
         SELECT
