@@ -83,37 +83,49 @@ def upgrade() -> None:
             FROM all_filings_data
             WHERE source_type = '10-K'
         ),
-        missing_quarters AS (
-            -- Calculate missing quarters by subtracting the sum of previous 3 10-Q filings from 10-K data
+        quarterly_with_ranks AS (
+            -- Rank quarterly filings for each annual filing
             SELECT
-                a.company_id,
-                a.fiscal_year,
-                a.fiscal_quarter,
-                a.label,
-                a.value - COALESCE(prev_quarters_sum.sum_value, 0) as value,
-                a.unit,
-                a.statement,
-                a.period_end,
-                a.period_start,
-                'calculated' as source_type,
-                a.fiscal_period_end
-            FROM annual_filings a
-            LEFT JOIN LATERAL (
-                -- Get the sum of the previous 3 10-Q filings for each 10-K filing
-                SELECT SUM(q.value) as sum_value
-                FROM (
-                    SELECT q.value
-                    FROM quarterly_filings q
-                    WHERE q.company_id = a.company_id
-                        AND q.statement = a.statement
-                        AND q.concept = a.concept
-                        AND COALESCE(q.axis, '') = COALESCE(a.axis, '')
-                        AND COALESCE(q.member, '') = COALESCE(a.member, '')
-                        AND q.fiscal_period_end < a.fiscal_period_end
+                q.*,
+                a.company_id as k_company_id,
+                a.fiscal_year as k_fiscal_year,
+                a.fiscal_quarter as k_fiscal_quarter,
+                a.value as k_value,
+                a.unit as k_unit,
+                a.statement as k_statement,
+                a.period_end as k_period_end,
+                a.period_start as k_period_start,
+                a.fiscal_period_end as k_fiscal_period_end,
+                a.label as k_label,
+                ROW_NUMBER() OVER (
+                    PARTITION BY q.company_id, q.statement, q.concept, q.axis, q.member, a.fiscal_period_end
                     ORDER BY q.fiscal_period_end DESC
-                    LIMIT 3
-                ) q
-            ) prev_quarters_sum ON true
+                ) as rn
+            FROM quarterly_filings q
+            JOIN annual_filings a ON
+                q.company_id = a.company_id
+                AND q.statement = a.statement
+                AND q.concept = a.concept
+                AND COALESCE(q.axis, '') = COALESCE(a.axis, '')
+                AND COALESCE(q.member, '') = COALESCE(a.member, '')
+                AND q.fiscal_period_end < a.fiscal_period_end
+        ),
+        missing_quarters AS (
+            SELECT
+                k_company_id as company_id,
+                k_fiscal_year as fiscal_year,
+                k_fiscal_quarter as fiscal_quarter,
+                k_label as label,
+                k_value - COALESCE(SUM(value) FILTER (WHERE rn <= 3), 0) as value,
+                k_unit as unit,
+                k_statement as statement,
+                k_period_end as period_end,
+                k_period_start as period_start,
+                'calculated' as source_type,
+                k_fiscal_period_end as fiscal_period_end
+            FROM quarterly_with_ranks
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_period_start, k_fiscal_period_end
+            HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
         -- Combine all quarterly data
         SELECT
