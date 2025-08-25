@@ -137,15 +137,15 @@ def upgrade() -> None:
         -- Combine all quarterly data
         SELECT
             company_id,
-            fiscal_year,
-            fiscal_quarter,
             label,
+            normalized_label,
             value,
             unit,
             statement,
-            normalized_label,
             period_end,
             period_start,
+            fiscal_year,
+            fiscal_quarter,
             source_type
         FROM quarterly_filings
 
@@ -153,15 +153,15 @@ def upgrade() -> None:
 
         SELECT
             company_id,
-            fiscal_year,
-            fiscal_quarter,
             label,
+            normalized_label,
             value,
             unit,
             statement,
-            normalized_label,
             period_end,
             period_start,
+            fiscal_year,
+            fiscal_quarter,
             source_type
         FROM missing_quarters
         WHERE value IS NOT NULL AND value != 0

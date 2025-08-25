@@ -5,6 +5,7 @@ from .companies import CompanyOperations
 from .filings import FilingOperations
 from .financial_facts import FinancialFactOperations
 from .quarterly_financials import QuarterlyFinancialsOperations
+from .yearly_financials import YearlyFinancialsOperations
 
 
 class FilingsDatabase:
@@ -17,6 +18,7 @@ class FilingsDatabase:
         self.filings = FilingOperations(self.manager.engine)
         self.financial_facts = FinancialFactOperations(self.manager.engine)
         self.quarterly_financials = QuarterlyFinancialsOperations(self.manager.engine)
+        self.yearly_financials = YearlyFinancialsOperations(self.manager.engine)
 
     def close(self) -> None:
         """Close database connection."""

@@ -210,6 +210,50 @@ Once the server is running, you can access the interactive API documentation at:
 - **GET** `/documents/count` - Get the number of documents in the system
 - **DELETE** `/documents/clear` - Clear all documents from the system
 
+## Financial Data
+
+The system includes comprehensive financial data management with support for SEC filings, financial facts, and materialized views for efficient querying.
+
+### Database Views
+
+#### Quarterly Financials
+A materialized view that provides quarterly financial metrics from 10-Q and 10-K filings, with calculated missing quarters based on annual data.
+
+#### Yearly Financials
+A materialized view that provides yearly financial metrics from 10-K filings only, offering a clean annual view of financial data.
+
+### Usage Examples
+
+```python
+from filings.db import FilingsDatabase
+
+# Initialize database
+db = FilingsDatabase("postgresql://user:pass@localhost/filings")
+
+# Get yearly financials for a company
+yearly_metrics = db.yearly_financials.get_metrics_by_company(company_id=1)
+
+# Get quarterly financials for a specific year
+quarterly_metrics = db.quarterly_financials.get_metrics_by_company_and_year(
+    company_id=1, fiscal_year=2023
+)
+
+# Get metrics by concept (e.g., revenue)
+revenue_metrics = db.yearly_financials.get_metrics_by_concept("Revenues")
+
+# Refresh materialized views after new data is loaded
+db.yearly_financials.refresh_view()
+db.quarterly_financials.refresh_view()
+```
+
+### Key Features
+
+- **Materialized Views**: Pre-computed views for fast querying of financial metrics
+- **Concept Normalization**: Standardized financial concept names across different filings
+- **Flexible Filtering**: Query by company, year, statement type, concept, or label
+- **Latest Metrics**: Easy access to the most recent financial data
+- **Automatic Refresh**: Views can be refreshed to include new data
+
 ## Example Usage
 
 ### Using curl
