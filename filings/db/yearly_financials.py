@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, select
+from sqlalchemy import MetaData, Table, and_, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -213,26 +213,34 @@ class YearlyFinancialsOperations:
         """Get all normalized labels and their counts for yearly financials."""
         try:
             with self.engine.connect() as conn:
-                query = """
-                SELECT normalized_label, statement, COUNT(*) as count
-                FROM yearly_financials
-                WHERE normalized_label IS NOT NULL
-                """
-                params = {}
+                # Build query using SQLAlchemy
+                stmt = (
+                    select(
+                        self.yearly_financials_view.c.normalized_label,
+                        self.yearly_financials_view.c.statement,
+                        func.count().label("count"),
+                    )
+                    .where(
+                        self.yearly_financials_view.c.normalized_label.is_not(None),
+                        self.yearly_financials_view.c.company_id == company_id,
+                    )
+                    .group_by(
+                        self.yearly_financials_view.c.normalized_label,
+                        self.yearly_financials_view.c.statement,
+                    )
+                    .order_by(
+                        func.count().desc(),
+                        self.yearly_financials_view.c.normalized_label,
+                    )
+                )
 
+                # Add statement filter if provided
                 if statement:
-                    query += " AND statement = :statement"
-                    params["statement"] = statement
+                    stmt = stmt.where(
+                        self.yearly_financials_view.c.statement == statement
+                    )
 
-                query += " AND company_id = :company_id"
-                params["company_id"] = company_id
-
-                query += """
-                GROUP BY normalized_label, statement
-                ORDER BY count DESC, normalized_label
-                """
-
-                result = conn.execute(query, params)
+                result = conn.execute(stmt)
                 rows = result.fetchall()
 
                 labels = []

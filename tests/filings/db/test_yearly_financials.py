@@ -269,8 +269,13 @@ class TestYearlyFinancialsOperations:
         """Test getting normalized labels."""
         mock_engine = Mock()
 
-        with patch("filings.db.yearly_financials.Table") as mock_table:
-            mock_table.return_value = Mock()
+        # Mock the table and its columns
+        mock_table = Mock()
+        mock_table.c.normalized_label = Mock()
+        mock_table.c.statement = Mock()
+        mock_table.c.company_id = Mock()
+
+        with patch("filings.db.yearly_financials.Table", return_value=mock_table):
             operations = YearlyFinancialsOperations(mock_engine)
 
             # Mock the database connection and query execution
@@ -294,7 +299,16 @@ class TestYearlyFinancialsOperations:
             mock_result.fetchall.return_value = [mock_row1, mock_row2]
             mock_conn.execute.return_value = mock_result
 
-            result = operations.get_normalized_labels(company_id=1)
+            # Mock the table instance that was created in __init__
+            operations.yearly_financials_view = mock_table
+
+            # Mock the SQLAlchemy select function to return a simple mock
+            with patch("filings.db.yearly_financials.select") as mock_select:
+                mock_select.return_value.where.return_value.group_by.return_value.order_by.return_value = (
+                    Mock()
+                )
+
+                result = operations.get_normalized_labels(company_id=1)
 
             assert len(result) == 2
             assert result[0]["normalized_label"] == "Revenue"
@@ -307,8 +321,13 @@ class TestYearlyFinancialsOperations:
         """Test getting normalized labels with statement filter."""
         mock_engine = Mock()
 
-        with patch("filings.db.yearly_financials.Table") as mock_table:
-            mock_table.return_value = Mock()
+        # Mock the table and its columns
+        mock_table = Mock()
+        mock_table.c.normalized_label = Mock()
+        mock_table.c.statement = Mock()
+        mock_table.c.company_id = Mock()
+
+        with patch("filings.db.yearly_financials.Table", return_value=mock_table):
             operations = YearlyFinancialsOperations(mock_engine)
 
             # Mock the database connection and query execution
@@ -327,9 +346,18 @@ class TestYearlyFinancialsOperations:
             mock_result.fetchall.return_value = [mock_row]
             mock_conn.execute.return_value = mock_result
 
-            result = operations.get_normalized_labels(
-                company_id=1, statement="BalanceSheet"
-            )
+            # Mock the table instance that was created in __init__
+            operations.yearly_financials_view = mock_table
+
+            # Mock the SQLAlchemy select function to return a simple mock
+            with patch("filings.db.yearly_financials.select") as mock_select:
+                mock_select.return_value.where.return_value.group_by.return_value.order_by.return_value = (
+                    Mock()
+                )
+
+                result = operations.get_normalized_labels(
+                    company_id=1, statement="BalanceSheet"
+                )
 
             assert len(result) == 1
             assert result[0]["normalized_label"] == "Total Assets"
@@ -340,22 +368,41 @@ class TestYearlyFinancialsOperations:
         """Test error handling when getting normalized labels fails."""
         mock_engine = Mock()
 
-        with patch("filings.db.yearly_financials.Table") as mock_table:
-            mock_table.return_value = Mock()
+        # Mock the table and its columns
+        mock_table = Mock()
+        mock_table.c.normalized_label = Mock()
+        mock_table.c.statement = Mock()
+        mock_table.c.company_id = Mock()
+
+        with patch("filings.db.yearly_financials.Table", return_value=mock_table):
             operations = YearlyFinancialsOperations(mock_engine)
 
-            # Mock the engine.connect to raise an exception
-            mock_engine.connect.side_effect = SQLAlchemyError("Database error")
+            # Mock the table instance that was created in __init__
+            operations.yearly_financials_view = mock_table
 
-            result = operations.get_normalized_labels(company_id=1)
-            assert result == []
+            # Mock the SQLAlchemy select function to return a simple mock
+            with patch("filings.db.yearly_financials.select") as mock_select:
+                mock_select.return_value.where.return_value.group_by.return_value.order_by.return_value = (
+                    Mock()
+                )
+
+                # Mock the engine.connect to raise an exception
+                mock_engine.connect.side_effect = SQLAlchemyError("Database error")
+
+                result = operations.get_normalized_labels(company_id=1)
+                assert result == []
 
     def test_get_normalized_labels_with_statement_and_company_id_filter(self):
         """Test getting normalized labels with both statement and company_id filters."""
         mock_engine = Mock()
 
-        with patch("filings.db.yearly_financials.Table") as mock_table:
-            mock_table.return_value = Mock()
+        # Mock the table and its columns
+        mock_table = Mock()
+        mock_table.c.normalized_label = Mock()
+        mock_table.c.statement = Mock()
+        mock_table.c.company_id = Mock()
+
+        with patch("filings.db.yearly_financials.Table", return_value=mock_table):
             operations = YearlyFinancialsOperations(mock_engine)
 
             # Mock the database connection and query execution
@@ -374,9 +421,18 @@ class TestYearlyFinancialsOperations:
             mock_result.fetchall.return_value = [mock_row]
             mock_conn.execute.return_value = mock_result
 
-            result = operations.get_normalized_labels(
-                company_id=1, statement="BalanceSheet"
-            )
+            # Mock the table instance that was created in __init__
+            operations.yearly_financials_view = mock_table
+
+            # Mock the SQLAlchemy select function to return a simple mock
+            with patch("filings.db.yearly_financials.select") as mock_select:
+                mock_select.return_value.where.return_value.group_by.return_value.order_by.return_value = (
+                    Mock()
+                )
+
+                result = operations.get_normalized_labels(
+                    company_id=1, statement="BalanceSheet"
+                )
 
             assert len(result) == 1
             assert result[0]["normalized_label"] == "Total Assets"
