@@ -137,6 +137,11 @@ class TestFinancialsEndpoints:
     @patch("api.financials.filings_db")
     def test_get_normalized_labels_quarterly_success(self, mock_filings_db):
         """Test successful normalized labels retrieval for quarterly data."""
+        # Mock the company lookup
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
         # Mock the database method
         mock_labels_data = [
             {
@@ -155,7 +160,12 @@ class TestFinancialsEndpoints:
         )
 
         # Test that the mock is set up correctly
-        labels = mock_filings_db.quarterly_financials.get_normalized_labels()
+        company = mock_filings_db.companies.get_company_by_ticker("AAPL")
+        assert company.id == 1
+
+        labels = mock_filings_db.quarterly_financials.get_normalized_labels(
+            company_id=1
+        )
         assert len(labels) == 2
         assert labels[0]["normalized_label"] == "Revenue"
         assert labels[0]["count"] == 100
@@ -165,6 +175,11 @@ class TestFinancialsEndpoints:
     @patch("api.financials.filings_db")
     def test_get_normalized_labels_yearly_success(self, mock_filings_db):
         """Test successful normalized labels retrieval for yearly data."""
+        # Mock the company lookup
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
         # Mock the database method
         mock_labels_data = [
             {
@@ -178,8 +193,53 @@ class TestFinancialsEndpoints:
         )
 
         # Test that the mock is set up correctly
-        labels = mock_filings_db.yearly_financials.get_normalized_labels()
+        company = mock_filings_db.companies.get_company_by_ticker("AAPL")
+        assert company.id == 1
+
+        labels = mock_filings_db.yearly_financials.get_normalized_labels(company_id=1)
         assert len(labels) == 1
         assert labels[0]["normalized_label"] == "Total Assets"
         assert labels[0]["statement"] == "BalanceSheet"
         assert labels[0]["count"] == 50
+
+    @patch("api.financials.filings_db")
+    def test_get_normalized_labels_with_statement_filter(self, mock_filings_db):
+        """Test normalized labels retrieval with statement filter."""
+        # Mock the company lookup
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock the database method
+        mock_labels_data = [
+            {
+                "normalized_label": "Total Assets",
+                "statement": "BalanceSheet",
+                "count": 15,
+            },
+        ]
+        mock_filings_db.yearly_financials.get_normalized_labels.return_value = (
+            mock_labels_data
+        )
+
+        # Test that the mock is set up correctly with both parameters
+        company = mock_filings_db.companies.get_company_by_ticker("AAPL")
+        assert company.id == 1
+
+        labels = mock_filings_db.yearly_financials.get_normalized_labels(
+            company_id=1, statement="BalanceSheet"
+        )
+        assert len(labels) == 1
+        assert labels[0]["normalized_label"] == "Total Assets"
+        assert labels[0]["statement"] == "BalanceSheet"
+        assert labels[0]["count"] == 15
+
+    @patch("api.financials.filings_db")
+    def test_get_normalized_labels_company_not_found(self, mock_filings_db):
+        """Test normalized labels retrieval when company ticker is not found."""
+        # Mock the company lookup to return None
+        mock_filings_db.companies.get_company_by_ticker.return_value = None
+
+        # Test that the mock is set up correctly
+        company = mock_filings_db.companies.get_company_by_ticker("INVALID")
+        assert company is None

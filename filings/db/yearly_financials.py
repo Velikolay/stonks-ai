@@ -86,18 +86,14 @@ class YearlyFinancialsOperations:
                 for row in rows:
                     financial = YearlyFinancial(
                         company_id=row.company_id,
-                        fiscal_year=row.fiscal_year,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
                         unit=row.unit,
                         statement=row.statement,
-                        concept=row.concept,
-                        axis=row.axis,
-                        member=row.member,
                         period_end=row.period_end,
                         period_start=row.period_start,
-                        source_type=row.source_type,
+                        fiscal_year=row.fiscal_year,
                         fiscal_period_end=row.fiscal_period_end,
                     )
                     financials.append(financial)
@@ -211,7 +207,9 @@ class YearlyFinancialsOperations:
             logger.error(f"Error refreshing yearly_financials view: {e}")
             raise
 
-    def get_normalized_labels(self, statement: Optional[str] = None) -> List[dict]:
+    def get_normalized_labels(
+        self, company_id: int, statement: Optional[str] = None
+    ) -> List[dict]:
         """Get all normalized labels and their counts for yearly financials."""
         try:
             with self.engine.connect() as conn:
@@ -225,6 +223,9 @@ class YearlyFinancialsOperations:
                 if statement:
                     query += " AND statement = :statement"
                     params["statement"] = statement
+
+                query += " AND company_id = :company_id"
+                params["company_id"] = company_id
 
                 query += """
                 GROUP BY normalized_label, statement

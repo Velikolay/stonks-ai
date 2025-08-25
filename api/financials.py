@@ -30,7 +30,6 @@ class FinancialMetricResponse(BaseModel):
 
     company_id: int
     ticker: str
-    company_name: str
     fiscal_year: int
     fiscal_quarter: Optional[int] = None
     label: str
@@ -143,7 +142,6 @@ async def get_financials(
             response_metric = FinancialMetricResponse(
                 company_id=metric.company_id,
                 ticker=company.ticker,
-                company_name=company.name,
                 fiscal_year=metric.fiscal_year,
                 fiscal_quarter=getattr(metric, "fiscal_quarter", None),
                 label=metric.label,
@@ -170,6 +168,7 @@ async def get_financials(
 
 @router.get("/normalized-labels", response_model=List[NormalizedLabelResponse])
 async def get_normalized_labels(
+    ticker: str = Query(..., description="Company ticker symbol"),
     granularity: str = Query(
         ..., description="Data granularity: 'quarterly' or 'yearly'"
     ),
@@ -187,13 +186,23 @@ async def get_normalized_labels(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
+        # Convert ticker to company_id
+        company = filings_db.companies.get_company_by_ticker(ticker)
+        if not company:
+            raise HTTPException(
+                status_code=404, detail=f"Company with ticker '{ticker}' not found"
+            )
+        company_id = company.id
+
         # Get normalized labels from the database
         if granularity == "quarterly":
             labels_data = filings_db.quarterly_financials.get_normalized_labels(
-                statement
+                company_id, statement
             )
         else:  # yearly
-            labels_data = filings_db.yearly_financials.get_normalized_labels(statement)
+            labels_data = filings_db.yearly_financials.get_normalized_labels(
+                company_id, statement
+            )
 
         # Convert to response format
         response_labels = []
@@ -207,6 +216,8 @@ async def get_normalized_labels(
 
         return response_labels
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving normalized labels: {e}")
         raise HTTPException(status_code=500, detail=str(e))

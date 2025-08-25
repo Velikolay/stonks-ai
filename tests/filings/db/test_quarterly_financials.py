@@ -252,7 +252,7 @@ class TestQuarterlyFinancialsOperations:
             mock_result.fetchall.return_value = [mock_row1, mock_row2]
             mock_conn.execute.return_value = mock_result
 
-            result = operations.get_normalized_labels()
+            result = operations.get_normalized_labels(company_id=1)
 
             assert len(result) == 2
             assert result[0]["normalized_label"] == "Revenue"
@@ -285,7 +285,9 @@ class TestQuarterlyFinancialsOperations:
             mock_result.fetchall.return_value = [mock_row]
             mock_conn.execute.return_value = mock_result
 
-            result = operations.get_normalized_labels(statement="BalanceSheet")
+            result = operations.get_normalized_labels(
+                company_id=1, statement="BalanceSheet"
+            )
 
             assert len(result) == 1
             assert result[0]["normalized_label"] == "Total Assets"
@@ -303,5 +305,38 @@ class TestQuarterlyFinancialsOperations:
             # Mock the engine.connect to raise an exception
             mock_engine.connect.side_effect = SQLAlchemyError("Database error")
 
-            result = operations.get_normalized_labels()
+            result = operations.get_normalized_labels(company_id=1)
             assert result == []
+
+    def test_get_normalized_labels_with_statement_and_company_id_filter(self):
+        """Test getting normalized labels with both statement and company_id filters."""
+        mock_engine = Mock()
+
+        with patch("filings.db.quarterly_financials.Table") as mock_table:
+            mock_table.return_value = Mock()
+            operations = QuarterlyFinancialsOperations(mock_engine)
+
+            # Mock the database connection and query execution
+            mock_conn = Mock()
+            mock_context = MagicMock()
+            mock_context.__enter__.return_value = mock_conn
+            mock_engine.connect.return_value = mock_context
+            mock_result = Mock()
+
+            # Mock the query result
+            mock_row = Mock()
+            mock_row.normalized_label = "Total Assets"
+            mock_row.statement = "BalanceSheet"
+            mock_row.count = 15
+
+            mock_result.fetchall.return_value = [mock_row]
+            mock_conn.execute.return_value = mock_result
+
+            result = operations.get_normalized_labels(
+                company_id=1, statement="BalanceSheet"
+            )
+
+            assert len(result) == 1
+            assert result[0]["normalized_label"] == "Total Assets"
+            assert result[0]["statement"] == "BalanceSheet"
+            assert result[0]["count"] == 15

@@ -208,7 +208,9 @@ class QuarterlyFinancialsOperations:
             )
             return []
 
-    def get_normalized_labels(self, statement: Optional[str] = None) -> List[dict]:
+    def get_normalized_labels(
+        self, company_id: int, statement: Optional[str] = None
+    ) -> List[dict]:
         """Get all normalized labels and their counts for quarterly financials."""
         try:
             with self.engine.connect() as conn:
@@ -222,6 +224,9 @@ class QuarterlyFinancialsOperations:
                 if statement:
                     query += " AND statement = :statement"
                     params["statement"] = statement
+
+                query += " AND company_id = :company_id"
+                params["company_id"] = company_id
 
                 query += """
                 GROUP BY normalized_label, statement
