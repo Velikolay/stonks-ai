@@ -34,16 +34,21 @@ class YearlyFinancialsOperations:
                 stmt = select(self.yearly_financials_view)
                 conditions = []
 
-                if filter_params.company_id is not None:
-                    conditions.append(
-                        self.yearly_financials_view.c.company_id
-                        == filter_params.company_id
-                    )
+                # Company ID is mandatory
+                conditions.append(
+                    self.yearly_financials_view.c.company_id == filter_params.company_id
+                )
 
-                if filter_params.fiscal_year is not None:
+                # Handle fiscal year range
+                if filter_params.fiscal_year_start is not None:
                     conditions.append(
                         self.yearly_financials_view.c.fiscal_year
-                        == filter_params.fiscal_year
+                        >= filter_params.fiscal_year_start
+                    )
+                if filter_params.fiscal_year_end is not None:
+                    conditions.append(
+                        self.yearly_financials_view.c.fiscal_year
+                        <= filter_params.fiscal_year_end
                     )
 
                 if filter_params.label is not None:
@@ -65,23 +70,14 @@ class YearlyFinancialsOperations:
                         == filter_params.statement
                     )
 
-                if filter_params.concept is not None:
-                    conditions.append(
-                        self.yearly_financials_view.c.concept == filter_params.concept
-                    )
+                stmt = stmt.where(and_(*conditions))
 
-                if conditions:
-                    stmt = stmt.where(and_(*conditions))
-
-                # Add ordering and limit
+                # Add ordering
                 stmt = stmt.order_by(
                     self.yearly_financials_view.c.company_id,
                     self.yearly_financials_view.c.fiscal_year.desc(),
                     self.yearly_financials_view.c.label,
                 )
-
-                if filter_params.limit:
-                    stmt = stmt.limit(filter_params.limit)
 
                 result = conn.execute(stmt)
                 rows = result.fetchall()
@@ -118,44 +114,39 @@ class YearlyFinancialsOperations:
     ) -> List[YearlyFinancial]:
         """Get all yearly metrics for a specific company and fiscal year."""
         filter_params = YearlyFinancialsFilter(
-            company_id=company_id, fiscal_year=fiscal_year
+            company_id=company_id,
+            fiscal_year_start=fiscal_year,
+            fiscal_year_end=fiscal_year,
         )
         return self.get_yearly_financials(filter_params)
 
-    def get_metrics_by_company(
-        self, company_id: int, limit: int = 100
-    ) -> List[YearlyFinancial]:
+    def get_metrics_by_company(self, company_id: int) -> List[YearlyFinancial]:
         """Get yearly metrics for a specific company."""
-        filter_params = YearlyFinancialsFilter(company_id=company_id, limit=limit)
+        filter_params = YearlyFinancialsFilter(company_id=company_id)
         return self.get_yearly_financials(filter_params)
 
     def get_metrics_by_label(
-        self, label: str, limit: int = 100
+        self, company_id: int, label: str
     ) -> List[YearlyFinancial]:
-        """Get yearly metrics by label (metric name)."""
-        filter_params = YearlyFinancialsFilter(label=label, limit=limit)
+        """Get yearly metrics by label (metric name) for a specific company."""
+        filter_params = YearlyFinancialsFilter(company_id=company_id, label=label)
         return self.get_yearly_financials(filter_params)
 
     def get_metrics_by_statement(
-        self, statement: str, limit: int = 100
+        self, company_id: int, statement: str
     ) -> List[YearlyFinancial]:
-        """Get yearly metrics by financial statement."""
-        filter_params = YearlyFinancialsFilter(statement=statement, limit=limit)
-        return self.get_yearly_financials(filter_params)
-
-    def get_metrics_by_concept(
-        self, concept: str, limit: int = 100
-    ) -> List[YearlyFinancial]:
-        """Get yearly metrics by concept."""
-        filter_params = YearlyFinancialsFilter(concept=concept, limit=limit)
+        """Get yearly metrics by financial statement for a specific company."""
+        filter_params = YearlyFinancialsFilter(
+            company_id=company_id, statement=statement
+        )
         return self.get_yearly_financials(filter_params)
 
     def get_metrics_by_normalized_label(
-        self, normalized_label: str, limit: int = 100
+        self, company_id: int, normalized_label: str
     ) -> List[YearlyFinancial]:
-        """Get yearly metrics by normalized label."""
+        """Get yearly metrics by normalized label for a specific company."""
         filter_params = YearlyFinancialsFilter(
-            normalized_label=normalized_label, limit=limit
+            company_id=company_id, normalized_label=normalized_label
         )
         return self.get_yearly_financials(filter_params)
 

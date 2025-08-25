@@ -230,7 +230,7 @@ from filings.db import FilingsDatabase
 # Initialize database
 db = FilingsDatabase("postgresql://user:pass@localhost/filings")
 
-# Get yearly financials for a company
+# Get yearly financials for a company (company_id is mandatory)
 yearly_metrics = db.yearly_financials.get_metrics_by_company(company_id=1)
 
 # Get quarterly financials for a specific year
@@ -238,8 +238,17 @@ quarterly_metrics = db.quarterly_financials.get_metrics_by_company_and_year(
     company_id=1, fiscal_year=2023
 )
 
-# Get metrics by concept (e.g., revenue)
-revenue_metrics = db.yearly_financials.get_metrics_by_concept("Revenues")
+# Get metrics by label for a specific company
+revenue_metrics = db.yearly_financials.get_metrics_by_label(company_id=1, label="Revenues")
+
+# Use range queries for fiscal years
+filter_params = YearlyFinancialsFilter(
+    company_id=1,
+    fiscal_year_start=2020,
+    fiscal_year_end=2023,
+    statement="IncomeStatement"
+)
+range_metrics = db.yearly_financials.get_yearly_financials(filter_params)
 
 # Refresh materialized views after new data is loaded
 db.yearly_financials.refresh_view()

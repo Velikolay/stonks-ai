@@ -28,11 +28,11 @@ class QuarterlyFinancial(BaseModel):
 class QuarterlyFinancialsFilter(BaseModel):
     """Filter model for querying quarterly financials."""
 
-    company_id: Optional[int] = None
-    fiscal_year: Optional[int] = None
-    fiscal_quarter: Optional[int] = None
+    company_id: int
+    fiscal_year_start: Optional[int] = None
+    fiscal_year_end: Optional[int] = None
+    fiscal_quarter_start: Optional[int] = None
+    fiscal_quarter_end: Optional[int] = None
     label: Optional[str] = None
     normalized_label: Optional[str] = None
     statement: Optional[str] = None
-    source_type: Optional[str] = None
-    limit: Optional[int] = 100

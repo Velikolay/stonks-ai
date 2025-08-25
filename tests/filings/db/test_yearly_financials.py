@@ -67,7 +67,7 @@ class TestYearlyFinancialsOperations:
                     ),
                 ]
 
-                # Create test data for year filter
+                # Create test data for year range filter
                 year_test_data = [
                     YearlyFinancial(
                         company_id=1,
@@ -114,16 +114,20 @@ class TestYearlyFinancialsOperations:
                 assert len(result) == 2
                 assert all(r.company_id == 1 for r in result)
 
-                # Test with year filter
+                # Test with year range filter
                 mock_get.return_value = year_test_data
-                filter_params = YearlyFinancialsFilter(fiscal_year=2023)
+                filter_params = YearlyFinancialsFilter(
+                    company_id=1, fiscal_year_start=2023, fiscal_year_end=2023
+                )
                 result = operations.get_yearly_financials(filter_params)
                 assert len(result) == 1
                 assert all(r.fiscal_year == 2023 for r in result)
 
                 # Test with statement filter
                 mock_get.return_value = statement_test_data
-                filter_params = YearlyFinancialsFilter(statement="IncomeStatement")
+                filter_params = YearlyFinancialsFilter(
+                    company_id=1, statement="IncomeStatement"
+                )
                 result = operations.get_yearly_financials(filter_params)
                 assert len(result) == 1
                 assert all(r.statement == "IncomeStatement" for r in result)
@@ -139,12 +143,11 @@ class TestYearlyFinancialsOperations:
             with patch.object(operations, "get_yearly_financials") as mock_get:
                 mock_get.return_value = []
 
-                operations.get_metrics_by_company(company_id=1, limit=10)
+                operations.get_metrics_by_company(company_id=1)
 
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
                 assert call_args.company_id == 1
-                assert call_args.limit == 10
 
     def test_get_metrics_by_company_and_year(self):
         """Test getting metrics by company and year."""
@@ -164,10 +167,11 @@ class TestYearlyFinancialsOperations:
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
                 assert call_args.company_id == 1
-                assert call_args.fiscal_year == 2023
+                assert call_args.fiscal_year_start == 2023
+                assert call_args.fiscal_year_end == 2023
 
-    def test_get_metrics_by_concept(self):
-        """Test getting metrics by concept."""
+    def test_get_metrics_by_label(self):
+        """Test getting metrics by label."""
         mock_engine = Mock()
 
         with patch("filings.db.yearly_financials.Table") as mock_table:
@@ -177,12 +181,12 @@ class TestYearlyFinancialsOperations:
             with patch.object(operations, "get_yearly_financials") as mock_get:
                 mock_get.return_value = []
 
-                operations.get_metrics_by_concept("Revenues", limit=5)
+                operations.get_metrics_by_label(company_id=1, label="Revenues")
 
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
-                assert call_args.concept == "Revenues"
-                assert call_args.limit == 5
+                assert call_args.company_id == 1
+                assert call_args.label == "Revenues"
 
     def test_get_metrics_by_statement(self):
         """Test getting metrics by statement."""
@@ -195,12 +199,14 @@ class TestYearlyFinancialsOperations:
             with patch.object(operations, "get_yearly_financials") as mock_get:
                 mock_get.return_value = []
 
-                operations.get_metrics_by_statement("BalanceSheet", limit=5)
+                operations.get_metrics_by_statement(
+                    company_id=1, statement="BalanceSheet"
+                )
 
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
+                assert call_args.company_id == 1
                 assert call_args.statement == "BalanceSheet"
-                assert call_args.limit == 5
 
     def test_get_latest_metrics_by_company(self):
         """Test getting latest metrics by company."""

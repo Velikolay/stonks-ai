@@ -34,22 +34,34 @@ class QuarterlyFinancialsOperations:
                 stmt = select(self.quarterly_financials_view)
                 conditions = []
 
-                if filter_params.company_id is not None:
-                    conditions.append(
-                        self.quarterly_financials_view.c.company_id
-                        == filter_params.company_id
-                    )
+                # Company ID is mandatory
+                conditions.append(
+                    self.quarterly_financials_view.c.company_id
+                    == filter_params.company_id
+                )
 
-                if filter_params.fiscal_year is not None:
+                # Handle fiscal year range
+                if filter_params.fiscal_year_start is not None:
                     conditions.append(
                         self.quarterly_financials_view.c.fiscal_year
-                        == filter_params.fiscal_year
+                        >= filter_params.fiscal_year_start
+                    )
+                if filter_params.fiscal_year_end is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_year
+                        <= filter_params.fiscal_year_end
                     )
 
-                if filter_params.fiscal_quarter is not None:
+                # Handle fiscal quarter range
+                if filter_params.fiscal_quarter_start is not None:
                     conditions.append(
                         self.quarterly_financials_view.c.fiscal_quarter
-                        == filter_params.fiscal_quarter
+                        >= filter_params.fiscal_quarter_start
+                    )
+                if filter_params.fiscal_quarter_end is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_quarter
+                        <= filter_params.fiscal_quarter_end
                     )
 
                 if filter_params.label is not None:
@@ -71,24 +83,14 @@ class QuarterlyFinancialsOperations:
                         == filter_params.statement
                     )
 
-                if filter_params.source_type is not None:
-                    conditions.append(
-                        self.quarterly_financials_view.c.source_type
-                        == filter_params.source_type
-                    )
+                stmt = stmt.where(and_(*conditions))
 
-                if conditions:
-                    stmt = stmt.where(and_(*conditions))
-
-                # Add ordering and limit
+                # Add ordering
                 stmt = stmt.order_by(
                     self.quarterly_financials_view.c.company_id,
                     self.quarterly_financials_view.c.fiscal_year.desc(),
                     self.quarterly_financials_view.c.fiscal_quarter.desc(),
                 )
-
-                if filter_params.limit:
-                    stmt = stmt.limit(filter_params.limit)
 
                 result = conn.execute(stmt)
                 rows = result.fetchall()
@@ -122,37 +124,39 @@ class QuarterlyFinancialsOperations:
     ) -> List[QuarterlyFinancial]:
         """Get all quarterly metrics for a specific company and fiscal year."""
         filter_params = QuarterlyFinancialsFilter(
-            company_id=company_id, fiscal_year=fiscal_year
+            company_id=company_id,
+            fiscal_year_start=fiscal_year,
+            fiscal_year_end=fiscal_year,
         )
         return self.get_quarterly_financials(filter_params)
 
-    def get_metrics_by_company(
-        self, company_id: int, limit: int = 100
-    ) -> List[QuarterlyFinancial]:
+    def get_metrics_by_company(self, company_id: int) -> List[QuarterlyFinancial]:
         """Get quarterly metrics for a specific company."""
-        filter_params = QuarterlyFinancialsFilter(company_id=company_id, limit=limit)
+        filter_params = QuarterlyFinancialsFilter(company_id=company_id)
         return self.get_quarterly_financials(filter_params)
 
     def get_metrics_by_label(
-        self, label: str, limit: int = 100
+        self, company_id: int, label: str
     ) -> List[QuarterlyFinancial]:
-        """Get quarterly metrics by label (metric name)."""
-        filter_params = QuarterlyFinancialsFilter(label=label, limit=limit)
+        """Get quarterly metrics by label (metric name) for a specific company."""
+        filter_params = QuarterlyFinancialsFilter(company_id=company_id, label=label)
         return self.get_quarterly_financials(filter_params)
 
     def get_metrics_by_statement(
-        self, statement: str, limit: int = 100
+        self, company_id: int, statement: str
     ) -> List[QuarterlyFinancial]:
-        """Get quarterly metrics by financial statement."""
-        filter_params = QuarterlyFinancialsFilter(statement=statement, limit=limit)
+        """Get quarterly metrics by financial statement for a specific company."""
+        filter_params = QuarterlyFinancialsFilter(
+            company_id=company_id, statement=statement
+        )
         return self.get_quarterly_financials(filter_params)
 
     def get_metrics_by_normalized_label(
-        self, normalized_label: str, limit: int = 100
+        self, company_id: int, normalized_label: str
     ) -> List[QuarterlyFinancial]:
-        """Get quarterly metrics by normalized label."""
+        """Get quarterly metrics by normalized label for a specific company."""
         filter_params = QuarterlyFinancialsFilter(
-            normalized_label=normalized_label, limit=limit
+            company_id=company_id, normalized_label=normalized_label
         )
         return self.get_quarterly_financials(filter_params)
 
