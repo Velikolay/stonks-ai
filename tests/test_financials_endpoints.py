@@ -38,7 +38,7 @@ class TestFinancialsEndpoints:
         else:
             assert False
 
-    @patch("app.filings_db")
+    @patch("api.financials.filings_db")
     def test_get_financials_company_not_found(self, mock_filings_db):
         """Test that company not found returns 404 error."""
         # Mock the database and company operations
@@ -49,7 +49,7 @@ class TestFinancialsEndpoints:
         company = mock_filings_db.companies.get_company_by_ticker("INVALID")
         assert company is None
 
-    @patch("app.filings_db")
+    @patch("api.financials.filings_db")
     def test_get_financials_quarterly_success(self, mock_filings_db):
         """Test successful quarterly financials retrieval."""
         # Mock the database and operations
@@ -88,7 +88,7 @@ class TestFinancialsEndpoints:
         assert metrics[0].fiscal_quarter == 1
         assert metrics[0].label == "Revenue"
 
-    @patch("app.filings_db")
+    @patch("api.financials.filings_db")
     def test_get_financials_yearly_success(self, mock_filings_db):
         """Test successful yearly financials retrieval."""
         # Mock the database and operations
@@ -134,7 +134,7 @@ class TestFinancialsEndpoints:
         else:
             assert False
 
-    @patch("app.filings_db")
+    @patch("api.financials.filings_db")
     def test_get_normalized_labels_quarterly_success(self, mock_filings_db):
         """Test successful normalized labels retrieval for quarterly data."""
         # Mock the database method
@@ -162,7 +162,7 @@ class TestFinancialsEndpoints:
         assert labels[1]["normalized_label"] == "Net Income"
         assert labels[1]["count"] == 80
 
-    @patch("app.filings_db")
+    @patch("api.financials.filings_db")
     def test_get_normalized_labels_yearly_success(self, mock_filings_db):
         """Test successful normalized labels retrieval for yearly data."""
         # Mock the database method
