@@ -1,7 +1,7 @@
 """Yearly financial metrics database operations."""
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import MetaData, Table, and_, select
 from sqlalchemy.engine import Engine
@@ -210,3 +210,46 @@ class YearlyFinancialsOperations:
         except SQLAlchemyError as e:
             logger.error(f"Error refreshing yearly_financials view: {e}")
             raise
+
+    def get_normalized_labels(self, statement: Optional[str] = None) -> List[dict]:
+        """Get all normalized labels and their counts for yearly financials."""
+        try:
+            with self.engine.connect() as conn:
+                query = """
+                SELECT normalized_label, statement, COUNT(*) as count
+                FROM yearly_financials
+                WHERE normalized_label IS NOT NULL
+                """
+                params = {}
+
+                if statement:
+                    query += " AND statement = :statement"
+                    params["statement"] = statement
+
+                query += """
+                GROUP BY normalized_label, statement
+                ORDER BY count DESC, normalized_label
+                """
+
+                result = conn.execute(query, params)
+                rows = result.fetchall()
+
+                labels = []
+                for row in rows:
+                    label_info = {
+                        "normalized_label": row.normalized_label,
+                        "statement": row.statement,
+                        "count": row.count,
+                    }
+                    labels.append(label_info)
+
+                logger.info(
+                    f"Retrieved {len(labels)} normalized labels for yearly financials"
+                )
+                return labels
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Error retrieving normalized labels for yearly financials: {e}"
+            )
+            return []

@@ -3,6 +3,8 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, Mock, patch
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from filings.db.yearly_financials import YearlyFinancialsOperations
 from filings.models.yearly_financials import YearlyFinancial, YearlyFinancialsFilter
 
@@ -262,3 +264,86 @@ class TestYearlyFinancialsOperations:
                 "REFRESH MATERIALIZED VIEW yearly_financials"
             )
             mock_conn.commit.assert_called_once()
+
+    def test_get_normalized_labels(self):
+        """Test getting normalized labels."""
+        mock_engine = Mock()
+
+        with patch("filings.db.yearly_financials.Table") as mock_table:
+            mock_table.return_value = Mock()
+            operations = YearlyFinancialsOperations(mock_engine)
+
+            # Mock the database connection and query execution
+            mock_conn = Mock()
+            mock_context = MagicMock()
+            mock_context.__enter__.return_value = mock_conn
+            mock_engine.connect.return_value = mock_context
+            mock_result = Mock()
+
+            # Mock the query result
+            mock_row1 = Mock()
+            mock_row1.normalized_label = "Revenue"
+            mock_row1.statement = "IncomeStatement"
+            mock_row1.count = 100
+
+            mock_row2 = Mock()
+            mock_row2.normalized_label = "Net Income"
+            mock_row2.statement = "IncomeStatement"
+            mock_row2.count = 80
+
+            mock_result.fetchall.return_value = [mock_row1, mock_row2]
+            mock_conn.execute.return_value = mock_result
+
+            result = operations.get_normalized_labels()
+
+            assert len(result) == 2
+            assert result[0]["normalized_label"] == "Revenue"
+            assert result[0]["statement"] == "IncomeStatement"
+            assert result[0]["count"] == 100
+            assert result[1]["normalized_label"] == "Net Income"
+            assert result[1]["count"] == 80
+
+    def test_get_normalized_labels_with_statement_filter(self):
+        """Test getting normalized labels with statement filter."""
+        mock_engine = Mock()
+
+        with patch("filings.db.yearly_financials.Table") as mock_table:
+            mock_table.return_value = Mock()
+            operations = YearlyFinancialsOperations(mock_engine)
+
+            # Mock the database connection and query execution
+            mock_conn = Mock()
+            mock_context = MagicMock()
+            mock_context.__enter__.return_value = mock_conn
+            mock_engine.connect.return_value = mock_context
+            mock_result = Mock()
+
+            # Mock the query result
+            mock_row = Mock()
+            mock_row.normalized_label = "Total Assets"
+            mock_row.statement = "BalanceSheet"
+            mock_row.count = 50
+
+            mock_result.fetchall.return_value = [mock_row]
+            mock_conn.execute.return_value = mock_result
+
+            result = operations.get_normalized_labels(statement="BalanceSheet")
+
+            assert len(result) == 1
+            assert result[0]["normalized_label"] == "Total Assets"
+            assert result[0]["statement"] == "BalanceSheet"
+            assert result[0]["count"] == 50
+
+    def test_get_normalized_labels_error_handling(self):
+        """Test error handling when getting normalized labels fails."""
+        mock_engine = Mock()
+
+        with patch("filings.db.yearly_financials.Table") as mock_table:
+            mock_table.return_value = Mock()
+            operations = YearlyFinancialsOperations(mock_engine)
+
+            # Mock the engine.connect to raise an exception
+            mock_engine.connect.side_effect = SQLAlchemyError("Database error")
+
+            result = operations.get_normalized_labels()
+            assert result == []

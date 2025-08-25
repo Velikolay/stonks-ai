@@ -255,6 +255,95 @@ db.yearly_financials.refresh_view()
 db.quarterly_financials.refresh_view()
 ```
 
+### API Endpoints
+
+The system provides REST API endpoints for accessing financial data:
+
+#### Get Financial Metrics
+```
+GET /financials?ticker=AAPL&granularity=quarterly
+```
+
+**Parameters:**
+- `ticker` (required): Company ticker symbol
+- `granularity` (required): Data granularity - `quarterly` or `yearly`
+- `fiscal_year_start` (optional): Start fiscal year for range queries
+- `fiscal_year_end` (optional): End fiscal year for range queries
+- `fiscal_quarter_start` (optional): Start fiscal quarter (1-4, quarterly only)
+- `fiscal_quarter_end` (optional): End fiscal quarter (1-4, quarterly only)
+- `label` (optional): Filter by metric label
+- `normalized_label` (optional): Filter by normalized label
+- `statement` (optional): Filter by financial statement
+
+**Example Responses:**
+
+Quarterly Data:
+```json
+[
+  {
+    "company_id": 1,
+    "ticker": "AAPL",
+    "company_name": "Apple Inc.",
+    "fiscal_year": 2023,
+    "fiscal_quarter": 1,
+    "label": "Revenue",
+    "normalized_label": "Revenue",
+    "value": 1000000.0,
+    "unit": "USD",
+    "statement": "IncomeStatement",
+    "period_end": "2023-03-31",
+    "period_start": "2023-01-01",
+    "source_type": "10-Q"
+  }
+]
+```
+
+Yearly Data:
+```json
+[
+  {
+    "company_id": 1,
+    "ticker": "AAPL",
+    "company_name": "Apple Inc.",
+    "fiscal_year": 2023,
+    "fiscal_quarter": null,
+    "label": "Revenue",
+    "normalized_label": "Revenue",
+    "value": 4000000.0,
+    "unit": "USD",
+    "statement": "IncomeStatement",
+    "period_end": "2023-09-30",
+    "period_start": "2022-10-01",
+    "source_type": "10-K"
+  }
+]
+```
+
+#### Get Normalized Labels
+```
+GET /financials/normalized-labels?granularity=quarterly
+```
+
+**Parameters:**
+- `granularity` (required): Data granularity - `quarterly` or `yearly`
+- `statement` (optional): Filter by financial statement
+
+**Example Response:**
+```json
+[
+  {
+    "normalized_label": "Revenue",
+    "statement": "IncomeStatement",
+    "count": 150
+  },
+  {
+    "normalized_label": "Net Income",
+    "statement": "IncomeStatement",
+    "count": 120
+  }
+]
+```
+
 ### Key Features
 
 - **Materialized Views**: Pre-computed views for fast querying of financial metrics
@@ -262,6 +351,7 @@ db.quarterly_financials.refresh_view()
 - **Flexible Filtering**: Query by company, year, statement type, concept, or label
 - **Latest Metrics**: Easy access to the most recent financial data
 - **Automatic Refresh**: Views can be refreshed to include new data
+- **REST API**: Easy access to financial data via HTTP endpoints
 
 ## Example Usage
 
@@ -311,6 +401,24 @@ response = requests.post('http://localhost:8000/query', json=query_data)
 result = response.json()
 print(f"Answer: {result['answer']}")
 print(f"Sources: {result['sources']}")
+
+# Get financial metrics
+response = requests.get('http://localhost:8000/financials', params={
+    'ticker': 'AAPL',
+    'granularity': 'quarterly',
+    'fiscal_year_start': 2023,
+    'fiscal_year_end': 2024
+})
+financials = response.json()
+print(f"Found {len(financials)} quarterly metrics for AAPL")
+
+# Get normalized labels
+response = requests.get('http://localhost:8000/financials/normalized-labels', params={
+    'granularity': 'quarterly',
+    'statement': 'IncomeStatement'
+})
+labels = response.json()
+print(f"Found {len(labels)} normalized labels for quarterly income statements")
 ```
 
 ## Configuration
@@ -319,7 +427,7 @@ print(f"Sources: {result['sources']}")
 
 - `OPENAI_API_KEY`: Your OpenAI API key (required)
 - `OPENAI_MODEL`: OpenAI model to use (default: gpt-4o-mini)
-- `DATABASE_URL`: PostgreSQL connection string (for Docker: postgresql://rag_user:rag_password@postgres:5432/rag_db)
+- `DATABASE_URL`: PostgreSQL connection string (required for financial data endpoints)
 
 ### RAG System Configuration
 
