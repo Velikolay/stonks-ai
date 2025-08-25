@@ -16,13 +16,13 @@ def test_health_check():
     """Test the health check endpoint."""
     print("🔍 Testing health check...")
     try:
-        response = requests.get(f"{BASE_URL}/edgar/health")
+        response = requests.get(f"{BASE_URL}/")
         print(f"Status: {response.status_code}")
         print(f"Response: {response.json()}")
-        return response.status_code == 200
+        assert response.status_code == 200
     except Exception as e:
         print(f"❌ Health check failed: {e}")
-        return False
+        assert False, f"Health check failed: {e}"
 
 
 def test_process_filing():
