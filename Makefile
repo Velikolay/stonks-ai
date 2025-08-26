@@ -17,6 +17,17 @@ help:
 	@echo "  db-reset   - Reset database (drop and recreate)"
 	@echo "  db-status  - Show migration status"
 	@echo "  db-history - Show migration history"
+	@echo ""
+	@echo "Docker commands:"
+	@echo "  docker-up          - Start services"
+	@echo "  docker-down        - Stop services (preserves data)"
+	@echo "  docker-migrate     - Run database migrations"
+	@echo "  docker-logs        - View logs"
+	@echo "  docker-backup      - Create database backup"
+	@echo "  docker-restore     - Restore database from backup"
+	@echo "  docker-volume-status - Check volume status"
+	@echo "  docker-cleanup     - Safe cleanup (preserves volumes)"
+	@echo "  docker-cleanup-all - DANGEROUS: Remove all data"
 
 # Install dependencies
 install:
@@ -98,6 +109,21 @@ docker-down:
 	@echo "🐳 Stopping services..."
 	docker compose down
 
+docker-cleanup:
+	@echo "🧹 Cleaning up Docker resources (preserving volumes)..."
+	docker system prune -f
+	docker image prune -f
+
+docker-cleanup-all:
+	@echo "⚠️  WARNING: This will remove ALL Docker resources including volumes!"
+	@echo "This will DELETE ALL DATABASE DATA!"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ]
+	docker system prune -a -f --volumes
+
+docker-volume-status:
+	@echo "📊 Docker volume status..."
+	docker volume ls | grep stonks-ai-py
+
 docker-migrate:
 	@echo "🗄️  Running database migrations..."
 	docker compose --profile migrate up db_migrate
@@ -105,3 +131,17 @@ docker-migrate:
 docker-logs:
 	@echo "📋 Showing logs..."
 	docker compose logs -f
+
+docker-backup:
+	@echo "💾 Creating database backup..."
+	@mkdir -p backups
+	docker compose exec postgres pg_dump -U rag_user rag_db > backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "✅ Backup created in backups/ directory"
+
+docker-restore:
+	@echo "📥 Restoring database from backup..."
+	@echo "Available backups:"
+	@ls -la backups/*.sql 2>/dev/null || echo "No backups found"
+	@read -p "Enter backup filename: " backup_file && \
+	docker compose exec -T postgres psql -U rag_user rag_db < backups/$$backup_file
+	@echo "✅ Database restored from $$backup_file"
