@@ -28,21 +28,19 @@ def set_filings_db(db: FilingsDatabase) -> None:
 class FinancialMetricValue(BaseModel):
     """Model for individual financial metric values."""
 
-    fiscal_year: int
-    fiscal_quarter: Optional[int] = None
+    label: str
     value: float
     unit: Optional[str] = None
+    fiscal_year: int
+    fiscal_quarter: Optional[int] = None
     period_end: Optional[str] = None
-    period_start: Optional[str] = None
     source_type: Optional[str] = None
 
 
 class FinancialMetricResponse(BaseModel):
     """Response model for financial metrics."""
 
-    company_id: int
     ticker: str
-    label: str
     normalized_label: str
     statement: Optional[str] = None
     values: List[FinancialMetricValue]
@@ -150,32 +148,28 @@ async def get_financials(
         metric_groups = {}
         for metric in metrics:
             # Create a key for grouping
-            key = (metric.label, metric.normalized_label, metric.statement)
+            key = (metric.normalized_label, metric.statement)
 
             if key not in metric_groups:
                 metric_groups[key] = []
 
             # Create the value object
             value_obj = FinancialMetricValue(
+                label=metric.label,
+                value=float(metric.value),
                 fiscal_year=metric.fiscal_year,
                 fiscal_quarter=getattr(metric, "fiscal_quarter", None),
-                value=float(metric.value),
                 unit=metric.unit,
                 period_end=metric.period_end.isoformat() if metric.period_end else None,
-                period_start=(
-                    metric.period_start.isoformat() if metric.period_start else None
-                ),
                 source_type=getattr(metric, "source_type", None),
             )
             metric_groups[key].append(value_obj)
 
         # Convert grouped metrics to response format
         response_metrics = []
-        for (label, normalized_label, statement), values in metric_groups.items():
+        for (normalized_label, statement), values in metric_groups.items():
             response_metric = FinancialMetricResponse(
-                company_id=company.id,
                 ticker=company.ticker,
-                label=label,
                 normalized_label=normalized_label,
                 statement=statement,
                 values=values,
