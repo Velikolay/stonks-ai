@@ -43,12 +43,8 @@ class TestYearlyFinancialsOperations:
                         value=Decimal("1000000.00"),
                         unit="USD",
                         statement="IncomeStatement",
-                        concept="Revenues",
-                        axis=None,
-                        member=None,
                         period_end=None,
                         period_start=None,
-                        source_type="10-K",
                         fiscal_period_end=None,
                     ),
                     YearlyFinancial(
@@ -59,12 +55,8 @@ class TestYearlyFinancialsOperations:
                         value=Decimal("1100000.00"),
                         unit="USD",
                         statement="IncomeStatement",
-                        concept="Revenues",
-                        axis=None,
-                        member=None,
                         period_end=None,
                         period_start=None,
-                        source_type="10-K",
                         fiscal_period_end=None,
                     ),
                 ]
@@ -79,12 +71,8 @@ class TestYearlyFinancialsOperations:
                         value=Decimal("1000000.00"),
                         unit="USD",
                         statement="IncomeStatement",
-                        concept="Revenues",
-                        axis=None,
-                        member=None,
                         period_end=None,
                         period_start=None,
-                        source_type="10-K",
                         fiscal_period_end=None,
                     )
                 ]
@@ -99,12 +87,8 @@ class TestYearlyFinancialsOperations:
                         value=Decimal("1000000.00"),
                         unit="USD",
                         statement="IncomeStatement",
-                        concept="Revenues",
-                        axis=None,
-                        member=None,
                         period_end=None,
                         period_start=None,
-                        source_type="10-K",
                         fiscal_period_end=None,
                     )
                 ]
@@ -188,7 +172,7 @@ class TestYearlyFinancialsOperations:
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
                 assert call_args.company_id == 1
-                assert call_args.label == "Revenues"
+                assert call_args.labels == ["Revenues"]
 
     def test_get_metrics_by_statement(self):
         """Test getting metrics by statement."""

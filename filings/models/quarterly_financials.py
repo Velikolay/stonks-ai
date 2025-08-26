@@ -2,7 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,6 +33,6 @@ class QuarterlyFinancialsFilter(BaseModel):
     fiscal_year_end: Optional[int] = None
     fiscal_quarter_start: Optional[int] = None
     fiscal_quarter_end: Optional[int] = None
-    label: Optional[str] = None
-    normalized_label: Optional[str] = None
+    labels: Optional[List[str]] = None
+    normalized_labels: Optional[List[str]] = None
     statement: Optional[str] = None

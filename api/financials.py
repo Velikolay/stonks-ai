@@ -25,21 +25,27 @@ def set_filings_db(db: FilingsDatabase) -> None:
     filings_db = db
 
 
+class FinancialMetricValue(BaseModel):
+    """Model for individual financial metric values."""
+
+    fiscal_year: int
+    fiscal_quarter: Optional[int] = None
+    value: float
+    unit: Optional[str] = None
+    period_end: Optional[str] = None
+    period_start: Optional[str] = None
+    source_type: Optional[str] = None
+
+
 class FinancialMetricResponse(BaseModel):
     """Response model for financial metrics."""
 
     company_id: int
     ticker: str
-    fiscal_year: int
-    fiscal_quarter: Optional[int] = None
     label: str
     normalized_label: str
-    value: float
-    unit: Optional[str] = None
     statement: Optional[str] = None
-    period_end: Optional[str] = None
-    period_start: Optional[str] = None
-    source_type: Optional[str] = None
+    values: List[FinancialMetricValue]
 
 
 class NormalizedLabelResponse(BaseModel):
@@ -64,9 +70,11 @@ async def get_financials(
     fiscal_quarter_end: Optional[int] = Query(
         None, description="End fiscal quarter (1-4)"
     ),
-    label: Optional[str] = Query(None, description="Filter by metric label"),
-    normalized_label: Optional[str] = Query(
-        None, description="Filter by normalized label"
+    labels: Optional[str] = Query(
+        None, description="Filter by metric labels (comma-separated)"
+    ),
+    normalized_labels: Optional[str] = Query(
+        None, description="Filter by normalized labels (comma-separated)"
     ),
     statement: Optional[str] = Query(None, description="Filter by financial statement"),
 ) -> List[FinancialMetricResponse]:
@@ -119,10 +127,12 @@ async def get_financials(
             filter_kwargs["fiscal_quarter_start"] = fiscal_quarter_start
         if fiscal_quarter_end is not None:
             filter_kwargs["fiscal_quarter_end"] = fiscal_quarter_end
-        if label is not None:
-            filter_kwargs["label"] = label
-        if normalized_label is not None:
-            filter_kwargs["normalized_label"] = normalized_label
+        if labels is not None:
+            filter_kwargs["labels"] = [label.strip() for label in labels.split(",")]
+        if normalized_labels is not None:
+            filter_kwargs["normalized_labels"] = [
+                label.strip() for label in normalized_labels.split(",")
+            ]
         if statement is not None:
             filter_kwargs["statement"] = statement
 
@@ -136,24 +146,39 @@ async def get_financials(
             filter_params = YearlyFinancialsFilter(**filter_kwargs)
             metrics = filings_db.yearly_financials.get_yearly_financials(filter_params)
 
-        # Convert to response format
-        response_metrics = []
+        # Group metrics by label and normalized_label to reduce payload size
+        metric_groups = {}
         for metric in metrics:
-            response_metric = FinancialMetricResponse(
-                company_id=metric.company_id,
-                ticker=company.ticker,
+            # Create a key for grouping
+            key = (metric.label, metric.normalized_label, metric.statement)
+
+            if key not in metric_groups:
+                metric_groups[key] = []
+
+            # Create the value object
+            value_obj = FinancialMetricValue(
                 fiscal_year=metric.fiscal_year,
                 fiscal_quarter=getattr(metric, "fiscal_quarter", None),
-                label=metric.label,
-                normalized_label=metric.normalized_label,
                 value=float(metric.value),
                 unit=metric.unit,
-                statement=metric.statement,
                 period_end=metric.period_end.isoformat() if metric.period_end else None,
                 period_start=(
                     metric.period_start.isoformat() if metric.period_start else None
                 ),
                 source_type=getattr(metric, "source_type", None),
+            )
+            metric_groups[key].append(value_obj)
+
+        # Convert grouped metrics to response format
+        response_metrics = []
+        for (label, normalized_label, statement), values in metric_groups.items():
+            response_metric = FinancialMetricResponse(
+                company_id=company.id,
+                ticker=company.ticker,
+                label=label,
+                normalized_label=normalized_label,
+                statement=statement,
+                values=values,
             )
             response_metrics.append(response_metric)
 

@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, func, select
+from sqlalchemy import MetaData, Table, and_, func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -64,17 +64,20 @@ class QuarterlyFinancialsOperations:
                         <= filter_params.fiscal_quarter_end
                     )
 
-                if filter_params.label is not None:
-                    conditions.append(
-                        self.quarterly_financials_view.c.label.ilike(
-                            f"%{filter_params.label}%"
+                if filter_params.labels is not None:
+                    label_conditions = []
+                    for label in filter_params.labels:
+                        label_conditions.append(
+                            self.quarterly_financials_view.c.label.ilike(f"%{label}%")
                         )
-                    )
+                    if label_conditions:
+                        conditions.append(or_(*label_conditions))
 
-                if filter_params.normalized_label is not None:
+                if filter_params.normalized_labels is not None:
                     conditions.append(
-                        self.quarterly_financials_view.c.normalized_label
-                        == filter_params.normalized_label
+                        self.quarterly_financials_view.c.normalized_label.in_(
+                            filter_params.normalized_labels
+                        )
                     )
 
                 if filter_params.statement is not None:
@@ -139,7 +142,7 @@ class QuarterlyFinancialsOperations:
         self, company_id: int, label: str
     ) -> List[QuarterlyFinancial]:
         """Get quarterly metrics by label (metric name) for a specific company."""
-        filter_params = QuarterlyFinancialsFilter(company_id=company_id, label=label)
+        filter_params = QuarterlyFinancialsFilter(company_id=company_id, labels=[label])
         return self.get_quarterly_financials(filter_params)
 
     def get_metrics_by_statement(
@@ -156,7 +159,7 @@ class QuarterlyFinancialsOperations:
     ) -> List[QuarterlyFinancial]:
         """Get quarterly metrics by normalized label for a specific company."""
         filter_params = QuarterlyFinancialsFilter(
-            company_id=company_id, normalized_label=normalized_label
+            company_id=company_id, normalized_labels=[normalized_label]
         )
         return self.get_quarterly_financials(filter_params)
 

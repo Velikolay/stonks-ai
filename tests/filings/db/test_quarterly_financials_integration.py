@@ -38,7 +38,7 @@ class TestQuarterlyFinancialsIntegration:
             fiscal_year_end=2024,
             fiscal_quarter_start=1,
             fiscal_quarter_end=1,
-            label="Revenue",
+            labels=["Revenue"],
             statement="Income Statement",
         )
 
@@ -47,7 +47,7 @@ class TestQuarterlyFinancialsIntegration:
         assert filter_params.fiscal_year_end == 2024
         assert filter_params.fiscal_quarter_start == 1
         assert filter_params.fiscal_quarter_end == 1
-        assert filter_params.label == "Revenue"
+        assert filter_params.labels == ["Revenue"]
         assert filter_params.statement == "Income Statement"
 
     def test_view_structure(self):

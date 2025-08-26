@@ -137,7 +137,7 @@ class TestQuarterlyFinancialsOperations:
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args[0][0]
                 assert call_args.company_id == 1
-                assert call_args.label == "Revenue"
+                assert call_args.labels == ["Revenue"]
 
     def test_get_metrics_by_statement(self):
         """Test getting metrics by statement."""
