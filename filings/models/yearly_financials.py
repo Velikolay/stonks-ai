@@ -17,7 +17,6 @@ class YearlyFinancial(BaseModel):
     unit: Optional[str] = None
     statement: Optional[str] = None
     period_end: Optional[date] = None
-    period_start: Optional[date] = None
     fiscal_year: int
     fiscal_period_end: Optional[date] = None
 

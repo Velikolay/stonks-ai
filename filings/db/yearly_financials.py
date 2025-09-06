@@ -95,7 +95,6 @@ class YearlyFinancialsOperations:
                         unit=row.unit,
                         statement=row.statement,
                         period_end=row.period_end,
-                        period_start=row.period_start,
                         fiscal_year=row.fiscal_year,
                         fiscal_period_end=row.fiscal_period_end,
                     )
@@ -179,7 +178,6 @@ class YearlyFinancialsOperations:
                         unit=row.unit,
                         statement=row.statement,
                         period_end=row.period_end,
-                        period_start=row.period_start,
                         fiscal_period_end=row.fiscal_period_end,
                     )
                     metrics.append(metric)

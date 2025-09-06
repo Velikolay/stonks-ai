@@ -38,6 +38,7 @@ def upgrade() -> None:
                 ff.member,
                 ff.period_end,
                 ff.period_start,
+                ff.period,
                 f.form_type as source_type,
                 f.fiscal_period_end
             FROM financial_facts ff
@@ -46,7 +47,7 @@ def upgrade() -> None:
                 AND (cn.statement IS NULL OR ff.statement = cn.statement)
             WHERE f.form_type IN ('10-Q', '10-K')
         ),
-        quarterly_filings AS (
+        quarterly_filings_raw AS (
             -- Get quarterly data from 10-Q filings
             SELECT
                 company_id,
@@ -61,11 +62,52 @@ def upgrade() -> None:
                 member,
                 period_end,
                 period_start,
+                period,
                 normalized_label,
                 source_type,
                 fiscal_period_end
             FROM all_filings_data
             WHERE source_type = '10-Q'
+        ),
+        quarterly_filings_with_prev AS (
+            -- Add previous quarter data for YTD conversion
+            SELECT
+                q.*,
+                CASE
+                    WHEN (fiscal_period_end - LAG(fiscal_period_end) OVER w) BETWEEN 80 AND 100
+                    THEN LAG(value) OVER w
+                    ELSE NULL
+                END AS prev_value
+            FROM quarterly_filings_raw q
+            WINDOW w AS (
+                PARTITION BY company_id, statement, normalized_label, axis, member
+                ORDER BY fiscal_period_end
+            )
+        ),
+        quarterly_filings AS (
+            -- Convert YTD data to quarterly values
+            SELECT
+                company_id,
+                fiscal_year,
+                fiscal_quarter,
+                label,
+                CASE
+                    WHEN period = 'Q' THEN value
+                    WHEN period = 'YTD' AND prev_value IS NULL THEN value
+                    WHEN period = 'YTD' AND prev_value IS NOT NULL THEN value - prev_value
+                    -- For NULL period (balance sheet items), use value as-is
+                    ELSE value
+                END as value,
+                unit,
+                statement,
+                concept,
+                axis,
+                member,
+                period_end,
+                normalized_label,
+                source_type,
+                fiscal_period_end
+            FROM quarterly_filings_with_prev
         ),
         annual_filings AS (
             -- Get annual data from 10-K filings
@@ -81,7 +123,6 @@ def upgrade() -> None:
                 axis,
                 member,
                 period_end,
-                period_start,
                 normalized_label,
                 source_type,
                 fiscal_period_end
@@ -99,7 +140,6 @@ def upgrade() -> None:
                 a.unit as k_unit,
                 a.statement as k_statement,
                 a.period_end as k_period_end,
-                a.period_start as k_period_start,
                 a.fiscal_period_end as k_fiscal_period_end,
                 a.label as k_label,
                 a.normalized_label as k_normalized_label,
@@ -126,14 +166,13 @@ def upgrade() -> None:
                 k_unit as unit,
                 k_statement as statement,
                 k_period_end as period_end,
-                k_period_start as period_start,
                 k_normalized_label as normalized_label,
                 'calculated' as source_type,
                 k_fiscal_period_end as fiscal_period_end
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
             WHERE k_statement != 'Balance Sheet'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_period_start, k_normalized_label, k_fiscal_period_end
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
         -- Combine all quarterly data
@@ -145,7 +184,6 @@ def upgrade() -> None:
             unit,
             statement,
             period_end,
-            period_start,
             fiscal_year,
             fiscal_quarter,
             source_type
@@ -162,7 +200,6 @@ def upgrade() -> None:
             unit,
             statement,
             period_end,
-            period_start,
             fiscal_year,
             fiscal_quarter,
             source_type
@@ -179,7 +216,6 @@ def upgrade() -> None:
             unit,
             statement,
             period_end,
-            period_start,
             fiscal_year,
             fiscal_quarter,
             source_type

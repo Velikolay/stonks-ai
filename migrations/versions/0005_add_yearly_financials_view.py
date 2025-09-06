@@ -28,7 +28,6 @@ def upgrade() -> None:
             ff.unit,
             ff.statement,
             ff.period_end,
-            ff.period_start,
             f.fiscal_year,
             f.fiscal_period_end
         FROM financial_facts ff

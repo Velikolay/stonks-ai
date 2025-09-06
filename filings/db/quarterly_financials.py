@@ -110,7 +110,6 @@ class QuarterlyFinancialsOperations:
                         unit=row.unit,
                         statement=row.statement,
                         period_end=row.period_end,
-                        period_start=row.period_start,
                         source_type=row.source_type,
                     )
                     financials.append(financial)
@@ -195,7 +194,6 @@ class QuarterlyFinancialsOperations:
                         unit=row.unit,
                         statement=row.statement,
                         period_end=row.period_end,
-                        period_start=row.period_start,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)
