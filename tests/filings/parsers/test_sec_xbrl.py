@@ -311,6 +311,63 @@ class TestSECXBRLParser:
         )
         assert result is None
 
+    def test_is_column_mostly_empty(self):
+        """Test that _is_column_mostly_empty correctly identifies empty columns."""
+        geography_parser = GeographyParser()
+        parser = SECXBRLParser(geography_parser=geography_parser)
+
+        # Create a test DataFrame
+        test_data = {
+            "concept": ["us-gaap:Revenues", "us-gaap:Assets", "us-gaap:Liabilities"],
+            "label": ["Revenues", "Assets", "Liabilities"],
+            "good_column": [1000000, 2000000, 3000000],  # 100% non-null
+            "mostly_empty": [1000000, None, None],  # 33% non-null
+            "completely_empty": [None, None, None],  # 0% non-null
+            "empty_strings": [
+                1000000,
+                "",
+                "",
+            ],  # 33% non-empty (empty strings count as empty)
+        }
+
+        df = pd.DataFrame(test_data)
+
+        # Test good column (should not be mostly empty)
+        assert not parser._is_column_mostly_empty(df, "good_column", threshold=20.0)
+        assert not parser._is_column_mostly_empty(df, "good_column", threshold=50.0)
+
+        # Test mostly empty column (33% non-null)
+        assert not parser._is_column_mostly_empty(
+            df, "mostly_empty", threshold=20.0
+        )  # 33% > 20%, so not mostly empty
+        assert parser._is_column_mostly_empty(
+            df, "mostly_empty", threshold=40.0
+        )  # 33% < 40%, so mostly empty
+
+        # Test completely empty column
+        assert parser._is_column_mostly_empty(df, "completely_empty", threshold=20.0)
+        assert not parser._is_column_mostly_empty(
+            df, "completely_empty", threshold=0.0
+        )  # 0% is not < 0%
+
+        # Test column with empty strings (should be treated same as None)
+        assert not parser._is_column_mostly_empty(
+            df, "empty_strings", threshold=20.0
+        )  # 33% > 20%, so not mostly empty
+        assert parser._is_column_mostly_empty(
+            df, "empty_strings", threshold=40.0
+        )  # 33% < 40%, so mostly empty
+
+        # Test non-existent column
+        assert parser._is_column_mostly_empty(df, "non_existent_column", threshold=20.0)
+
+        # Test with empty DataFrame
+        empty_df = pd.DataFrame()
+        assert parser._is_column_mostly_empty(empty_df, "any_column", threshold=20.0)
+
+        # Test with None DataFrame
+        assert parser._is_column_mostly_empty(None, "any_column", threshold=20.0)
+
     def test_parse_disaggregated_revenues_empty_data(self):
         """Test parsing disaggregated revenues with empty data."""
         geography_parser = GeographyParser()

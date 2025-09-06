@@ -104,7 +104,11 @@ class SECXBRLParser:
             period_columns = []
 
             for col in columns:
-                if isinstance(col, str) and ("-" in col or "/" in col):
+                if (
+                    isinstance(col, str)
+                    and ("-" in col or "/" in col)
+                    and not self._is_column_mostly_empty(statement_df, col)
+                ):
                     period_columns.append(col)
 
             if not period_columns:
@@ -421,6 +425,35 @@ class SECXBRLParser:
 
         # If we can't determine the period type, default to YTD
         return PeriodType.YTD
+
+    def _is_column_mostly_empty(
+        self, df: pd.DataFrame, column_name: str, threshold: float = 20.0
+    ) -> bool:
+        """Check if a specific column has mostly empty values.
+
+        This is a workaround for edgartools issue #408
+
+        Args:
+            df: DataFrame to check
+            column_name: Name of the column to check
+            threshold: Percentage threshold (default 20%). If non-null values are below this, column is considered mostly empty.
+
+        Returns:
+            True if the column is mostly empty (below threshold), False otherwise
+        """
+        if df is None or df.empty or column_name not in df.columns:
+            return True
+
+        # Calculate the percentage of non-null, non-empty values for the specific column
+        # Count values that are not null/NaN and not empty strings
+        non_empty_count = (
+            df[column_name]
+            .apply(lambda x: x is not None and x != "" and pd.notna(x))
+            .sum()
+        )
+        total_rows = len(df)
+        non_empty_percentage = (non_empty_count / total_rows) * 100
+        return non_empty_percentage < threshold
 
     def _to_df_dim(self, sec_dim: str) -> str:
         dim = sec_dim.replace(":", "_")
