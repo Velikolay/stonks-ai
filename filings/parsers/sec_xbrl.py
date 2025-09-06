@@ -388,29 +388,28 @@ class SECXBRLParser:
         else:
             return PeriodType.Q
 
-    def _determine_period_type_from_column(self, period_col: str) -> PeriodType:
+    def _determine_period_type_from_column(
+        self, period_col: str, statement_type: str
+    ) -> Optional[PeriodType]:
         """Determine period type based on the period column name.
 
         Args:
             period_col: The period column name (e.g., "2025-06-28 (Q2)", "2025-12-31")
 
         Returns:
-            PeriodType.Q if it's a quarter, PeriodType.YTD otherwise
-
-        Raises:
-            ValueError: If period_col is empty, doesn't contain ISO date, or period type cannot be determined
+            PeriodType.Q if it's a quarter, PeriodType.YTD if it's year-to-date, None if no period info
         """
-        if not period_col:
-            raise ValueError("Period column is required but not provided")
+
+        if statement_type == "Balance Sheet":
+            return None
 
         # Validate that the period column contains an ISO date (YYYY-MM-DD format)
         import re
 
         iso_date_pattern = r"\b\d{4}-\d{2}-\d{2}\b"
         if not re.search(iso_date_pattern, period_col):
-            raise ValueError(
-                f"Period column must contain an ISO date (YYYY-MM-DD format): '{period_col}'"
-            )
+            # If no ISO date found, return None (for balance sheet items, etc.)
+            return None
 
         # Check if the column name contains quarter indicators
         period_col_lower = period_col.lower()
@@ -468,7 +467,7 @@ class SECXBRLParser:
             period_end = self._parse_date(date_str)
 
             # Determine period type based on the period column name
-            period = self._determine_period_type_from_column(period_col)
+            period = self._determine_period_type_from_column(period_col, statement_type)
 
             # Create abstracts from hierarchy (only parent abstracts, not the element itself)
             abstracts = []

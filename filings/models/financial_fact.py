@@ -36,7 +36,7 @@ class FinancialFactBase(BaseModel):
     abstracts: Optional[List[FinancialFactAbstract]] = None
     period_end: Optional[date] = None
     period_start: Optional[date] = None
-    period: PeriodType
+    period: Optional[PeriodType] = None
 
     @field_validator("abstracts", mode="before")
     @classmethod

@@ -544,3 +544,47 @@ class TestFinancialFactOperations:
         # Test enum creation from string
         assert PeriodType("YTD") == PeriodType.YTD
         assert PeriodType("Q") == PeriodType.Q
+
+    def test_financial_fact_optional_period_field(self):
+        """Test that FinancialFact period field is optional."""
+        # Test FinancialFactCreate without period field should work (for balance sheet items)
+        fact_create = FinancialFactCreate(
+            filing_id=1,
+            concept="us-gaap:Assets",
+            label="Total Assets",
+            value=Decimal("352755.0"),
+            unit="USD",
+            statement="Balance Sheet",
+            period_end=date(2024, 9, 28),
+            # period field intentionally omitted (balance sheet items don't have periods)
+        )
+        assert fact_create.period is None
+
+        # Test FinancialFact without period field should work
+        fact = FinancialFact(
+            id=1,
+            filing_id=1,
+            concept="us-gaap:Assets",
+            label="Total Assets",
+            value=Decimal("352755.0"),
+            unit="USD",
+            statement="Balance Sheet",
+            period_end=date(2024, 9, 28),
+            # period field intentionally omitted
+        )
+        assert fact.period is None
+
+        # Test FinancialFact with period field should work
+        fact_with_period = FinancialFact(
+            id=1,
+            filing_id=1,
+            concept="us-gaap:Revenues",
+            label="Revenues",
+            value=Decimal("89498.0"),
+            unit="USD",
+            statement="Income Statement",
+            period_end=date(2024, 9, 28),
+            period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
+        )
+        assert fact_with_period.period == PeriodType.Q

@@ -42,7 +42,7 @@ class FinancialFactOperations:
                         statement=fact.statement,
                         period_end=fact.period_end,
                         period_start=fact.period_start,
-                        period=fact.period.value,
+                        period=fact.period.value if fact.period is not None else None,
                         abstracts=(
                             [abstract.model_dump() for abstract in fact.abstracts]
                             if fact.abstracts is not None
@@ -135,7 +135,11 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
-                            period=PeriodType(row.period),
+                            period=(
+                                PeriodType(row.period)
+                                if row.period is not None
+                                else None
+                            ),
                             abstracts=row.abstracts,
                         )
                     )
@@ -183,7 +187,11 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
-                            period=PeriodType(row.period),
+                            period=(
+                                PeriodType(row.period)
+                                if row.period is not None
+                                else None
+                            ),
                             abstracts=row.abstracts,
                         )
                     )

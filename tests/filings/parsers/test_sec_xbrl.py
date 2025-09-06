@@ -4,7 +4,6 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pandas as pd
-import pytest
 
 from filings.parsers.geography import GeographyParser
 from filings.parsers.sec_xbrl import SECXBRLParser
@@ -226,46 +225,46 @@ class TestSECXBRLParser:
         assert fact.value == Decimal("1000000")
         assert fact.statement == "Income Statement"
 
-        # Regression test: ensure period field is set
+        # Regression test: ensure period field is set (for income statement items)
         assert hasattr(fact, "period"), "FinancialFact should have period field"
-        assert fact.period is not None, "Period field should not be None"
+        assert (
+            fact.period is not None
+        ), "Period field should not be None for income statement items"
         assert fact.period in [
             "YTD",
             "Q",
         ], f"Period should be YTD or Q, got {fact.period}"
 
     def test_determine_period_type_from_column_validation(self):
-        """Test that _determine_period_type_from_column fails with invalid inputs."""
+        """Test that _determine_period_type_from_column handles various inputs correctly."""
         geography_parser = GeographyParser()
         parser = SECXBRLParser(geography_parser=geography_parser)
 
-        # Test with empty period column
-        with pytest.raises(
-            ValueError, match="Period column is required but not provided"
-        ):
-            parser._determine_period_type_from_column("")
+        # Test with empty period column (should return None for balance sheet items)
+        result = parser._determine_period_type_from_column("", "Income Statement")
+        assert result is None
 
-        # Test with None period column
-        with pytest.raises(
-            ValueError, match="Period column is required but not provided"
-        ):
-            parser._determine_period_type_from_column(None)
-
-        # Test with period column missing ISO date
-        with pytest.raises(ValueError, match="Period column must contain an ISO date"):
-            parser._determine_period_type_from_column("Some Random Text")
+        # Test with period column missing ISO date (should return None for balance sheet items)
+        result = parser._determine_period_type_from_column(
+            "Some Random Text", "Income Statement"
+        )
+        assert result is None
 
         # Test with period column missing ISO date (only quarter indicator)
-        with pytest.raises(ValueError, match="Period column must contain an ISO date"):
-            parser._determine_period_type_from_column("Q1")
+        result = parser._determine_period_type_from_column("Q1", "Income Statement")
+        assert result is None
 
-        # Test with invalid date format
-        with pytest.raises(ValueError, match="Period column must contain an ISO date"):
-            parser._determine_period_type_from_column("2024/03/31 (Q1)")
+        # Test with invalid date format (should return None for balance sheet items)
+        result = parser._determine_period_type_from_column(
+            "2024/03/31 (Q1)", "Income Statement"
+        )
+        assert result is None
 
         # Test with invalid date format (MM-DD-YYYY)
-        with pytest.raises(ValueError, match="Period column must contain an ISO date"):
-            parser._determine_period_type_from_column("03-31-2024 (Q1)")
+        result = parser._determine_period_type_from_column(
+            "03-31-2024 (Q1)", "Income Statement"
+        )
+        assert result is None
 
     def test_determine_period_type_from_column_valid_inputs(self):
         """Test that _determine_period_type_from_column works with valid inputs."""
@@ -273,24 +272,44 @@ class TestSECXBRLParser:
         parser = SECXBRLParser(geography_parser=geography_parser)
 
         # Test with valid quarter period column
-        result = parser._determine_period_type_from_column("2024-03-31 (Q1)")
+        result = parser._determine_period_type_from_column(
+            "2024-03-31 (Q1)", "Income Statement"
+        )
         assert result == "Q"
 
         # Test with valid quarter period column (different format)
-        result = parser._determine_period_type_from_column("2024-06-30 Q2")
+        result = parser._determine_period_type_from_column(
+            "2024-06-30 Q2", "Income Statement"
+        )
         assert result == "Q"
 
         # Test with valid YTD period column (no quarter indicator)
-        result = parser._determine_period_type_from_column("2024-12-31")
+        result = parser._determine_period_type_from_column(
+            "2024-12-31", "Cash Flow Statement"
+        )
         assert result == "YTD"
 
         # Test with valid YTD period column (explicit YTD)
-        result = parser._determine_period_type_from_column("2024-12-31 (YTD)")
+        result = parser._determine_period_type_from_column(
+            "2024-12-31 (YTD)", "Cash Flow Statement"
+        )
         assert result == "YTD"
 
         # Test with valid period column (quarter in middle)
-        result = parser._determine_period_type_from_column("Q3 2024-09-30")
+        result = parser._determine_period_type_from_column(
+            "Q3 2024-09-30", "Cash Flow Statement"
+        )
         assert result == "Q"
+
+        result = parser._determine_period_type_from_column(
+            "2024-03-31 (Q1)", "Balance Sheet"
+        )
+        assert result is None
+
+        result = parser._determine_period_type_from_column(
+            "2024-03-31", "Balance Sheet"
+        )
+        assert result is None
 
     def test_parse_disaggregated_revenues_empty_data(self):
         """Test parsing disaggregated revenues with empty data."""
