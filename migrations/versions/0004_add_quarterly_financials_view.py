@@ -131,6 +131,8 @@ def upgrade() -> None:
                 'calculated' as source_type,
                 k_fiscal_period_end as fiscal_period_end
             FROM quarterly_with_ranks
+            -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
+            WHERE k_statement != 'Balance Sheet'
             GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_period_start, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
@@ -151,6 +153,24 @@ def upgrade() -> None:
 
         UNION ALL
 
+        -- Balance Sheet data is snapshot in time accumulation
+        SELECT
+            company_id,
+            label,
+            normalized_label,
+            value,
+            unit,
+            statement,
+            period_end,
+            period_start,
+            fiscal_year,
+            fiscal_quarter,
+            source_type
+        FROM annual_filings
+        WHERE statement = 'Balance Sheet'
+
+        UNION ALL
+
         SELECT
             company_id,
             label,
@@ -165,7 +185,7 @@ def upgrade() -> None:
             source_type
         FROM missing_quarters
         WHERE value IS NOT NULL AND value != 0
-        ORDER BY company_id, fiscal_year, fiscal_quarter, label;
+        ORDER BY company_id, fiscal_year DESC, fiscal_quarter DESC, statement, label;
     """
     )
 

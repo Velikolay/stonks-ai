@@ -36,7 +36,7 @@ def upgrade() -> None:
         LEFT JOIN concept_normalizations cn ON ff.concept = cn.concept
             AND (cn.statement IS NULL OR ff.statement = cn.statement)
         WHERE f.form_type = '10-K'
-        ORDER BY f.company_id, f.fiscal_year, ff.label;
+        ORDER BY f.company_id, f.fiscal_year DESC, ff.statement, ff.label;
     """
     )
 
