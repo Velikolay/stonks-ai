@@ -2,9 +2,17 @@
 
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class PeriodType(str, Enum):
+    """Period type enumeration for financial facts."""
+
+    YTD = "YTD"  # Year to date
+    Q = "Q"  # Quarter
 
 
 class FinancialFactAbstract(BaseModel):
@@ -28,6 +36,7 @@ class FinancialFactBase(BaseModel):
     abstracts: Optional[List[FinancialFactAbstract]] = None
     period_end: Optional[date] = None
     period_start: Optional[date] = None
+    period: PeriodType
 
     @field_validator("abstracts", mode="before")
     @classmethod

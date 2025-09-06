@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from filings import CompanyCreate, FilingCreate, FinancialFactCreate
+from filings import CompanyCreate, FilingCreate, FinancialFactCreate, PeriodType
 
 
 class TestDatabaseIntegration:
@@ -47,6 +47,7 @@ class TestDatabaseIntegration:
                 statement="Income Statement",
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                period=PeriodType.Q,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
@@ -57,6 +58,7 @@ class TestDatabaseIntegration:
                 statement="Income Statement",
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                period=PeriodType.Q,
             ),
         ]
         fact_ids = db.financial_facts.insert_financial_facts_batch(facts_data)
@@ -120,6 +122,7 @@ class TestDatabaseIntegration:
                 value=Decimal("50000.0"),
                 unit="USD",
                 statement="Income Statement",
+                period=PeriodType.Q,
             )
             db.financial_facts.insert_financial_fact(fact_data)
 
@@ -205,6 +208,7 @@ class TestDatabaseIntegration:
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period=PeriodType.Q,
             )
         )
 
@@ -246,6 +250,7 @@ class TestDatabaseIntegration:
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
+            period=PeriodType.Q,
         )
 
         # This should fail due to foreign key constraint

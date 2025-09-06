@@ -12,6 +12,7 @@ from .models import (
     FinancialFactAbstract,
     FinancialFactBase,
     FinancialFactCreate,
+    PeriodType,
     QuarterlyFinancial,
     QuarterlyFinancialsFilter,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "FinancialFactCreate",
     "FinancialFact",
     "FinancialFactAbstract",
+    "PeriodType",
     "QuarterlyFinancial",
     "QuarterlyFinancialsFilter",
     "SECXBRLFilingsLoader",

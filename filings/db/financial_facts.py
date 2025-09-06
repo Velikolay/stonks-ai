@@ -7,7 +7,7 @@ from sqlalchemy import MetaData, Table, insert, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models import FinancialFact, FinancialFactCreate
+from ..models import FinancialFact, FinancialFactCreate, PeriodType
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ class FinancialFactOperations:
                         statement=fact.statement,
                         period_end=fact.period_end,
                         period_start=fact.period_start,
+                        period=fact.period.value,
                         abstracts=(
                             [abstract.model_dump() for abstract in fact.abstracts]
                             if fact.abstracts is not None
@@ -85,6 +86,9 @@ class FinancialFactOperations:
                             statement=fact.statement,
                             period_end=fact.period_end,
                             period_start=fact.period_start,
+                            period=(
+                                fact.period.value if fact.period is not None else None
+                            ),
                             abstracts=(
                                 [abstract.model_dump() for abstract in fact.abstracts]
                                 if fact.abstracts is not None
@@ -131,6 +135,7 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
+                            period=PeriodType(row.period),
                             abstracts=row.abstracts,
                         )
                     )
@@ -178,6 +183,7 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             period_start=row.period_start,
+                            period=PeriodType(row.period),
                             abstracts=row.abstracts,
                         )
                     )
@@ -211,6 +217,9 @@ class FinancialFactOperations:
                         statement=row.statement,
                         period_end=row.period_end,
                         period_start=row.period_start,
+                        period=(
+                            PeriodType(row.period) if row.period is not None else None
+                        ),
                         abstracts=row.abstracts,
                     )
                     facts.append(fact)

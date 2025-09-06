@@ -14,6 +14,7 @@ from filings import (
     FilingsDatabase,
     FinancialFactAbstract,
     FinancialFactCreate,
+    PeriodType,
 )
 
 
@@ -153,6 +154,7 @@ def sample_financial_fact() -> FinancialFactCreate:
         statement="Income Statement",
         period_end=date(2024, 9, 28),
         period_start=date(2024, 6, 30),
+        period=PeriodType.Q,
     )
 
 
@@ -174,5 +176,6 @@ def sample_financial_fact_with_abstracts() -> FinancialFactCreate:
         statement="Income Statement",
         period_end=date(2024, 9, 28),
         period_start=date(2024, 6, 30),
+        period=PeriodType.Q,
         abstracts=abstracts,
     )

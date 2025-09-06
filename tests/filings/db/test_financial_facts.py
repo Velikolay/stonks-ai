@@ -8,6 +8,7 @@ from filings import (
     FinancialFact,
     FinancialFactAbstract,
     FinancialFactCreate,
+    PeriodType,
 )
 
 
@@ -64,6 +65,7 @@ class TestFinancialFactOperations:
                 ],
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                period=PeriodType.Q,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
@@ -79,6 +81,7 @@ class TestFinancialFactOperations:
                 ],
                 period_end=date(2024, 9, 28),
                 period_start=date(2024, 6, 30),
+                period=PeriodType.Q,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
@@ -88,6 +91,7 @@ class TestFinancialFactOperations:
                 unit="USD",
                 statement="Balance Sheet",
                 period_end=date(2024, 9, 28),
+                period=PeriodType.Q,
             ),
         ]
 
@@ -136,6 +140,7 @@ class TestFinancialFactOperations:
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period=PeriodType.Q,
             ),
             FinancialFactCreate(
                 filing_id=filing.id,
@@ -144,6 +149,7 @@ class TestFinancialFactOperations:
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
+                period=PeriodType.Q,
             ),
         ]
 
@@ -202,6 +208,7 @@ class TestFinancialFactOperations:
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
+            period=PeriodType.Q,
         )
 
         fact2 = FinancialFactCreate(
@@ -211,6 +218,7 @@ class TestFinancialFactOperations:
             value=Decimal("81797.0"),
             unit="USD",
             statement="Income Statement",
+            period=PeriodType.Q,
         )
 
         db.financial_facts.insert_financial_fact(fact1)
@@ -253,6 +261,7 @@ class TestFinancialFactOperations:
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period=PeriodType.Q,
             )
 
             db.financial_facts.insert_financial_fact(fact)
@@ -278,6 +287,7 @@ class TestFinancialFactOperations:
             statement="Income Statement",
             period_end=date(2024, 9, 28),
             period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
         )
         assert fact.filing_id == 1
         assert fact.concept == "us-gaap:Revenues"
@@ -299,6 +309,7 @@ class TestFinancialFactOperations:
             statement="Income Statement",
             period_end=date(2024, 9, 28),
             period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
         )
         assert complete_fact.id == 1
         assert complete_fact.filing_id == 1
@@ -327,6 +338,7 @@ class TestFinancialFactOperations:
             statement="Income Statement",
             period_end=date(2024, 9, 28),
             period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
         )
 
         fact_id = db.financial_facts.insert_financial_fact(fact_data)
@@ -410,6 +422,7 @@ class TestFinancialFactOperations:
             statement="Income Statement",
             period_end=date(2024, 9, 28),
             period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
             abstracts=[],
         )
 
@@ -441,6 +454,7 @@ class TestFinancialFactOperations:
             statement="Income Statement",
             period_end=date(2024, 9, 28),
             period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
             abstracts=None,
         )
 
@@ -452,3 +466,81 @@ class TestFinancialFactOperations:
 
         assert fact.id == fact_id
         assert fact.abstracts is None
+
+    def test_financial_fact_with_period_field(self, db, sample_company, sample_filing):
+        """Test financial fact with period field."""
+        # Create company and filing
+        company = db.companies.get_or_create_company(sample_company)
+        sample_filing.company_id = company.id
+        filing = db.filings.get_or_create_filing(sample_filing)
+
+        # Test with YTD period
+        fact_data_ytd = FinancialFactCreate(
+            filing_id=filing.id,
+            concept="us-gaap:Revenues",
+            label="Revenues",
+            value=Decimal("89498.0"),
+            unit="USD",
+            statement="Income Statement",
+            period_end=date(2024, 9, 28),
+            period_start=date(2024, 1, 1),
+            period=PeriodType.YTD,
+        )
+
+        fact_id_ytd = db.financial_facts.insert_financial_fact(fact_data_ytd)
+
+        # Test with Q period
+        fact_data_q = FinancialFactCreate(
+            filing_id=filing.id,
+            concept="us-gaap:NetIncomeLoss",
+            label="Net Income (Loss)",
+            value=Decimal("22956.0"),
+            unit="USD",
+            statement="Income Statement",
+            period_end=date(2024, 9, 28),
+            period_start=date(2024, 6, 30),
+            period=PeriodType.Q,
+        )
+
+        fact_id_q = db.financial_facts.insert_financial_fact(fact_data_q)
+
+        # Test with Q period for assets
+        fact_data_q_assets = FinancialFactCreate(
+            filing_id=filing.id,
+            concept="us-gaap:Assets",
+            label="Total Assets",
+            value=Decimal("352755.0"),
+            unit="USD",
+            statement="Balance Sheet",
+            period_end=date(2024, 9, 28),
+            period=PeriodType.Q,
+        )
+
+        fact_id_q_assets = db.financial_facts.insert_financial_fact(fact_data_q_assets)
+
+        # Retrieve and verify facts
+        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+
+        # Find the facts by concept
+        revenue_fact = next(f for f in facts if f.concept == "us-gaap:Revenues")
+        net_income_fact = next(f for f in facts if f.concept == "us-gaap:NetIncomeLoss")
+        assets_fact = next(f for f in facts if f.concept == "us-gaap:Assets")
+
+        # Verify period values
+        assert revenue_fact.id == fact_id_ytd
+        assert revenue_fact.period == PeriodType.YTD
+
+        assert net_income_fact.id == fact_id_q
+        assert net_income_fact.period == PeriodType.Q
+
+        assert assets_fact.id == fact_id_q_assets
+        assert assets_fact.period == PeriodType.Q
+
+    def test_period_type_enum_values(self):
+        """Test PeriodType enum values."""
+        assert PeriodType.YTD == "YTD"
+        assert PeriodType.Q == "Q"
+
+        # Test enum creation from string
+        assert PeriodType("YTD") == PeriodType.YTD
+        assert PeriodType("Q") == PeriodType.Q

@@ -8,7 +8,7 @@ from typing import List, Optional
 import pandas as pd
 from edgar import Company, Filing
 
-from ..models import FinancialFact, FinancialFactAbstract
+from ..models import FinancialFact, FinancialFactAbstract, PeriodType
 from .geography import GeographyParser
 
 logger = logging.getLogger(__name__)
@@ -330,6 +330,9 @@ class SECXBRLParser:
             period_start = self._parse_date(row.get("period_start"))
             period_end = self._parse_date(row.get("period_end"))
 
+            # Determine period type based on dates
+            period = self._determine_period_type(period_start, period_end)
+
             # Create label using original concept label and member
             label = f"{original_label} - {member}" if member else original_label
 
@@ -346,6 +349,7 @@ class SECXBRLParser:
                 statement=f"Disaggregated {metric} ({dimension_type})",
                 period_end=period_end,
                 period_start=period_start,
+                period=period,
                 abstracts=None,  # No hierarchy for disaggregated data
             )
 
@@ -354,6 +358,70 @@ class SECXBRLParser:
         except Exception as e:
             logger.error(f"Error creating disaggregated {metric} fact: {e}")
             return None
+
+    def _determine_period_type(
+        self, period_start: Optional[date], period_end: Optional[date]
+    ) -> PeriodType:
+        """Determine period type based on start and end dates.
+
+        Args:
+            period_start: Start date of the period
+            period_end: End date of the period
+
+        Returns:
+            PeriodType.YTD if it's year-to-date, PeriodType.Q if it's a quarter
+        """
+        if not period_start or not period_end:
+            # Default to Q if we can't determine
+            return PeriodType.Q
+
+        # Calculate the number of days in the period
+        days_in_period = (period_end - period_start).days
+
+        # If the period is approximately 3 months (90 days +/- 10 days), it's a quarter
+        if 80 <= days_in_period <= 100:
+            return PeriodType.Q
+        # If the period is longer (like 6-12 months), it's likely YTD
+        elif days_in_period > 100:
+            return PeriodType.YTD
+        # Default to Q for shorter periods
+        else:
+            return PeriodType.Q
+
+    def _determine_period_type_from_column(self, period_col: str) -> PeriodType:
+        """Determine period type based on the period column name.
+
+        Args:
+            period_col: The period column name (e.g., "2025-06-28 (Q2)", "2025-12-31")
+
+        Returns:
+            PeriodType.Q if it's a quarter, PeriodType.YTD otherwise
+
+        Raises:
+            ValueError: If period_col is empty, doesn't contain ISO date, or period type cannot be determined
+        """
+        if not period_col:
+            raise ValueError("Period column is required but not provided")
+
+        # Validate that the period column contains an ISO date (YYYY-MM-DD format)
+        import re
+
+        iso_date_pattern = r"\b\d{4}-\d{2}-\d{2}\b"
+        if not re.search(iso_date_pattern, period_col):
+            raise ValueError(
+                f"Period column must contain an ISO date (YYYY-MM-DD format): '{period_col}'"
+            )
+
+        # Check if the column name contains quarter indicators
+        period_col_lower = period_col.lower()
+        if any(
+            indicator in period_col_lower
+            for indicator in ["q1", "q2", "q3", "q4", "quarter"]
+        ):
+            return PeriodType.Q
+
+        # If we can't determine the period type, default to YTD
+        return PeriodType.YTD
 
     def _to_df_dim(self, sec_dim: str) -> str:
         dim = sec_dim.replace(":", "_")
@@ -399,6 +467,9 @@ class SECXBRLParser:
             # Parse the date
             period_end = self._parse_date(date_str)
 
+            # Determine period type based on the period column name
+            period = self._determine_period_type_from_column(period_col)
+
             # Create abstracts from hierarchy (only parent abstracts, not the element itself)
             abstracts = []
 
@@ -423,6 +494,7 @@ class SECXBRLParser:
                 statement=statement_type,
                 period_end=period_end,
                 period_start=None,  # Could be calculated if needed
+                period=period,
                 abstracts=abstracts if abstracts else None,
             )
 

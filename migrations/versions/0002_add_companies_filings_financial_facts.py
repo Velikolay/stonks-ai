@@ -69,6 +69,7 @@ def upgrade() -> None:
         sa.Column("abstracts", JSONB(), nullable=True),
         sa.Column("period_end", sa.Date(), nullable=True),
         sa.Column("period_start", sa.Date(), nullable=True),
+        sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=False),
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],
@@ -84,6 +85,9 @@ def downgrade() -> None:
     # Drop financial_facts table
     op.drop_index(op.f("ix_financial_facts_id"), table_name="financial_facts")
     op.drop_table("financial_facts")
+
+    # Drop the enum type
+    op.execute("DROP TYPE IF EXISTS period_type")
 
     # Drop filings table
     op.drop_index(op.f("ix_filings_id"), table_name="filings")
