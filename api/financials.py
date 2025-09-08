@@ -126,10 +126,10 @@ async def get_financials(
         if fiscal_quarter_end is not None:
             filter_kwargs["fiscal_quarter_end"] = fiscal_quarter_end
         if labels is not None:
-            filter_kwargs["labels"] = [label.strip() for label in labels.split(",")]
+            filter_kwargs["labels"] = [label.strip() for label in labels.split(";")]
         if normalized_labels is not None:
             filter_kwargs["normalized_labels"] = [
-                label.strip() for label in normalized_labels.split(",")
+                label.strip() for label in normalized_labels.split(";")
             ]
         if statement is not None:
             filter_kwargs["statement"] = statement

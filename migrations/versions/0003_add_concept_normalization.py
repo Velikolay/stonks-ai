@@ -53,11 +53,6 @@ def upgrade() -> None:
         ('us-gaap_GrossProfit', 'Gross Profit', 'Income Statement', 'Gross profit'),
         ('us-gaap_GrossProfitLoss', 'Gross Profit', 'Income Statement', 'Gross profit or loss'),
 
-        -- Operating Expenses concepts
-        ('us-gaap_OperatingExpenses', 'Operating Expenses', 'Income Statement', 'Operating expenses'),
-        ('us-gaap_SellingGeneralAndAdministrativeExpense', 'Operating Expenses', 'Income Statement', 'Selling, general and administrative expenses'),
-        ('us-gaap_ResearchAndDevelopmentExpense', 'Operating Expenses', 'Income Statement', 'Research and development expenses'),
-
         -- Operating Income concepts
         ('us-gaap_OperatingIncomeLoss', 'Operating Income', 'Income Statement', 'Operating income or loss'),
         ('us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxes', 'Operating Income', 'Income Statement', 'Income from continuing operations before taxes'),
@@ -108,7 +103,12 @@ def upgrade() -> None:
         ('us-gaap_LongTermDebt', 'Long-term Debt', 'Balance Sheet', 'Long-term debt'),
         ('us-gaap_LongTermDebtNoncurrent', 'Long-term Debt', 'Balance Sheet', 'Long-term debt noncurrent'),
         ('us-gaap_ShortTermBorrowings', 'Short-term Debt', 'Balance Sheet', 'Short-term borrowings'),
-        ('us-gaap_ShortTermDebt', 'Short-term Debt', 'Balance Sheet', 'Short-term debt')
+        ('us-gaap_ShortTermDebt', 'Short-term Debt', 'Balance Sheet', 'Short-term debt'),
+
+        -- Deferred Revenue concepts
+        ('us-gaap_DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
+        ('us-gaap_ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
+        ('us-gaap_DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', 'Deferred revenue non-current')
     """
     )
 
