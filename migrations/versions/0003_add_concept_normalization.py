@@ -108,7 +108,12 @@ def upgrade() -> None:
         -- Deferred Revenue concepts
         ('us-gaap_DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
         ('us-gaap_ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
-        ('us-gaap_DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', 'Deferred revenue non-current')
+        ('us-gaap_DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', 'Deferred revenue non-current'),
+
+        -- Other
+        ('us-gaap_ProceedsFromPaymentsForOtherFinancingActivities', 'Other financing activities', 'Cash Flow Statement', 'Other financing activities'),
+        ('us-gaap_PaymentsForProceedsFromOtherInvestingActivities', 'Other investing activities', 'Cash Flow Statement', 'Other investing activities'),
+        ('us-gaap_OtherNoncashIncomeExpense', 'Other income expenses', 'Cash Flow Statement', 'Other income expenses')
     """
     )
 
