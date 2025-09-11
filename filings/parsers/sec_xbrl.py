@@ -203,7 +203,7 @@ class SECXBRLParser:
                         row,
                         metric=metric,
                         dimension="srt:ProductOrServiceAxis",
-                        dimension_type="Product",
+                        dimension_parsed="Product",
                     )
                     if fact:
                         facts.append(fact)
@@ -229,7 +229,7 @@ class SECXBRLParser:
                         row,
                         metric=metric,
                         dimension="srt:StatementGeographicAxis",
-                        dimension_type="Geographic",
+                        dimension_parsed="Geographic",
                     )
                     if fact:
                         facts.append(fact)
@@ -260,7 +260,10 @@ class SECXBRLParser:
                             row,
                             metric=metric,
                             dimension="us-gaap:StatementBusinessSegmentsAxis",
-                            dimension_type="Geographic",
+                            dimension_parsed="Geographic",
+                            dimension_value_parsed=self.geography_parser.parse_geography(
+                                segment_member
+                            ).geography,
                         )
                         if fact:
                             facts.append(fact)
@@ -295,15 +298,20 @@ class SECXBRLParser:
         return self._parse_disaggregated_metrics(xbrl, "OperatingIncome")
 
     def _create_disaggregated_metric_fact(
-        self, row, metric: str, dimension: str, dimension_type: str
+        self,
+        row,
+        metric: str,
+        dimension: str,
+        dimension_parsed: str,
+        dimension_value_parsed: Optional[str] = None,
     ) -> Optional[FinancialFact]:
         """Create a FinancialFact for disaggregated metrics.
 
         Args:
             row: DataFrame row from XBRL query
-            dimension: The dimension axis
-            dimension_type: Type of dimension (Product, Geographic)
             metric: The metric being disaggregated (e.g., "Revenue", "OperatingIncome")
+            dimension: The dimension axis
+            dimension_parsed: The parsed dimension (Product, Geographic)
 
         Returns:
             FinancialFact object or None if invalid
@@ -313,11 +321,13 @@ class SECXBRLParser:
             concept = row.get("concept", metric)
             value = row.get("value")
 
-            # Get the original label from the XBRL data
-            original_label = row.get("label", concept)
+            # Get the label from the XBRL data
+            label = row.get("label", concept)
 
             axis = dimension
             member = row.get(self._to_df_dim(dimension), "UnknownMember")
+            parsed_axis = dimension_parsed
+            parsed_member = dimension_value_parsed
 
             # Skip if no value
             if not value:
@@ -337,9 +347,6 @@ class SECXBRLParser:
             # Determine period type based on dates
             period = self._determine_period_type(period_start, period_end)
 
-            # Create label using original concept label and member
-            label = f"{original_label} - {member}" if member else original_label
-
             # Create the financial fact
             fact = FinancialFact(
                 id=0,  # Will be set by database
@@ -350,7 +357,9 @@ class SECXBRLParser:
                 unit="USD",  # Default unit
                 axis=axis,
                 member=member,
-                statement=f"Disaggregated {metric} ({dimension_type})",
+                parsed_axis=parsed_axis,
+                parsed_member=parsed_member,
+                statement="Income Statement",
                 period_end=period_end,
                 period_start=period_start,
                 period=period,
@@ -360,7 +369,9 @@ class SECXBRLParser:
             return fact
 
         except Exception as e:
-            logger.error(f"Error creating disaggregated {metric} fact: {e}")
+            logger.error(
+                f"Error creating disaggregated {metric}, {dimension} fact: {e}"
+            )
             return None
 
     def _determine_period_type(

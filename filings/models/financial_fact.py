@@ -32,6 +32,8 @@ class FinancialFactBase(BaseModel):
     unit: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
+    parsed_axis: Optional[str] = None
+    parsed_member: Optional[str] = None
     statement: Optional[str] = None
     abstracts: Optional[List[FinancialFactAbstract]] = None
     period_end: Optional[date] = None

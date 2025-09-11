@@ -65,6 +65,8 @@ def upgrade() -> None:
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("axis", sa.String(), nullable=True),
         sa.Column("member", sa.String(), nullable=True),
+        sa.Column("parsed_axis", sa.String(), nullable=True),
+        sa.Column("parsed_member", sa.String(), nullable=True),
         sa.Column("statement", sa.String(), nullable=True),
         sa.Column("abstracts", JSONB(), nullable=True),
         sa.Column("period_end", sa.Date(), nullable=True),
