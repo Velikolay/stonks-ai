@@ -46,8 +46,9 @@ class TestSECXBRLParser:
                 mock_fact.member = product
                 mock_fact.value = Decimal(str(1000000 + i * 1000000))
                 mock_fact.axis = "srt:ProductOrServiceAxis"
-                mock_fact.statement = "Disaggregated Revenue (Product)"
-                mock_fact.label = f"Contract Revenue - {product}"
+                mock_fact.parsed_axis = "Product"
+                mock_fact.statement = "Income Statement"
+                mock_fact.label = "Contract Revenue"
                 mock_facts.append(mock_fact)
 
             mock_create.side_effect = mock_facts
@@ -59,8 +60,9 @@ class TestSECXBRLParser:
             assert facts[0].member == "iPhone"
             assert facts[0].value == Decimal("1000000")
             assert facts[0].axis == "srt:ProductOrServiceAxis"
-            assert facts[0].statement == "Disaggregated Revenue (Product)"
-            assert facts[0].label == "Contract Revenue - iPhone"
+            assert facts[0].parsed_axis == "Product"
+            assert facts[0].statement == "Income Statement"
+            assert facts[0].label == "Contract Revenue"
 
     def test_parse_disaggregated_revenues_geographic(self):
         """Test parsing disaggregated revenues by geographic region."""
@@ -104,7 +106,8 @@ class TestSECXBRLParser:
         assert facts[0].member == "Americas"
         assert facts[0].value == Decimal("5000000")
         assert facts[0].axis == "srt:StatementGeographicAxis"
-        assert facts[0].statement == "Disaggregated Revenue (Geographic)"
+        assert facts[0].parsed_axis == "Geographic"
+        assert facts[0].statement == "Income Statement"
 
     def test_create_disaggregated_revenue_fact(self):
         """Test creating disaggregated revenue fact."""
@@ -125,15 +128,16 @@ class TestSECXBRLParser:
             row,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_type="Product",
+            dimension_parsed="Product",
         )
 
         assert fact.concept == "Revenue"
         assert fact.value == Decimal("1000000")
         assert fact.member == "iPhone"
         assert fact.axis == "srt:ProductOrServiceAxis"
-        assert fact.statement == "Disaggregated Revenue (Product)"
-        assert fact.label == "Contract Revenue - iPhone"
+        assert fact.parsed_axis == "Product"
+        assert fact.statement == "Income Statement"
+        assert fact.label == "Contract Revenue"
         # Regression test: ensure period field is set
         assert fact.period is not None
         assert fact.period in ["YTD", "Q"]  # PeriodType values
@@ -157,7 +161,7 @@ class TestSECXBRLParser:
             row,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_type="Product",
+            dimension_parsed="Product",
         )
 
         assert fact is None
@@ -181,7 +185,7 @@ class TestSECXBRLParser:
             row,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_type="Product",
+            dimension_parsed="Product",
         )
 
         # This test ensures that if someone accidentally removes the period field
@@ -439,7 +443,8 @@ class TestSECXBRLParser:
         for fact in facts:
             assert fact.concept == "Revenue"
             assert fact.axis == "us-gaap:StatementBusinessSegmentsAxis"
-            assert fact.statement == "Disaggregated Revenue (Geographic)"
+            assert fact.parsed_axis == "Geographic"
+            assert fact.statement == "Income Statement"
             assert isinstance(fact.value, Decimal)
             assert fact.value > 0
 
