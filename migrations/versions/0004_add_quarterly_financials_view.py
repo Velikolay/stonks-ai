@@ -36,6 +36,8 @@ def upgrade() -> None:
                 ff.concept,
                 ff.axis,
                 ff.member,
+                ff.parsed_axis,
+                ff.parsed_member,
                 ff.period_end,
                 ff.period_start,
                 ff.period,
@@ -60,6 +62,8 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
+                parsed_axis,
+                parsed_member,
                 period_end,
                 period_start,
                 period,
@@ -103,6 +107,8 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
+                parsed_axis,
+                parsed_member,
                 period_end,
                 normalized_label,
                 source_type,
@@ -122,6 +128,8 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
+                parsed_axis,
+                parsed_member,
                 period_end,
                 normalized_label,
                 source_type,
@@ -138,6 +146,8 @@ def upgrade() -> None:
                 a.fiscal_quarter as k_fiscal_quarter,
                 a.value as k_value,
                 a.unit as k_unit,
+                a.parsed_axis as k_parsed_axis,
+                a.parsed_member as k_parsed_member,
                 a.statement as k_statement,
                 a.period_end as k_period_end,
                 a.fiscal_period_end as k_fiscal_period_end,
@@ -164,6 +174,8 @@ def upgrade() -> None:
                 k_label as label,
                 k_value - COALESCE(SUM(value) FILTER (WHERE rn <= 3), 0) as value,
                 k_unit as unit,
+                k_parsed_axis as parsed_axis,
+                k_parsed_member as parsed_member,
                 k_statement as statement,
                 k_period_end as period_end,
                 k_normalized_label as normalized_label,
@@ -172,7 +184,7 @@ def upgrade() -> None:
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
             WHERE k_statement != 'Balance Sheet'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_normalized_label, k_fiscal_period_end
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
 
@@ -183,6 +195,8 @@ def upgrade() -> None:
             normalized_label,
             value,
             unit,
+            parsed_axis as axis,
+            parsed_member as member,
             statement,
             period_end,
             fiscal_year,
@@ -199,6 +213,8 @@ def upgrade() -> None:
             normalized_label,
             value,
             unit,
+            parsed_axis as axis,
+            parsed_member as member,
             statement,
             period_end,
             fiscal_year,
@@ -215,6 +231,8 @@ def upgrade() -> None:
             normalized_label,
             value,
             unit,
+            parsed_axis as axis,
+            parsed_member as member,
             statement,
             period_end,
             fiscal_year,

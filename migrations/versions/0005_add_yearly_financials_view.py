@@ -26,6 +26,8 @@ def upgrade() -> None:
             COALESCE(cn.normalized_label, ff.label) as normalized_label,
             ff.value,
             ff.unit,
+            ff.parsed_axis as axis,
+            ff.parsed_member as member,
             ff.statement,
             ff.period_end,
             f.fiscal_year,
