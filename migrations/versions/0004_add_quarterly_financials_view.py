@@ -175,6 +175,7 @@ def upgrade() -> None:
             GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_statement, k_period_end, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
+
         -- Combine all quarterly data
         SELECT
             company_id,

@@ -10,6 +10,7 @@ from edgar import Company, Filing
 
 from ..models import FinancialFact, FinancialFactAbstract, PeriodType
 from .geography import GeographyParser
+from .product import ProductParser
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,18 @@ logger = logging.getLogger(__name__)
 class SECXBRLParser:
     """Parser for SEC XBRL (10-Q, 10-K, etc.) filings using edgartools."""
 
-    def __init__(self, geography_parser: GeographyParser):
+    def __init__(
+        self,
+        geography_parser: GeographyParser,
+        product_parser: ProductParser,
+    ):
         """Initialize the parser.
 
         Args:
             geography_parser: Geography parser instance.
         """
         self.geography_parser = geography_parser
+        self.product_parser = product_parser
 
     def parse_filing(self, filing: Filing) -> List[FinancialFact]:
         """Parse an XBRL filing and extract financial facts.
@@ -199,11 +205,18 @@ class SECXBRLParser:
                 ]
 
                 for _, row in product_metrics.iterrows():
+                    segment_member = row.get(
+                        self._to_df_dim("srt:ProductOrServiceAxis"), ""
+                    )
+
                     fact = self._create_disaggregated_metric_fact(
                         row,
                         metric=metric,
                         dimension="srt:ProductOrServiceAxis",
                         dimension_parsed="Product",
+                        dimension_value_parsed=self.product_parser.parse_product(
+                            segment_member
+                        ).product,
                     )
                     if fact:
                         facts.append(fact)
