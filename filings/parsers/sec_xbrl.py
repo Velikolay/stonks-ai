@@ -155,7 +155,11 @@ class SECXBRLParser:
                 # Add current abstract to hierarchy if it's an abstract
                 if is_abstract:
                     abstract_hierarchy.append(
-                        {"level": level, "concept": concept, "label": label}
+                        {
+                            "level": level,
+                            "concept": self._to_sec_concept(concept),
+                            "label": label,
+                        }
                     )
 
                 # Create fact if there's a value (not an abstract)
@@ -480,8 +484,11 @@ class SECXBRLParser:
         return non_empty_percentage < threshold
 
     def _to_df_dim(self, sec_dim: str) -> str:
-        dim = sec_dim.replace(":", "_")
+        dim = sec_dim.replace(":", "_", 1)
         return f"dim_{dim}"
+
+    def _to_sec_concept(self, concept: str) -> str:
+        return concept.replace("_", ":", 1)
 
     def _create_financial_fact_with_hierarchy(
         self,
@@ -505,7 +512,7 @@ class SECXBRLParser:
         """
         try:
             # Extract basic information
-            concept = row.get("concept", "")
+            concept = self._to_sec_concept(row.get("concept", ""))
             label = row.get("label", concept)
             value = row.get(period_col)
 

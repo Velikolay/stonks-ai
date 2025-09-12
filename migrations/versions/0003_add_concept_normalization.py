@@ -38,82 +38,82 @@ def upgrade() -> None:
         """
         INSERT INTO concept_normalizations (concept, normalized_label, statement, description) VALUES
         -- Revenue concepts
-        ('us-gaap_Revenues', 'Revenue', 'Income Statement', 'Total revenue'),
-        ('us-gaap_SalesRevenueNet', 'Revenue', 'Income Statement', 'Net sales revenue'),
-        ('us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenue', 'Income Statement', 'Revenue from contracts with customers'),
-        ('us-gaap_RevenueFromContractWithCustomerIncludingAssessedTax', 'Revenue', 'Income Statement', 'Revenue from contracts including tax'),
-        ('us-gaap_OperatingRevenues', 'Revenue', 'Income Statement', 'Operating revenues'),
+        ('us-gaap:Revenues', 'Revenue', 'Income Statement', 'Total revenue'),
+        ('us-gaap:SalesRevenueNet', 'Revenue', 'Income Statement', 'Net sales revenue'),
+        ('us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenue', 'Income Statement', 'Revenue from contracts with customers'),
+        ('us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax', 'Revenue', 'Income Statement', 'Revenue from contracts including tax'),
+        ('us-gaap:OperatingRevenues', 'Revenue', 'Income Statement', 'Operating revenues'),
 
         -- Cost of Revenue concepts
-        ('us-gaap_CostOfGoodsAndServicesSold', 'Cost of Revenue', 'Income Statement', 'Cost of goods and services sold'),
-        ('us-gaap_CostOfRevenue', 'Cost of Revenue', 'Income Statement', 'Cost of revenue'),
-        ('us-gaap_CostOfGoodsSold', 'Cost of Revenue', 'Income Statement', 'Cost of goods sold'),
+        ('us-gaap:CostOfGoodsAndServicesSold', 'Cost of Revenue', 'Income Statement', 'Cost of goods and services sold'),
+        ('us-gaap:CostOfRevenue', 'Cost of Revenue', 'Income Statement', 'Cost of revenue'),
+        ('us-gaap:CostOfGoodsSold', 'Cost of Revenue', 'Income Statement', 'Cost of goods sold'),
 
         -- Gross Profit concepts
-        ('us-gaap_GrossProfit', 'Gross Profit', 'Income Statement', 'Gross profit'),
-        ('us-gaap_GrossProfitLoss', 'Gross Profit', 'Income Statement', 'Gross profit or loss'),
+        ('us-gaap:GrossProfit', 'Gross Profit', 'Income Statement', 'Gross profit'),
+        ('us-gaap:GrossProfitLoss', 'Gross Profit', 'Income Statement', 'Gross profit or loss'),
 
         -- Operating Income concepts
-        ('us-gaap_OperatingIncomeLoss', 'Operating Income', 'Income Statement', 'Operating income or loss'),
-        ('us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxes', 'Operating Income', 'Income Statement', 'Income from continuing operations before taxes'),
+        ('us-gaap:OperatingIncomeLoss', 'Operating Income', 'Income Statement', 'Operating income or loss'),
+        ('us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxes', 'Operating Income', 'Income Statement', 'Income from continuing operations before taxes'),
 
         -- Net Income concepts
-        ('us-gaap_NetIncomeLoss', 'Net Income', 'Income Statement', 'Net income or loss'),
-        ('us-gaap_ProfitLoss', 'Net Income', 'Income Statement', 'Profit or loss'),
-        ('us-gaap_IncomeLossFromContinuingOperationsAfterIncomeTaxes', 'Net Income', 'Income Statement', 'Income from continuing operations after taxes'),
+        ('us-gaap:NetIncomeLoss', 'Net Income', 'Income Statement', 'Net income or loss'),
+        ('us-gaap:ProfitLoss', 'Net Income', 'Income Statement', 'Profit or loss'),
+        ('us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes', 'Net Income', 'Income Statement', 'Income from continuing operations after taxes'),
 
         -- Cash and Cash Equivalents concepts
-        ('us-gaap_CashAndCashEquivalentsAtCarryingValue', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash and cash equivalents'),
-        ('us-gaap_Cash', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash'),
-        ('us-gaap_CashEquivalentsAtCarryingValue', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash equivalents'),
+        ('us-gaap:CashAndCashEquivalentsAtCarryingValue', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash and cash equivalents'),
+        ('us-gaap:Cash', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash'),
+        ('us-gaap:CashEquivalentsAtCarryingValue', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash equivalents'),
 
         -- Total Assets concepts
-        ('us-gaap_Assets', 'Total Assets', 'Balance Sheet', 'Total assets'),
-        ('us-gaap_AssetsTotal', 'Total Assets', 'Balance Sheet', 'Total assets'),
+        ('us-gaap:Assets', 'Total Assets', 'Balance Sheet', 'Total assets'),
+        ('us-gaap:AssetsTotal', 'Total Assets', 'Balance Sheet', 'Total assets'),
 
         -- Total Liabilities concepts
-        ('us-gaap_Liabilities', 'Total Liabilities', 'Balance Sheet', 'Total liabilities'),
-        ('us-gaap_LiabilitiesTotal', 'Total Liabilities', 'Balance Sheet', 'Total liabilities'),
+        ('us-gaap:Liabilities', 'Total Liabilities', 'Balance Sheet', 'Total liabilities'),
+        ('us-gaap:LiabilitiesTotal', 'Total Liabilities', 'Balance Sheet', 'Total liabilities'),
 
         -- Total Equity concepts
-        ('us-gaap_StockholdersEquity', 'Total Equity', 'Balance Sheet', 'Stockholders equity'),
-        ('us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'Total Equity', 'Balance Sheet', 'Total stockholders equity'),
-        ('us-gaap_Equity', 'Total Equity', 'Balance Sheet', 'Total equity'),
+        ('us-gaap:StockholdersEquity', 'Total Equity', 'Balance Sheet', 'Stockholders equity'),
+        ('us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'Total Equity', 'Balance Sheet', 'Total stockholders equity'),
+        ('us-gaap:Equity', 'Total Equity', 'Balance Sheet', 'Total equity'),
 
         -- Operating Cash Flow concepts
-        ('us-gaap_NetCashProvidedByUsedInOperatingActivities', 'Operating Cash Flow', 'Cash Flow Statement', 'Net cash from operating activities'),
-        ('us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations', 'Operating Cash Flow', 'Cash Flow Statement', 'Net cash from operating activities - continuing'),
+        ('us-gaap:NetCashProvidedByUsedInOperatingActivities', 'Operating Cash Flow', 'Cash Flow Statement', 'Net cash from operating activities'),
+        ('us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations', 'Operating Cash Flow', 'Cash Flow Statement', 'Net cash from operating activities - continuing'),
 
         -- Investing Cash Flow concepts
-        ('us-gaap_NetCashProvidedByUsedInInvestingActivities', 'Investing Cash Flow', 'Cash Flow Statement', 'Net cash from investing activities'),
-        ('us-gaap_NetCashProvidedByUsedInInvestingActivitiesContinuingOperations', 'Investing Cash Flow', 'Cash Flow Statement', 'Net cash from investing activities - continuing'),
+        ('us-gaap:NetCashProvidedByUsedInInvestingActivities', 'Investing Cash Flow', 'Cash Flow Statement', 'Net cash from investing activities'),
+        ('us-gaap:NetCashProvidedByUsedInInvestingActivitiesContinuingOperations', 'Investing Cash Flow', 'Cash Flow Statement', 'Net cash from investing activities - continuing'),
 
         -- Financing Cash Flow concepts
-        ('us-gaap_NetCashProvidedByUsedInFinancingActivities', 'Financing Cash Flow', 'Cash Flow Statement', 'Net cash from financing activities'),
-        ('us-gaap_NetCashProvidedByUsedInFinancingActivitiesContinuingOperations', 'Financing Cash Flow', 'Cash Flow Statement', 'Net cash from financing activities - continuing'),
+        ('us-gaap:NetCashProvidedByUsedInFinancingActivities', 'Financing Cash Flow', 'Cash Flow Statement', 'Net cash from financing activities'),
+        ('us-gaap:NetCashProvidedByUsedInFinancingActivitiesContinuingOperations', 'Financing Cash Flow', 'Cash Flow Statement', 'Net cash from financing activities - continuing'),
 
         -- Free Cash Flow concepts
-        ('us-gaap_FreeCashFlow', 'Free Cash Flow', 'Cash Flow Statement', 'Free cash flow'),
+        ('us-gaap:FreeCashFlow', 'Free Cash Flow', 'Cash Flow Statement', 'Free cash flow'),
 
         -- EPS concepts
-        ('us-gaap_EarningsPerShareBasic', 'Basic EPS', 'Income Statement', 'Basic earnings per share'),
-        ('us-gaap_EarningsPerShareDiluted', 'Diluted EPS', 'Income Statement', 'Diluted earnings per share'),
+        ('us-gaap:EarningsPerShareBasic', 'Basic EPS', 'Income Statement', 'Basic earnings per share'),
+        ('us-gaap:EarningsPerShareDiluted', 'Diluted EPS', 'Income Statement', 'Diluted earnings per share'),
 
         -- Debt concepts
-        ('us-gaap_LongTermDebt', 'Long-term Debt', 'Balance Sheet', 'Long-term debt'),
-        ('us-gaap_LongTermDebtNoncurrent', 'Long-term Debt', 'Balance Sheet', 'Long-term debt noncurrent'),
-        ('us-gaap_ShortTermBorrowings', 'Short-term Debt', 'Balance Sheet', 'Short-term borrowings'),
-        ('us-gaap_ShortTermDebt', 'Short-term Debt', 'Balance Sheet', 'Short-term debt'),
+        ('us-gaap:LongTermDebt', 'Long-term Debt', 'Balance Sheet', 'Long-term debt'),
+        ('us-gaap:LongTermDebtNoncurrent', 'Long-term Debt', 'Balance Sheet', 'Long-term debt noncurrent'),
+        ('us-gaap:ShortTermBorrowings', 'Short-term Debt', 'Balance Sheet', 'Short-term borrowings'),
+        ('us-gaap:ShortTermDebt', 'Short-term Debt', 'Balance Sheet', 'Short-term debt'),
 
         -- Deferred Revenue concepts
-        ('us-gaap_DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
-        ('us-gaap_ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
-        ('us-gaap_DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', 'Deferred revenue non-current'),
+        ('us-gaap:DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
+        ('us-gaap:ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
+        ('us-gaap:DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', 'Deferred revenue non-current'),
 
         -- Other
-        ('us-gaap_ProceedsFromPaymentsForOtherFinancingActivities', 'Other financing activities', 'Cash Flow Statement', 'Other financing activities'),
-        ('us-gaap_PaymentsForProceedsFromOtherInvestingActivities', 'Other investing activities', 'Cash Flow Statement', 'Other investing activities'),
-        ('us-gaap_OtherNoncashIncomeExpense', 'Other income expenses', 'Cash Flow Statement', 'Other income expenses')
+        ('us-gaap:ProceedsFromPaymentsForOtherFinancingActivities', 'Other financing activities', 'Cash Flow Statement', 'Other financing activities'),
+        ('us-gaap:PaymentsForProceedsFromOtherInvestingActivities', 'Other investing activities', 'Cash Flow Statement', 'Other investing activities'),
+        ('us-gaap:OtherNoncashIncomeExpense', 'Other income expenses', 'Cash Flow Statement', 'Other income expenses')
     """
     )
 
