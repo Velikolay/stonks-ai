@@ -20,24 +20,60 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE MATERIALIZED VIEW yearly_financials AS
+        WITH all_filings_data AS (
+            -- Get all filing data with latest abstracts for each unique metric combination
+            SELECT
+                f.company_id,
+                ff.label,
+                COALESCE(cn.normalized_label, ff.label) as normalized_label,
+                ff.value,
+                ff.unit,
+                ff.parsed_axis as axis,
+                ff.parsed_member as member,
+                ff.statement,
+                ff.period_end,
+                f.fiscal_year,
+                f.fiscal_period_end,
+                -- Get the latest abstracts for this metric combination
+                FIRST_VALUE(ff.abstracts) OVER (
+                    PARTITION BY f.company_id, ff.statement, COALESCE(cn.normalized_label, ff.label), ff.axis, ff.member
+                    ORDER BY f.fiscal_period_end DESC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) as latest_abstracts
+            FROM financial_facts ff
+            JOIN filings f ON ff.filing_id = f.id
+            LEFT JOIN concept_normalizations cn ON ff.concept = cn.concept
+                AND (cn.statement IS NULL OR ff.statement = cn.statement)
+            WHERE f.form_type = '10-K'
+        ),
+        all_filings_data_ext AS (
+            SELECT
+                all_filings_data.*,
+                CASE
+                    WHEN jsonb_typeof(latest_abstracts) = 'array' THEN (
+                        SELECT array_agg(rtrim(elem->>'label', ':'))
+                        FROM jsonb_array_elements(latest_abstracts) AS elem
+                        WHERE elem->>'label' IS NOT NULL
+                    )
+                    ELSE NULL
+                END AS latest_abstract_labels
+            FROM all_filings_data
+        )
         SELECT
-            f.company_id,
-            ff.label,
-            COALESCE(cn.normalized_label, ff.label) as normalized_label,
-            ff.value,
-            ff.unit,
-            ff.parsed_axis as axis,
-            ff.parsed_member as member,
-            ff.statement,
-            ff.period_end,
-            f.fiscal_year,
-            f.fiscal_period_end
-        FROM financial_facts ff
-        JOIN filings f ON ff.filing_id = f.id
-        LEFT JOIN concept_normalizations cn ON ff.concept = cn.concept
-            AND (cn.statement IS NULL OR ff.statement = cn.statement)
-        WHERE f.form_type = '10-K'
-        ORDER BY f.company_id, f.fiscal_year DESC, ff.statement, ff.label;
+            company_id,
+            label,
+            normalized_label,
+            value,
+            unit,
+            axis,
+            member,
+            statement,
+            latest_abstract_labels as abstracts,
+            period_end,
+            fiscal_year,
+            fiscal_period_end
+        FROM all_filings_data_ext
+        ORDER BY company_id, fiscal_year DESC, statement;
     """
     )
 

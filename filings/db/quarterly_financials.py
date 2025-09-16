@@ -109,6 +109,9 @@ class QuarterlyFinancialsOperations:
                         value=row.value,
                         unit=row.unit,
                         statement=row.statement,
+                        axis=row.axis,
+                        member=row.member,
+                        abstracts=row.abstracts,
                         period_end=row.period_end,
                         source_type=row.source_type,
                     )
@@ -193,6 +196,9 @@ class QuarterlyFinancialsOperations:
                         value=row.value,
                         unit=row.unit,
                         statement=row.statement,
+                        axis=row.axis,
+                        member=row.member,
+                        abstracts=row.abstracts,
                         period_end=row.period_end,
                         source_type=row.source_type,
                     )

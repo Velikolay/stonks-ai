@@ -41,6 +41,12 @@ def upgrade() -> None:
                 ff.period_end,
                 ff.period_start,
                 ff.period,
+                -- Get the latest abstracts for this metric combination and extract labels
+                FIRST_VALUE(ff.abstracts) OVER (
+                    PARTITION BY f.company_id, ff.statement, COALESCE(cn.normalized_label, ff.label), ff.axis, ff.member
+                    ORDER BY f.fiscal_period_end DESC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) as latest_abstracts,
                 f.form_type as source_type,
                 f.fiscal_period_end
             FROM financial_facts ff
@@ -48,6 +54,19 @@ def upgrade() -> None:
             LEFT JOIN concept_normalizations cn ON ff.concept = cn.concept
                 AND (cn.statement IS NULL OR ff.statement = cn.statement)
             WHERE f.form_type IN ('10-Q', '10-K')
+        ),
+        all_filings_data_ext AS (
+            SELECT
+                all_filings_data.*,
+                CASE
+                    WHEN jsonb_typeof(latest_abstracts) = 'array' THEN (
+                        SELECT array_agg(rtrim(elem->>'label', ':'))
+                        FROM jsonb_array_elements(latest_abstracts) AS elem
+                        WHERE elem->>'label' IS NOT NULL
+                    )
+                    ELSE NULL
+                END AS latest_abstract_labels
+            FROM all_filings_data
         ),
         quarterly_filings_raw AS (
             -- Get quarterly data from 10-Q filings
@@ -64,13 +83,14 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
+                latest_abstract_labels as abstracts,
                 period_end,
                 period_start,
                 period,
                 normalized_label,
                 source_type,
                 fiscal_period_end
-            FROM all_filings_data
+            FROM all_filings_data_ext
             WHERE source_type = '10-Q'
         ),
         quarterly_filings_with_prev AS (
@@ -109,6 +129,7 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
+                abstracts,
                 period_end,
                 normalized_label,
                 source_type,
@@ -130,11 +151,12 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
+                latest_abstract_labels as abstracts,
                 period_end,
                 normalized_label,
                 source_type,
                 fiscal_period_end
-            FROM all_filings_data
+            FROM all_filings_data_ext
             WHERE source_type = '10-K'
         ),
         quarterly_with_ranks AS (
@@ -149,6 +171,7 @@ def upgrade() -> None:
                 a.parsed_axis as k_parsed_axis,
                 a.parsed_member as k_parsed_member,
                 a.statement as k_statement,
+                a.abstracts as k_abstracts,
                 a.period_end as k_period_end,
                 a.fiscal_period_end as k_fiscal_period_end,
                 a.label as k_label,
@@ -177,6 +200,7 @@ def upgrade() -> None:
                 k_parsed_axis as parsed_axis,
                 k_parsed_member as parsed_member,
                 k_statement as statement,
+                k_abstracts as abstracts,
                 k_period_end as period_end,
                 k_normalized_label as normalized_label,
                 'calculated' as source_type,
@@ -184,7 +208,7 @@ def upgrade() -> None:
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
             WHERE k_statement != 'Balance Sheet'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_normalized_label, k_fiscal_period_end
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
 
@@ -198,6 +222,7 @@ def upgrade() -> None:
             parsed_axis as axis,
             parsed_member as member,
             statement,
+            abstracts,
             period_end,
             fiscal_year,
             fiscal_quarter,
@@ -216,6 +241,7 @@ def upgrade() -> None:
             parsed_axis as axis,
             parsed_member as member,
             statement,
+            abstracts,
             period_end,
             fiscal_year,
             fiscal_quarter,
@@ -234,13 +260,14 @@ def upgrade() -> None:
             parsed_axis as axis,
             parsed_member as member,
             statement,
+            abstracts,
             period_end,
             fiscal_year,
             fiscal_quarter,
             source_type
         FROM missing_quarters
         WHERE value IS NOT NULL AND value != 0
-        ORDER BY company_id, fiscal_year DESC, fiscal_quarter DESC, statement, label;
+        ORDER BY company_id, fiscal_year DESC, fiscal_quarter DESC, statement;
     """
     )
 

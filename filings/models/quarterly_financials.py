@@ -18,6 +18,9 @@ class QuarterlyFinancial(BaseModel):
     value: Decimal
     unit: Optional[str] = None
     statement: Optional[str] = None
+    axis: Optional[str] = None
+    member: Optional[str] = None
+    abstracts: Optional[List[str]] = None
     period_end: Optional[date] = None
     source_type: str  # '10-Q', '10-K', or 'calculated'
 
