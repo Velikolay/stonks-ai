@@ -43,6 +43,9 @@ class FinancialMetricResponse(BaseModel):
     ticker: str
     normalized_label: str
     statement: Optional[str] = None
+    axis: Optional[str] = None
+    member: Optional[str] = None
+    abstracts: Optional[List[str]] = None
     values: List[FinancialMetricValue]
 
 
@@ -148,7 +151,13 @@ async def get_financials(
         metric_groups = {}
         for metric in metrics:
             # Create a key for grouping
-            key = (metric.normalized_label, metric.statement)
+            key = (
+                metric.normalized_label,
+                metric.statement,
+                metric.axis,
+                metric.member,
+                tuple(metric.abstracts) if metric.abstracts else None,
+            )
 
             if key not in metric_groups:
                 metric_groups[key] = []
@@ -167,11 +176,20 @@ async def get_financials(
 
         # Convert grouped metrics to response format
         response_metrics = []
-        for (normalized_label, statement), values in metric_groups.items():
+        for (
+            normalized_label,
+            statement,
+            axis,
+            member,
+            abstracts,
+        ), values in metric_groups.items():
             response_metric = FinancialMetricResponse(
                 ticker=company.ticker,
                 normalized_label=normalized_label,
                 statement=statement,
+                axis=axis,
+                member=member,
+                abstracts=list(abstracts) if abstracts else None,
                 values=values,
             )
             response_metrics.append(response_metric)
