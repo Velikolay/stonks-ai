@@ -73,6 +73,20 @@ class YearlyFinancialsOperations:
                         == filter_params.statement
                     )
 
+                # Handle axis filter
+                if filter_params.axis is not None:
+                    if filter_params.axis == "":
+                        # Empty string means filter for NULL axis
+                        conditions.append(self.yearly_financials_view.c.axis.is_(None))
+                    else:
+                        # Specific axis value
+                        conditions.append(
+                            self.yearly_financials_view.c.axis == filter_params.axis
+                        )
+                else:
+                    # If axis filter is not provided, only return records where axis is NULL
+                    conditions.append(self.yearly_financials_view.c.axis.is_(None))
+
                 stmt = stmt.where(and_(*conditions))
 
                 # Add ordering
@@ -218,6 +232,8 @@ class YearlyFinancialsOperations:
                     select(
                         self.yearly_financials_view.c.normalized_label,
                         self.yearly_financials_view.c.statement,
+                        self.yearly_financials_view.c.axis,
+                        self.yearly_financials_view.c.member,
                         func.count().label("count"),
                     )
                     .where(
@@ -227,10 +243,12 @@ class YearlyFinancialsOperations:
                     .group_by(
                         self.yearly_financials_view.c.normalized_label,
                         self.yearly_financials_view.c.statement,
+                        self.yearly_financials_view.c.axis,
+                        self.yearly_financials_view.c.member,
                     )
                     .order_by(
+                        self.yearly_financials_view.c.statement,
                         func.count().desc(),
-                        self.yearly_financials_view.c.normalized_label,
                     )
                 )
 
@@ -248,6 +266,8 @@ class YearlyFinancialsOperations:
                     label_info = {
                         "normalized_label": row.normalized_label,
                         "statement": row.statement,
+                        "axis": row.axis,
+                        "member": row.member,
                         "count": row.count,
                     }
                     labels.append(label_info)

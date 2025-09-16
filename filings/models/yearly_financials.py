@@ -35,3 +35,4 @@ class YearlyFinancialsFilter(BaseModel):
     labels: Optional[List[str]] = None
     normalized_labels: Optional[List[str]] = None
     statement: Optional[str] = None
+    axis: Optional[str] = None

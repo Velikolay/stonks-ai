@@ -86,6 +86,22 @@ class QuarterlyFinancialsOperations:
                         == filter_params.statement
                     )
 
+                # Handle axis filter
+                if filter_params.axis is not None:
+                    if filter_params.axis == "":
+                        # Empty string means filter for NULL axis
+                        conditions.append(
+                            self.quarterly_financials_view.c.axis.is_(None)
+                        )
+                    else:
+                        # Specific axis value
+                        conditions.append(
+                            self.quarterly_financials_view.c.axis == filter_params.axis
+                        )
+                else:
+                    # If axis filter is not provided, only return records where axis is NULL
+                    conditions.append(self.quarterly_financials_view.c.axis.is_(None))
+
                 stmt = stmt.where(and_(*conditions))
 
                 # Add ordering
@@ -226,6 +242,8 @@ class QuarterlyFinancialsOperations:
                     select(
                         self.quarterly_financials_view.c.normalized_label,
                         self.quarterly_financials_view.c.statement,
+                        self.quarterly_financials_view.c.axis,
+                        self.quarterly_financials_view.c.member,
                         func.count().label("count"),
                     )
                     .where(
@@ -235,10 +253,12 @@ class QuarterlyFinancialsOperations:
                     .group_by(
                         self.quarterly_financials_view.c.normalized_label,
                         self.quarterly_financials_view.c.statement,
+                        self.quarterly_financials_view.c.axis,
+                        self.quarterly_financials_view.c.member,
                     )
                     .order_by(
+                        self.quarterly_financials_view.c.statement,
                         func.count().desc(),
-                        self.quarterly_financials_view.c.normalized_label,
                     )
                 )
 
@@ -256,6 +276,8 @@ class QuarterlyFinancialsOperations:
                     label_info = {
                         "normalized_label": row.normalized_label,
                         "statement": row.statement,
+                        "axis": row.axis,
+                        "member": row.member,
                         "count": row.count,
                     }
                     labels.append(label_info)

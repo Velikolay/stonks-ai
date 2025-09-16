@@ -54,6 +54,8 @@ class NormalizedLabelResponse(BaseModel):
 
     normalized_label: str
     statement: Optional[str] = None
+    axis: Optional[str] = None
+    member: Optional[str] = None
     count: int
 
 
@@ -78,6 +80,7 @@ async def get_financials(
         None, description="Filter by normalized labels (comma-separated)"
     ),
     statement: Optional[str] = Query(None, description="Filter by financial statement"),
+    axis: Optional[str] = Query(None, description="Filter by axis"),
 ) -> List[FinancialMetricResponse]:
     """Get quarterly or yearly financial metrics for a company by ticker."""
 
@@ -136,6 +139,8 @@ async def get_financials(
             ]
         if statement is not None:
             filter_kwargs["statement"] = statement
+        if axis is not None:
+            filter_kwargs["axis"] = axis
 
         # Get financial data based on granularity
         if granularity == "quarterly":
@@ -247,6 +252,8 @@ async def get_normalized_labels(
             response_label = NormalizedLabelResponse(
                 normalized_label=label_info["normalized_label"],
                 statement=label_info["statement"],
+                axis=label_info["axis"],
+                member=label_info["member"],
                 count=label_info["count"],
             )
             response_labels.append(response_label)
