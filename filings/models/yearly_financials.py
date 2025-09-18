@@ -22,6 +22,7 @@ class YearlyFinancial(BaseModel):
     period_end: Optional[date] = None
     fiscal_year: int
     fiscal_period_end: Optional[date] = None
+    source_type: str  # '10-K'
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -46,6 +46,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         period_start=None,
                         fiscal_period_end=None,
+                        source_type="10-K",
                     ),
                     YearlyFinancial(
                         company_id=1,
@@ -58,6 +59,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         period_start=None,
                         fiscal_period_end=None,
+                        source_type="10-K",
                     ),
                 ]
 
@@ -74,6 +76,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         period_start=None,
                         fiscal_period_end=None,
+                        source_type="10-K",
                     )
                 ]
 
@@ -90,6 +93,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         period_start=None,
                         fiscal_period_end=None,
+                        source_type="10-K",
                     )
                 ]
 

@@ -59,7 +59,9 @@ class NormalizedLabelResponse(BaseModel):
     count: int
 
 
-@router.get("/", response_model=List[FinancialMetricResponse])
+@router.get(
+    "/", response_model=List[FinancialMetricResponse], response_model_exclude_none=True
+)
 async def get_financials(
     ticker: str = Query(..., description="Company ticker symbol"),
     granularity: str = Query(
@@ -208,7 +210,11 @@ async def get_financials(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/normalized-labels", response_model=List[NormalizedLabelResponse])
+@router.get(
+    "/normalized-labels",
+    response_model=List[NormalizedLabelResponse],
+    response_model_exclude_none=True,
+)
 async def get_normalized_labels(
     ticker: str = Query(..., description="Company ticker symbol"),
     granularity: str = Query(

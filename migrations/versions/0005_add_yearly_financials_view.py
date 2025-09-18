@@ -71,7 +71,8 @@ def upgrade() -> None:
             latest_abstract_labels as abstracts,
             period_end,
             fiscal_year,
-            fiscal_period_end
+            fiscal_period_end,
+            '10-K' as source_type
         FROM all_filings_data_ext
         ORDER BY company_id, fiscal_year DESC, statement;
     """

@@ -22,7 +22,7 @@ class QuarterlyFinancial(BaseModel):
     member: Optional[str] = None
     abstracts: Optional[List[str]] = None
     period_end: Optional[date] = None
-    source_type: str  # '10-Q', '10-K', or 'calculated'
+    source_type: str  # '10-Q', or 'calculated'
 
     model_config = ConfigDict(from_attributes=True)
 
