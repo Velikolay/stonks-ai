@@ -28,18 +28,17 @@ def set_filings_db(db: FilingsDatabase) -> None:
 class FinancialMetricValue(BaseModel):
     """Model for individual financial metric values."""
 
-    label: str
     value: float
-    fiscal_year: int
+    period_end: str
+    label: Optional[str] = None
+    fiscal_year: Optional[int] = None
     fiscal_quarter: Optional[int] = None
-    period_end: Optional[str] = None
     source_type: Optional[str] = None
 
 
 class FinancialMetricResponse(BaseModel):
     """Response model for financial metrics."""
 
-    ticker: str
     normalized_label: str
     unit: Optional[str] = None
     statement: Optional[str] = None
@@ -83,6 +82,7 @@ async def get_financials(
     ),
     statement: Optional[str] = Query(None, description="Filter by financial statement"),
     axis: Optional[str] = Query(None, description="Filter by axis"),
+    short: bool = Query(False, description="Return minimal response"),
 ) -> List[FinancialMetricResponse]:
     """Get quarterly or yearly financial metrics for a company by ticker."""
 
@@ -173,13 +173,17 @@ async def get_financials(
                 }
 
             # Create the value object
+            period_end_str = metric.period_end.isoformat() if metric.period_end else ""
+
             value_obj = FinancialMetricValue(
-                label=metric.label,
+                label=metric.label if not short else None,
                 value=float(metric.value),
-                fiscal_year=metric.fiscal_year,
-                fiscal_quarter=getattr(metric, "fiscal_quarter", None),
-                period_end=metric.period_end.isoformat() if metric.period_end else None,
-                source_type=getattr(metric, "source_type", None),
+                fiscal_year=metric.fiscal_year if not short else None,
+                fiscal_quarter=(
+                    getattr(metric, "fiscal_quarter", None) if not short else None
+                ),
+                period_end=period_end_str,
+                source_type=getattr(metric, "source_type", None) if not short else None,
             )
             metric_groups[key]["values"].append(value_obj)
 
@@ -192,7 +196,6 @@ async def get_financials(
             member,
         ), group_data in metric_groups.items():
             response_metric = FinancialMetricResponse(
-                ticker=company.ticker,
                 normalized_label=normalized_label,
                 unit=group_data["unit"],
                 statement=statement,
