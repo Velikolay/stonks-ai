@@ -30,7 +30,6 @@ class FinancialMetricValue(BaseModel):
 
     label: str
     value: float
-    unit: Optional[str] = None
     fiscal_year: int
     fiscal_quarter: Optional[int] = None
     period_end: Optional[str] = None
@@ -42,6 +41,7 @@ class FinancialMetricResponse(BaseModel):
 
     ticker: str
     normalized_label: str
+    unit: Optional[str] = None
     statement: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
@@ -154,7 +154,7 @@ async def get_financials(
             filter_params = YearlyFinancialsFilter(**filter_kwargs)
             metrics = filings_db.yearly_financials.get_yearly_financials(filter_params)
 
-        # Group metrics by label and normalized_label to reduce payload size
+        # Group metrics by label, statement, etc. to reduce payload size
         metric_groups = {}
         for metric in metrics:
             # Create a key for grouping
@@ -163,11 +163,14 @@ async def get_financials(
                 metric.statement,
                 metric.axis,
                 metric.member,
-                tuple(metric.abstracts) if metric.abstracts else None,
             )
 
             if key not in metric_groups:
-                metric_groups[key] = []
+                metric_groups[key] = {
+                    "values": [],
+                    "unit": metric.unit,
+                    "abstracts": metric.abstracts,
+                }
 
             # Create the value object
             value_obj = FinancialMetricValue(
@@ -175,11 +178,10 @@ async def get_financials(
                 value=float(metric.value),
                 fiscal_year=metric.fiscal_year,
                 fiscal_quarter=getattr(metric, "fiscal_quarter", None),
-                unit=metric.unit,
                 period_end=metric.period_end.isoformat() if metric.period_end else None,
                 source_type=getattr(metric, "source_type", None),
             )
-            metric_groups[key].append(value_obj)
+            metric_groups[key]["values"].append(value_obj)
 
         # Convert grouped metrics to response format
         response_metrics = []
@@ -188,16 +190,16 @@ async def get_financials(
             statement,
             axis,
             member,
-            abstracts,
-        ), values in metric_groups.items():
+        ), group_data in metric_groups.items():
             response_metric = FinancialMetricResponse(
                 ticker=company.ticker,
                 normalized_label=normalized_label,
+                unit=group_data["unit"],
                 statement=statement,
                 axis=axis,
                 member=member,
-                abstracts=list(abstracts) if abstracts else None,
-                values=values,
+                abstracts=group_data["abstracts"],
+                values=group_data["values"],
             )
             response_metrics.append(response_metric)
 
