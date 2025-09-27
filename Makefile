@@ -83,6 +83,14 @@ dev-setup: install format lint typecheck test
 	@echo "🚀 Development environment ready!"
 
 # Database commands
+db-start:
+	@echo "🐳 Starting database..."
+	brew services start postgresql@16
+
+db-stop:
+	@echo "🐳 Stopping database..."
+	brew services stop postgresql@16
+
 db-init:
 	@echo "🗄️  Initializing database..."
 	alembic upgrade head
