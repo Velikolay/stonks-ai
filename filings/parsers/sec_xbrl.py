@@ -131,6 +131,11 @@ class SECXBRLParser:
             # Track the hierarchy of abstracts
             abstract_hierarchy = []
 
+            # Filter out rows where dimension=True
+            statement_df = statement_df[
+                statement_df.get("dimension", False) is not True
+            ]
+
             # Iterate through each row in the statement
             for _, row in statement_df.iterrows():
                 level = row.get("level", 1)
