@@ -207,7 +207,9 @@ def upgrade() -> None:
                 k_fiscal_period_end as fiscal_period_end
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
-            WHERE k_statement != 'Balance Sheet'
+            WHERE
+                k_statement != 'Balance Sheet'
+                AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
             GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_value, k_unit, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_normalized_label, k_fiscal_period_end
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
@@ -231,7 +233,7 @@ def upgrade() -> None:
 
         UNION ALL
 
-        -- Balance Sheet data is snapshot in time accumulation
+        -- Balance Sheet data is point in time accumulation
         SELECT
             company_id,
             label,
@@ -247,7 +249,9 @@ def upgrade() -> None:
             fiscal_quarter,
             source_type
         FROM annual_filings
-        WHERE statement = 'Balance Sheet'
+        WHERE
+            statement = 'Balance Sheet'
+            OR normalized_label ILIKE 'Shares Outstanding%'
 
         UNION ALL
 
