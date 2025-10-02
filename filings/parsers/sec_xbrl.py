@@ -520,7 +520,7 @@ class SECXBRLParser:
             # Extract basic information
             concept = self._to_sec_concept(row.get("concept", ""))
             label = row.get("label", concept)
-            value = row.get(period_col)
+            value = self.fix_sign(concept, row.get(period_col))
 
             # Skip if no value or concept
             if not value or not concept:
@@ -572,6 +572,20 @@ class SECXBRLParser:
         except Exception as e:
             logger.error(f"Error creating financial fact from row: {e}")
             return None
+
+    # Fix for edgartools bug https://github.com/dgunning/edgartools/issues/451
+    def fix_sign(self, concept: str, value: float) -> float:
+        if value < 0 and any(
+            debit_concept in concept
+            for debit_concept in [
+                "IncomeTaxExpense",
+                "CostOf",
+                "PaymentsFor",
+                "PaymentsOf",
+            ]
+        ):
+            return -value
+        return value
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
         """Parse date string to date object.
