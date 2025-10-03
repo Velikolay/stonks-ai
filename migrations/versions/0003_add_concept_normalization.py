@@ -62,6 +62,10 @@ def upgrade() -> None:
         ('us-gaap:ProfitLoss', 'Net Income', 'Income Statement', 'Profit or loss'),
         ('us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes', 'Net Income', 'Income Statement', 'Income from continuing operations after taxes'),
 
+        -- Income Before Tax from Continuing Operations
+        ('us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest', 'Income Before Tax from Continuing Operations', 'Income Statement', 'Income from continuing operations before taxes'),
+        ('us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments', 'Income Before Tax from Continuing Operations', 'Income Statement', 'Income from continuing operations before taxes'),
+
         -- Cash and Cash Equivalents concepts
         ('us-gaap:CashAndCashEquivalentsAtCarryingValue', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash and cash equivalents'),
         ('us-gaap:Cash', 'Cash and Cash Equivalents', 'Balance Sheet', 'Cash'),
@@ -98,6 +102,9 @@ def upgrade() -> None:
         -- EPS concepts
         ('us-gaap:EarningsPerShareBasic', 'Basic EPS', 'Income Statement', 'Basic earnings per share'),
         ('us-gaap:EarningsPerShareDiluted', 'Diluted EPS', 'Income Statement', 'Diluted earnings per share'),
+
+        -- Cash Dividents Per Share concepts
+        ('us-gaap:CommonStockDividendsPerShareDeclared', 'Cash Dividends Per Share', 'Income Statement', 'Cash dividends declared per share'),
 
         -- Debt concepts
         ('us-gaap:LongTermDebt', 'Long-term Debt', 'Balance Sheet', 'Long-term debt'),
