@@ -112,6 +112,15 @@ def upgrade() -> None:
         ('us-gaap:ShortTermBorrowings', 'Short-term Debt', 'Balance Sheet', 'Short-term borrowings'),
         ('us-gaap:ShortTermDebt', 'Short-term Debt', 'Balance Sheet', 'Short-term debt'),
 
+        -- Current Marketable Securities concepts
+        ('us-gaap:MarketableSecuritiesCurrent', 'Current Marketable Securities', 'Balance Sheet', 'Marketable securities current'),
+        ('us-gaap:AvailableForSaleSecuritiesCurrent', 'Current Marketable Securities', 'Balance Sheet', 'Marketable securities current'),
+
+        -- Non-current Marketable Securities concepts
+        ('us-gaap:MarketableSecuritiesNoncurrent', 'Non-current Marketable Securities', 'Balance Sheet', 'Marketable securities non-current'),
+        ('us-gaap:AvailableForSaleSecuritiesNoncurrent', 'Non-current Marketable Securities', 'Balance Sheet', 'Marketable securities non-current'),
+        ('us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent', 'Non-current Marketable Securities', 'Balance Sheet', 'Marketable securities non-current'),
+
         -- Deferred Revenue concepts
         ('us-gaap:DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
         ('us-gaap:ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', 'Deferred revenue'),
