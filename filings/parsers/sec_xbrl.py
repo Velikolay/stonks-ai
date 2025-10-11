@@ -125,10 +125,6 @@ class SECXBRLParser:
                 period_columns, latest_period_col
             )
 
-            # Extract date from the latest period column
-            # Get "2025-06-28" from "2025-06-28 (Q2)"
-            date_str = latest_period_col.split(" ")[0]
-
             # Track the hierarchy of abstracts
             abstract_hierarchy = []
 
@@ -176,7 +172,6 @@ class SECXBRLParser:
                         statement_type,
                         latest_period_col,
                         comparative_period_col,
-                        date_str,
                         abstract_hierarchy,
                     )
                     if fact:
@@ -387,6 +382,7 @@ class SECXBRLParser:
                 parsed_member=parsed_member,
                 statement="Income Statement",
                 period_end=period_end,
+                comparative_period_end=None,
                 period_start=period_start,
                 period=period,
                 abstracts=None,  # No hierarchy for disaggregated data
@@ -535,7 +531,6 @@ class SECXBRLParser:
         statement_type: str,
         period_col: str,
         comparative_period_col: Optional[str],
-        date_str: str,
         abstract_hierarchy: list,
     ) -> Optional[FinancialFact]:
         """Create a FinancialFact from a statement row with hierarchical abstracts.
@@ -545,7 +540,6 @@ class SECXBRLParser:
             statement_type: Type of financial statement
             period_col: The period column name (e.g., "2025-06-28 (Q2)")
             comparative_period_col: The comparative period (past year) column name (e.g., "2024-06-28 (Q2)")
-            date_str: The date string (e.g., "2025-06-28")
             abstract_hierarchy: List of parent abstracts in hierarchy
 
         Returns:
@@ -581,8 +575,13 @@ class SECXBRLParser:
                         f"Invalid comparative value for concept {concept}: {comparative_value}"
                     )
 
-            # Parse the date
-            period_end = self._parse_date(date_str)
+            # Get "2025-06-28" from "2025-06-28 (Q2)"
+            period_end = self._parse_date(period_col.split(" ")[0])
+            comparative_period_end = (
+                self._parse_date(comparative_period_col.split(" ")[0])
+                if comparative_period_col
+                else None
+            )
 
             # Determine period type based on the period column name
             period = self._determine_period_type_from_column(period_col, statement_type)
@@ -608,6 +607,7 @@ class SECXBRLParser:
                 member=None,  # Could be extracted from dimension data if available
                 statement=statement_type,
                 period_end=period_end,
+                comparative_period_end=comparative_period_end,
                 period_start=None,  # Could be calculated if needed
                 period=period,
                 abstracts=abstracts if abstracts else None,

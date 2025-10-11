@@ -44,6 +44,7 @@ class FinancialFactOperations:
                         parsed_member=fact.parsed_member,
                         statement=fact.statement,
                         period_end=fact.period_end,
+                        comparative_period_end=fact.comparative_period_end,
                         period_start=fact.period_start,
                         period=fact.period.value if fact.period is not None else None,
                         abstracts=(
@@ -91,6 +92,7 @@ class FinancialFactOperations:
                             parsed_member=fact.parsed_member,
                             statement=fact.statement,
                             period_end=fact.period_end,
+                            comparative_period_end=fact.comparative_period_end,
                             period_start=fact.period_start,
                             period=(
                                 fact.period.value if fact.period is not None else None
@@ -143,6 +145,7 @@ class FinancialFactOperations:
                             parsed_member=row.parsed_member,
                             statement=row.statement,
                             period_end=row.period_end,
+                            comparative_period_end=row.comparative_period_end,
                             period_start=row.period_start,
                             period=(
                                 PeriodType(row.period)
@@ -198,6 +201,7 @@ class FinancialFactOperations:
                             parsed_member=row.parsed_member,
                             statement=row.statement,
                             period_end=row.period_end,
+                            comparative_period_end=row.comparative_period_end,
                             period_start=row.period_start,
                             period=(
                                 PeriodType(row.period)
@@ -239,6 +243,7 @@ class FinancialFactOperations:
                         parsed_member=row.parsed_member,
                         statement=row.statement,
                         period_end=row.period_end,
+                        comparative_period_end=row.comparative_period_end,
                         period_start=row.period_start,
                         period=(
                             PeriodType(row.period) if row.period is not None else None

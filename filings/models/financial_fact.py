@@ -38,6 +38,7 @@ class FinancialFactBase(BaseModel):
     statement: Optional[str] = None
     abstracts: Optional[List[FinancialFactAbstract]] = None
     period_end: Optional[date] = None
+    comparative_period_end: Optional[date] = None
     period_start: Optional[date] = None
     period: Optional[PeriodType] = None
 
