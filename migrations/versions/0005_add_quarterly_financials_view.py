@@ -1,7 +1,7 @@
 """add_quarterly_financials_view
 
-Revision ID: 0004
-Revises: 0003
+Revision ID: 0005
+Revises: 0004
 Create Date: 2025-08-22 01:15:46.030435
 
 """
@@ -9,8 +9,8 @@ Create Date: 2025-08-22 01:15:46.030435
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0004"
-down_revision = "0003"
+revision = "0005"
+down_revision = "0004"
 branch_labels = None
 depends_on = None
 

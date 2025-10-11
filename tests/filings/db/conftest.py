@@ -106,7 +106,7 @@ def test_engine(test_db_url: str) -> Engine:
 
     yield engine
 
-    # Cleanup - truncate all tables (don't drop them since they're managed by migrations)
+    # Cleanup - truncate all tables (don't drop views/tables since they're managed by migrations)
     try:
         with engine.connect() as conn:
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))

@@ -1,4 +1,4 @@
-"""add_concept_normalization
+"""Add automatic concept normalization view
 
 Revision ID: 0003
 Revises: 0002
