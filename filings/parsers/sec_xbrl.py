@@ -107,15 +107,13 @@ class SECXBRLParser:
             columns = statement_df.columns.tolist()
 
             # Find the column with the latest date (period column)
-            period_columns = []
-
-            for col in columns:
-                if (
-                    isinstance(col, str)
-                    and ("-" in col or "/" in col)
-                    and not self._is_column_mostly_empty(statement_df, col)
-                ):
-                    period_columns.append(col)
+            period_columns = [
+                col
+                for col in columns
+                if isinstance(col, str)
+                and ("-" in col or "/" in col)
+                and not self._is_column_mostly_empty(statement_df, col)
+            ]
 
             if not period_columns:
                 logger.warning(f"No period columns found in {statement_type}")
@@ -123,6 +121,9 @@ class SECXBRLParser:
 
             # Sort by date string (YYYY-MM-DD format sorts lexicographically)
             latest_period_col = sorted(period_columns)[-1]
+            comparative_period_col = self._extract_comparative_period_column(
+                period_columns, latest_period_col
+            )
 
             # Extract date from the latest period column
             # Get "2025-06-28" from "2025-06-28 (Q2)"
@@ -174,6 +175,7 @@ class SECXBRLParser:
                         row,
                         statement_type,
                         latest_period_col,
+                        comparative_period_col,
                         date_str,
                         abstract_hierarchy,
                     )
@@ -377,6 +379,7 @@ class SECXBRLParser:
                 concept=concept,
                 label=label,
                 value=decimal_value,
+                comparative_value=None,  # Temporarily unsupported
                 unit="USD",  # Default unit
                 axis=axis,
                 member=member,
@@ -460,6 +463,36 @@ class SECXBRLParser:
         # If we can't determine the period type, default to YTD
         return PeriodType.YTD
 
+    def _extract_comparative_period_column(
+        self, period_columns: List[str], latest_period_col: str
+    ) -> Optional[str]:
+        period_info = latest_period_col.split(" ")
+        if len(period_info) == 1:
+            period_date = period_info[0]
+            return next(
+                (
+                    x
+                    for _, x in enumerate(period_columns)
+                    if len(x.split(" ")) == 1 and period_date not in x
+                ),
+                None,
+            )
+        elif len(period_info) == 2:
+            period_date = period_info[0]
+            period_quarter = period_info[1]
+            return next(
+                (
+                    x
+                    for _, x in enumerate(period_columns)
+                    if len(x.split(" ")) == 2
+                    and period_quarter in x
+                    and period_date not in x
+                ),
+                None,
+            )
+        else:
+            return None
+
     def _is_column_mostly_empty(
         self, df: pd.DataFrame, column_name: str, threshold: float = 20.0
     ) -> bool:
@@ -501,6 +534,7 @@ class SECXBRLParser:
         row,
         statement_type: str,
         period_col: str,
+        comparative_period_col: Optional[str],
         date_str: str,
         abstract_hierarchy: list,
     ) -> Optional[FinancialFact]:
@@ -510,6 +544,7 @@ class SECXBRLParser:
             row: DataFrame row from statement
             statement_type: Type of financial statement
             period_col: The period column name (e.g., "2025-06-28 (Q2)")
+            comparative_period_col: The comparative period (past year) column name (e.g., "2024-06-28 (Q2)")
             date_str: The date string (e.g., "2025-06-28")
             abstract_hierarchy: List of parent abstracts in hierarchy
 
@@ -521,6 +556,9 @@ class SECXBRLParser:
             concept = self._to_sec_concept(row.get("concept", ""))
             label = row.get("label", concept)
             value = row.get(period_col)
+            comparative_value = (
+                row.get(comparative_period_col) if comparative_period_col else None
+            )
 
             # Skip if no value or concept
             if not value or not concept:
@@ -528,10 +566,20 @@ class SECXBRLParser:
 
             # Convert value to Decimal
             try:
-                decimal_value = Decimal(str(value))
+                value_decimal = Decimal(str(value))
             except (ValueError, TypeError):
                 logger.warning(f"Invalid value for concept {concept}: {value}")
                 return None
+
+            # Convert comparative value to Decimal
+            comparative_value_decimal = None
+            if comparative_value:
+                try:
+                    comparative_value_decimal = Decimal(str(comparative_value))
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid comparative value for concept {concept}: {comparative_value}"
+                    )
 
             # Parse the date
             period_end = self._parse_date(date_str)
@@ -540,15 +588,12 @@ class SECXBRLParser:
             period = self._determine_period_type_from_column(period_col, statement_type)
 
             # Create abstracts from hierarchy (only parent abstracts, not the element itself)
-            abstracts = []
-
-            # Add parent abstracts from hierarchy
-            for abstract in abstract_hierarchy:
-                abstracts.append(
-                    FinancialFactAbstract(
-                        concept=abstract["concept"], label=abstract["label"]
-                    )
+            abstracts = [
+                FinancialFactAbstract(
+                    concept=abstract["concept"], label=abstract["label"]
                 )
+                for abstract in abstract_hierarchy
+            ]
 
             # Create the financial fact
             fact = FinancialFact(
@@ -556,7 +601,8 @@ class SECXBRLParser:
                 filing_id=0,  # Will be set by caller
                 concept=concept,
                 label=label,
-                value=decimal_value,
+                value=value_decimal,
+                comparative_value=comparative_value_decimal,
                 unit="USD",  # Default unit, could be extracted from data if available
                 axis=None,  # Could be extracted from dimension data if available
                 member=None,  # Could be extracted from dimension data if available

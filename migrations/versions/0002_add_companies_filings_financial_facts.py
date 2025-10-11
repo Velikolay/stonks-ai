@@ -62,6 +62,7 @@ def upgrade() -> None:
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("label", sa.String(), nullable=True),
         sa.Column("value", sa.Numeric(), nullable=False),
+        sa.Column("comparative_value", sa.Numeric(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("axis", sa.String(), nullable=True),
         sa.Column("member", sa.String(), nullable=True),

@@ -29,6 +29,7 @@ class FinancialFactBase(BaseModel):
     concept: str
     label: Optional[str] = None
     value: Decimal = Field(..., decimal_places=2)
+    comparative_value: Optional[Decimal] = None
     unit: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
