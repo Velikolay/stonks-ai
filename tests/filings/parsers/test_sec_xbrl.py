@@ -233,6 +233,7 @@ class TestSECXBRLParser:
             "concept": "us-gaap:Revenues",
             "label": "Revenues",
             "2024-03-31 (Q1)": 1000000,  # Period column with value
+            "2023-03-31 (Q1)": 500000,  # Period column with value
         }
 
         # Mock abstract hierarchy
@@ -244,7 +245,7 @@ class TestSECXBRLParser:
             row=row,
             statement_type="Income Statement",
             period_col="2024-03-31 (Q1)",
-            date_str="2024-03-31",
+            comparative_period_col="2023-03-31 (Q1)",
             abstract_hierarchy=abstract_hierarchy,
         )
 
@@ -252,6 +253,7 @@ class TestSECXBRLParser:
         assert fact is not None, "Parser should create a valid FinancialFact"
         assert fact.concept == "us-gaap:Revenues"
         assert fact.value == Decimal("1000000")
+        assert fact.comparative_value == Decimal("500000")
         assert fact.statement == "Income Statement"
 
         # Regression test: ensure period field is set (for income statement items)

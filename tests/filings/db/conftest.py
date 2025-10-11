@@ -68,18 +68,41 @@ def test_db_url() -> str:
 @pytest.fixture(scope="session")
 def test_engine(test_db_url: str) -> Engine:
     """Test database engine."""
+    import os
+    from pathlib import Path
+
     engine = create_engine(test_db_url)
 
     # Run migrations to create tables
     from alembic import command
     from alembic.config import Config
 
+    # Get the project root directory (where alembic.ini is located)
+    project_root = Path(__file__).parent.parent.parent.parent
+    alembic_ini_path = project_root / "alembic.ini"
+
     # Create Alembic config and override the database URL
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = Config(str(alembic_ini_path))
     alembic_cfg.set_main_option("sqlalchemy.url", test_db_url)
 
-    # Run migrations to create all tables
-    command.upgrade(alembic_cfg, "head")
+    # Save original state
+    original_cwd = os.getcwd()
+    original_database_url = os.environ.get("DATABASE_URL")
+
+    # CRITICAL: Override DATABASE_URL so Alembic's env.py uses test database
+    os.environ["DATABASE_URL"] = test_db_url
+    os.chdir(str(project_root))
+
+    try:
+        # Run migrations to create all tables
+        command.upgrade(alembic_cfg, "head")
+    finally:
+        # Restore original state
+        os.chdir(original_cwd)
+        if original_database_url is not None:
+            os.environ["DATABASE_URL"] = original_database_url
+        else:
+            os.environ.pop("DATABASE_URL", None)
 
     yield engine
 
@@ -89,6 +112,7 @@ def test_engine(test_db_url: str) -> Engine:
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
+            conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.commit()
     except Exception as e:
         # Tables might not exist yet, which is fine
@@ -106,6 +130,7 @@ def clean_tables(test_engine: Engine):
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
+            conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.commit()
     except Exception:
         # Tables might not exist yet, which is fine for the first test
