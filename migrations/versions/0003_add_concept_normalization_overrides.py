@@ -1,4 +1,4 @@
-"""Add automatic concept normalization view
+"""Add concept normalization overrides table
 
 Revision ID: 0003
 Revises: 0002
@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     # Create concept normalization mapping table
     op.create_table(
-        "concept_normalizations",
+        "concept_normalization_overrides",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("normalized_label", sa.String(), nullable=False),
@@ -29,14 +29,16 @@ def upgrade() -> None:
         sa.Column("description", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "concept", "statement", name="uq_concept_normalizations_concept_statement"
+            "concept",
+            "statement",
+            name="uq_concept_normalization_overrides_concept_statement",
         ),
     )
 
     # Insert initial concept mappings for common financial metrics
     op.execute(
         """
-        INSERT INTO concept_normalizations (concept, normalized_label, statement, description) VALUES
+        INSERT INTO concept_normalization_overrides (concept, normalized_label, statement, description) VALUES
         -- Revenue concepts
         ('us-gaap:Revenues', 'Revenue', 'Income Statement', 'Total revenue'),
         ('us-gaap:SalesRevenueNet', 'Revenue', 'Income Statement', 'Net sales revenue'),
@@ -133,10 +135,10 @@ def upgrade() -> None:
     """
     )
 
-    # Create index on concept_normalizations for performance
+    # Create index on concept_normalization_overrides for performance
     op.create_index(
-        op.f("ix_concept_normalizations_concept"),
-        "concept_normalizations",
+        op.f("ix_concept_normalization_overrides_concept"),
+        "concept_normalization_overrides",
         ["concept"],
         unique=False,
     )
@@ -145,8 +147,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop indexes
     op.drop_index(
-        op.f("ix_concept_normalizations_concept"), table_name="concept_normalizations"
+        op.f("ix_concept_normalization_overrides_concept"),
+        table_name="concept_normalization_overrides",
     )
 
-    # Drop concept_normalizations table
-    op.drop_table("concept_normalizations")
+    # Drop concept_normalization_overrides table
+    op.drop_table("concept_normalization_overrides")

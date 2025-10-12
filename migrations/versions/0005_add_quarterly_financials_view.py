@@ -51,7 +51,7 @@ def upgrade() -> None:
                 f.fiscal_period_end
             FROM financial_facts ff
             JOIN filings f ON ff.filing_id = f.id
-            LEFT JOIN concept_normalizations cn ON ff.concept = cn.concept
+            LEFT JOIN concept_normalization_overrides cn ON ff.concept = cn.concept
                 AND (cn.statement IS NULL OR ff.statement = cn.statement)
             WHERE f.form_type IN ('10-Q', '10-K')
         ),
