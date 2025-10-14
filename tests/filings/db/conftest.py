@@ -127,6 +127,8 @@ def clean_tables(test_engine: Engine):
     # Clean tables before each test
     try:
         with test_engine.connect() as conn:
+            # Views that depend on the data need to be dropped/recreated or just left as-is
+            # since they're just queries over the data
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))

@@ -233,8 +233,135 @@ def upgrade() -> None:
         """
     )
 
+    # Create merged view
+    op.execute(
+        """
+        CREATE VIEW concept_normalization AS
+
+        WITH RECURSIVE combined AS (
+        -- Combine both views with source tracking
+        SELECT
+            company_id,
+            statement,
+            concept,
+            label,
+            normalized_label,
+            group_id,
+            group_max_period_end
+        FROM concept_normalization_chaining
+
+        UNION ALL
+
+        SELECT
+            company_id,
+            statement,
+            concept,
+            label,
+            normalized_label,
+            group_id,
+            group_max_period_end
+        FROM concept_normalization_grouping
+        ),
+
+        -- Identify group merges: groups that share at least one concept
+        group_links AS (
+        SELECT DISTINCT
+            c1.company_id,
+            c1.statement,
+            c1.concept,
+            c1.group_id as group_id_1,
+            c2.group_id as group_id_2,
+            CASE
+                WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.group_id
+                WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.group_id
+                ELSE c2.group_id
+            END as group_id,
+            CASE
+                WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.normalized_label
+                WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.normalized_label
+                ELSE c2.normalized_label
+            END as normalized_label,
+            GREATEST(c1.group_max_period_end, c2.group_max_period_end) as group_max_period_end
+        FROM combined c1
+        JOIN combined c2
+            ON c1.company_id = c2.company_id
+            AND c1.statement = c2.statement
+            AND c1.concept = c2.concept
+            AND c1.group_id != c2.group_id
+        ),
+
+        transitive_merges AS (
+        SELECT
+            company_id,
+            statement,
+            group_id_1,
+            group_id_2,
+            group_id,
+            group_max_period_end,
+            normalized_label
+        FROM group_links
+
+        UNION
+
+        SELECT
+            tm.company_id,
+            tm.statement,
+            tm.group_id_1,
+            gl.group_id_2,
+            CASE
+                WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.group_id
+                WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.group_id
+                ELSE gl.group_id
+            END as group_id,
+            GREATEST(tm.group_max_period_end, gl.group_max_period_end) as group_max_period_end,
+            CASE
+                WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.normalized_label
+                WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.normalized_label
+                ELSE gl.normalized_label
+            END as normalized_label
+        FROM transitive_merges tm
+        JOIN group_links gl
+        ON
+            tm.company_id = gl.company_id
+            AND tm.statement = gl.statement
+            AND tm.group_id_2 = gl.group_id_1
+        WHERE tm.group_id_1 != gl.group_id_2
+        ),
+
+        canonical_groups AS (
+        SELECT DISTINCT ON (company_id, statement, group_id_1)
+            company_id,
+            statement,
+            group_id_1 as original_group_id,
+            group_id as final_group_id,
+            group_max_period_end,
+            normalized_label
+        FROM
+            transitive_merges
+        ORDER BY company_id, statement, group_id_1, group_max_period_end DESC
+        )
+
+        -- Final output with all concepts
+        SELECT DISTINCT
+            c.company_id,
+            c.statement,
+            c.concept,
+            c.label,
+            COALESCE(cg.normalized_label, c.normalized_label) as normalized_label,
+            COALESCE(cg.final_group_id, c.group_id) as group_id,
+            COALESCE(cg.group_max_period_end, c.group_max_period_end) as group_max_period_end
+        FROM combined c
+        LEFT JOIN canonical_groups cg
+        ON
+            c.company_id = cg.company_id
+            AND c.statement = cg.statement
+            AND c.group_id = cg.original_group_id
+        """
+    )
+
 
 def downgrade() -> None:
-    # Drop the view
+    # Drop the views
+    op.execute("DROP VIEW IF EXISTS concept_normalization")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
     op.execute("DROP VIEW IF EXISTS concept_normalization_grouping")
