@@ -236,7 +236,7 @@ def upgrade() -> None:
     # Create merged view
     op.execute(
         """
-        CREATE VIEW concept_normalization AS
+        CREATE VIEW concept_normalization_combined AS
 
         WITH RECURSIVE combined AS (
         -- Combine both views with source tracking
@@ -359,9 +359,42 @@ def upgrade() -> None:
         """
     )
 
+    op.execute(
+        """
+        CREATE VIEW concept_normalization AS
+
+        WITH concept_normalization_stable AS (
+          SELECT * FROM concept_normalization_combined
+        ),
+        group_overrides AS (
+          SELECT
+            cn.group_id,
+            MAX(cno.normalized_label) as normalized_label
+          FROM concept_normalization_stable cn
+          JOIN concept_normalization_overrides cno
+          ON cn.statement = cno.statement
+          AND cn.concept = cno.concept
+          GROUP BY cn.group_id
+        )
+
+        SELECT
+          cn.company_id,
+          cn.statement,
+          cn.concept,
+          cn.label,
+          COALESCE(go.normalized_label, cn.normalized_label) as normalized_label,
+          cn.group_id,
+          go.normalized_label IS NOT NULL as overridden
+        FROM concept_normalization_stable cn
+        LEFT JOIN group_overrides go
+        ON cn.group_id = go.group_id
+        """
+    )
+
 
 def downgrade() -> None:
     # Drop the views
     op.execute("DROP VIEW IF EXISTS concept_normalization")
+    op.execute("DROP VIEW IF EXISTS concept_normalization_combined")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
     op.execute("DROP VIEW IF EXISTS concept_normalization_grouping")

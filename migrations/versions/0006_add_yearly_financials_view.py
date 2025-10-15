@@ -25,7 +25,7 @@ def upgrade() -> None:
             SELECT
                 f.company_id,
                 ff.label,
-                COALESCE(cn.normalized_label, ff.label) as normalized_label,
+                COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
                 ff.value,
                 ff.unit,
                 ff.parsed_axis as axis,
@@ -36,14 +36,21 @@ def upgrade() -> None:
                 f.fiscal_period_end,
                 -- Get the latest abstracts for this metric combination
                 FIRST_VALUE(ff.abstracts) OVER (
-                    PARTITION BY f.company_id, ff.statement, COALESCE(cn.normalized_label, ff.label), ff.axis, ff.member
+                    PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
                     ORDER BY f.fiscal_period_end DESC
                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                 ) as latest_abstracts
             FROM financial_facts ff
             JOIN filings f ON ff.filing_id = f.id
-            LEFT JOIN concept_normalization_overrides cn ON ff.concept = cn.concept
-                AND (cn.statement IS NULL OR ff.statement = cn.statement)
+            LEFT JOIN concept_normalization_overrides cno
+            ON
+                ff.statement = cno.statement
+                AND ff.concept = cno.concept
+            LEFT JOIN concept_normalization cn
+            ON
+                f.company_id = cn.company_id
+                AND ff.statement = cn.statement
+                AND ff.concept = cn.concept
             WHERE f.form_type = '10-K'
         ),
         all_filings_data_ext AS (
