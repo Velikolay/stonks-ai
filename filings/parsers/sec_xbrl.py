@@ -48,19 +48,21 @@ class SECXBRLParser:
 
             # Parse income statement
             income_facts = self._parse_statement(
-                xbrl.statements.income_statement().to_dataframe(), "Income Statement"
+                xbrl.statements.income_statement().to_dataframe(include_unit=True),
+                "Income Statement",
             )
             facts.extend(income_facts)
 
             # Parse balance sheet
             balance_facts = self._parse_statement(
-                xbrl.statements.balance_sheet().to_dataframe(), "Balance Sheet"
+                xbrl.statements.balance_sheet().to_dataframe(include_unit=True),
+                "Balance Sheet",
             )
             facts.extend(balance_facts)
 
             # Parse cash flow statement
             cashflow_facts = self._parse_statement(
-                xbrl.statements.cashflow_statement().to_dataframe(),
+                xbrl.statements.cashflow_statement().to_dataframe(include_unit=True),
                 "Cash Flow Statement",
             )
             facts.extend(cashflow_facts)
@@ -340,6 +342,7 @@ class SECXBRLParser:
             # Extract basic information
             concept = row.get("concept", metric)
             value = row.get("value")
+            unit = row.get("unit", "usd")
 
             # Get the label from the XBRL data
             label = row.get("label", concept)
@@ -375,7 +378,7 @@ class SECXBRLParser:
                 label=label,
                 value=decimal_value,
                 comparative_value=None,  # Temporarily unsupported
-                unit="USD",  # Default unit
+                unit=unit,
                 axis=axis,
                 member=member,
                 parsed_axis=parsed_axis,
@@ -549,6 +552,7 @@ class SECXBRLParser:
             # Extract basic information
             concept = self._to_sec_concept(row.get("concept", ""))
             label = row.get("label", concept)
+            unit = row.get("unit", "usd")
             value = row.get(period_col)
             comparative_value = (
                 row.get(comparative_period_col) if comparative_period_col else None
@@ -602,7 +606,7 @@ class SECXBRLParser:
                 label=label,
                 value=value_decimal,
                 comparative_value=comparative_value_decimal,
-                unit="USD",  # Default unit, could be extracted from data if available
+                unit=unit,
                 axis=None,  # Could be extracted from dimension data if available
                 member=None,  # Could be extracted from dimension data if available
                 statement=statement_type,

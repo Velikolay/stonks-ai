@@ -25,8 +25,8 @@ def example_load_aapl_filings():
         # Process filings
         result = loader.load_company_filings(
             ticker="AAPL",
-            form="10-Q",
-            limit=50,
+            form="10-K",
+            limit=20,
             # override=True,
         )
 
