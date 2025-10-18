@@ -30,6 +30,7 @@ class FinancialFactBase(BaseModel):
     label: Optional[str] = None
     value: Decimal = Field(..., decimal_places=2)
     comparative_value: Optional[Decimal] = None
+    weight: Optional[Decimal] = None
     unit: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
@@ -41,6 +42,7 @@ class FinancialFactBase(BaseModel):
     comparative_period_end: Optional[date] = None
     period_start: Optional[date] = None
     period: Optional[PeriodType] = None
+    order: Optional[int] = None
 
     @field_validator("abstracts", mode="before")
     @classmethod
