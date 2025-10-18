@@ -63,6 +63,7 @@ def upgrade() -> None:
         sa.Column("label", sa.String(), nullable=True),
         sa.Column("value", sa.Numeric(), nullable=False),
         sa.Column("comparative_value", sa.Numeric(), nullable=True),
+        sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("axis", sa.String(), nullable=True),
         sa.Column("member", sa.String(), nullable=True),
@@ -74,6 +75,7 @@ def upgrade() -> None:
         sa.Column("comparative_period_end", sa.Date(), nullable=True),
         sa.Column("period_start", sa.Date(), nullable=True),
         sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=True),
+        sa.Column("order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],
