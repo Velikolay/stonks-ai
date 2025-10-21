@@ -1,6 +1,7 @@
 """SEC 10-Q XBRL Parser using edgartools."""
 
 import logging
+import math
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
@@ -149,8 +150,8 @@ class SECXBRLParser:
                 # Detect abstract by lack of numeric value
                 is_abstract = (
                     value is None
-                    or value == 0
                     or (isinstance(value, str) and not value.strip())
+                    or math.isnan(value)
                 )
 
                 # Update abstract hierarchy based on level
@@ -171,7 +172,7 @@ class SECXBRLParser:
                     )
 
                 # Create fact if there's a value (not an abstract)
-                if value is not None and value != 0 and not is_abstract:
+                if not is_abstract:
                     order += 1
                     fact = self._create_financial_fact_with_hierarchy(
                         row,
@@ -184,8 +185,8 @@ class SECXBRLParser:
                     if fact:
                         facts.append(fact)
 
-        except Exception as e:
-            logger.error(f"Error parsing {statement_type}: {e}")
+        except Exception:
+            logger.exception(f"Error parsing {statement_type}")
 
         return facts
 
@@ -357,7 +358,8 @@ class SECXBRLParser:
         try:
             # Extract basic information
             concept = row.get("concept", metric)
-            value = row.get("value")
+            value = row.get("numeric_value")
+            weight = row.get("weight")
             unit = row.get("unit", "usd")
 
             # Get the label from the XBRL data
@@ -369,15 +371,24 @@ class SECXBRLParser:
             parsed_member = dimension_value_parsed
 
             # Skip if no value
-            if not value:
+            if not value or math.isnan(value):
                 return None
 
             # Convert value to Decimal
             try:
-                decimal_value = Decimal(str(value))
+                value_decimal = Decimal(str(value))
             except (ValueError, TypeError):
                 logger.warning(f"Invalid value for disaggregated {metric}: {value}")
                 return None
+
+            weight_decimal = None
+            if weight and not math.isnan(weight):
+                try:
+                    weight_decimal = Decimal(str(weight))
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid weight for disaggregated {metric}: {weight}"
+                    )
 
             # Parse dates
             period_start = self._parse_date(row.get("period_start"))
@@ -392,7 +403,8 @@ class SECXBRLParser:
                 filing_id=0,  # Will be set by caller
                 concept=concept,
                 label=label,
-                value=decimal_value,
+                value=value_decimal,
+                weight=weight_decimal,
                 comparative_value=None,  # Temporarily unsupported
                 unit=unit,
                 axis=axis,
@@ -410,10 +422,8 @@ class SECXBRLParser:
 
             return fact
 
-        except Exception as e:
-            logger.error(
-                f"Error creating disaggregated {metric}, {dimension} fact: {e}"
-            )
+        except Exception:
+            logger.exception(f"Error creating disaggregated {metric}, {dimension} fact")
             return None
 
     def _determine_period_type(
@@ -576,9 +586,10 @@ class SECXBRLParser:
             comparative_value = (
                 row.get(comparative_period_col) if comparative_period_col else None
             )
+            weight = row.get("weight")
 
             # Skip if no value or concept
-            if not value or not concept:
+            if not value or math.isnan(value) or not concept:
                 return None
 
             # Convert value to Decimal
@@ -590,13 +601,20 @@ class SECXBRLParser:
 
             # Convert comparative value to Decimal
             comparative_value_decimal = None
-            if comparative_value:
+            if comparative_value and not math.isnan(comparative_value):
                 try:
                     comparative_value_decimal = Decimal(str(comparative_value))
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid comparative value for concept {concept}: {comparative_value}"
                     )
+
+            weight_decimal = None
+            if weight and not math.isnan(weight):
+                try:
+                    weight_decimal = Decimal(str(weight))
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid weight for concept {concept}: {weight}")
 
             # Get "2025-06-28" from "2025-06-28 (Q2)"
             period_end = self._parse_date(period_col.split(" ")[0])
@@ -626,6 +644,7 @@ class SECXBRLParser:
                 label=label,
                 value=value_decimal,
                 comparative_value=comparative_value_decimal,
+                weight=weight_decimal,
                 unit=unit,
                 axis=None,  # Could be extracted from dimension data if available
                 member=None,  # Could be extracted from dimension data if available
@@ -640,8 +659,8 @@ class SECXBRLParser:
 
             return fact
 
-        except Exception as e:
-            logger.error(f"Error creating financial fact from row: {e}")
+        except Exception:
+            logger.exception(f"Error creating financial fact from row {row}")
             return None
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
