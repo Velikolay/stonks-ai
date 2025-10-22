@@ -75,7 +75,7 @@ def upgrade() -> None:
         sa.Column("comparative_period_end", sa.Date(), nullable=True),
         sa.Column("period_start", sa.Date(), nullable=True),
         sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=True),
-        sa.Column("order", sa.Integer(), nullable=True),
+        sa.Column("position", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],

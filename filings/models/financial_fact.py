@@ -42,7 +42,7 @@ class FinancialFactBase(BaseModel):
     comparative_period_end: Optional[date] = None
     period_start: Optional[date] = None
     period: Optional[PeriodType] = None
-    order: Optional[int] = None
+    position: Optional[int] = None
 
     @field_validator("abstracts", mode="before")
     @classmethod

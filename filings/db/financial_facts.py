@@ -53,7 +53,7 @@ class FinancialFactOperations:
                             if fact.abstracts is not None
                             else None
                         ),
-                        order=fact.order,
+                        position=fact.position,
                     )
                     .returning(self.financial_facts_table.c.id)
                 )
@@ -105,7 +105,7 @@ class FinancialFactOperations:
                                 if fact.abstracts is not None
                                 else None
                             ),
-                            order=fact.order,
+                            position=fact.position,
                         )
                         .returning(self.financial_facts_table.c.id)
                     )
@@ -158,7 +158,7 @@ class FinancialFactOperations:
                                 else None
                             ),
                             abstracts=row.abstracts,
-                            order=row.order,
+                            position=row.position,
                         )
                     )
                 return facts
@@ -216,7 +216,7 @@ class FinancialFactOperations:
                                 else None
                             ),
                             abstracts=row.abstracts,
-                            order=row.order,
+                            position=row.position,
                         )
                     )
                 return facts

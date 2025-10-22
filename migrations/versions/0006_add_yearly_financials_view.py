@@ -35,11 +35,9 @@ def upgrade() -> None:
                 f.fiscal_year,
                 f.fiscal_period_end,
                 -- Get the latest abstracts for this metric combination
-                FIRST_VALUE(ff.abstracts) OVER (
-                    PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
-                    ORDER BY f.fiscal_period_end DESC
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                ) as latest_abstracts
+                FIRST_VALUE(ff.abstracts) OVER w AS latest_abstracts,
+                FIRST_VALUE(ff.position) OVER w AS latest_position,
+                FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
             JOIN filings f ON ff.filing_id = f.id
             LEFT JOIN concept_normalization_overrides cno
@@ -52,6 +50,11 @@ def upgrade() -> None:
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
             WHERE f.form_type = '10-K'
+            WINDOW w AS (
+                PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
+                ORDER BY f.fiscal_period_end DESC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            )
         ),
         all_filings_data_ext AS (
             SELECT
@@ -72,6 +75,7 @@ def upgrade() -> None:
             normalized_label,
             value,
             unit,
+            latest_weight as weight,
             axis,
             member,
             statement,
@@ -79,6 +83,7 @@ def upgrade() -> None:
             period_end,
             fiscal_year,
             fiscal_period_end,
+            latest_position as position,
             '10-K' as source_type
         FROM all_filings_data_ext
         ORDER BY company_id, fiscal_year DESC, statement;

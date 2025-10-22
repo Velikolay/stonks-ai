@@ -131,8 +131,8 @@ class SECXBRLParser:
             # Track the hierarchy of abstracts
             abstract_hierarchy = []
 
-            # Track global fact order (only for facts, not abstracts)
-            order = 0
+            # Track global fact position (only for facts, not abstracts)
+            position = 0
 
             # Filter out rows where dimension=True (if dimension column exists)
             if "dimension" in statement_df.columns:
@@ -173,14 +173,14 @@ class SECXBRLParser:
 
                 # Create fact if there's a value (not an abstract)
                 if not is_abstract:
-                    order += 1
+                    position += 1
                     fact = self._create_financial_fact_with_hierarchy(
                         row,
                         statement_type,
                         latest_period_col,
                         comparative_period_col,
                         abstract_hierarchy,
-                        order,
+                        position,
                     )
                     if fact:
                         facts.append(fact)
@@ -201,7 +201,7 @@ class SECXBRLParser:
             List of FinancialFact objects for disaggregated metrics
         """
         facts = []
-        order = 0
+        position = 0
 
         try:
             # Query disaggregated metrics by product/service
@@ -221,7 +221,7 @@ class SECXBRLParser:
                 ]
 
                 for _, row in product_metrics.iterrows():
-                    order += 1
+                    position += 1
                     segment_member = row.get(
                         self._to_df_dim("srt:ProductOrServiceAxis"), ""
                     )
@@ -234,7 +234,7 @@ class SECXBRLParser:
                         dimension_value_parsed=self.product_parser.parse_product(
                             segment_member
                         ).product,
-                        order=order,
+                        position=position,
                     )
                     if fact:
                         facts.append(fact)
@@ -256,14 +256,14 @@ class SECXBRLParser:
                 ]
 
                 for _, row in geographic_metrics.iterrows():
-                    order += 1
+                    position += 1
                     fact = self._create_disaggregated_metric_fact(
                         row,
                         metric=metric,
                         dimension="srt:StatementGeographicAxis",
                         dimension_parsed="Geographic",
                         dimension_value_parsed=None,
-                        order=order,
+                        position=position,
                     )
                     if fact:
                         facts.append(fact)
@@ -290,7 +290,7 @@ class SECXBRLParser:
                         self._to_df_dim("us-gaap:StatementBusinessSegmentsAxis"), ""
                     )
                     if self.geography_parser.is_geography_text(segment_member):
-                        order += 1
+                        position += 1
                         fact = self._create_disaggregated_metric_fact(
                             row,
                             metric=metric,
@@ -299,7 +299,7 @@ class SECXBRLParser:
                             dimension_value_parsed=self.geography_parser.parse_geography(
                                 segment_member
                             ).geography,
-                            order=order,
+                            position=position,
                         )
                         if fact:
                             facts.append(fact)
@@ -340,7 +340,7 @@ class SECXBRLParser:
         dimension: str,
         dimension_parsed: str,
         dimension_value_parsed: Optional[str],
-        order: int,
+        position: int,
     ) -> Optional[FinancialFact]:
         """Create a FinancialFact for disaggregated metrics.
 
@@ -350,7 +350,7 @@ class SECXBRLParser:
             dimension: The dimension axis
             dimension_parsed: The parsed dimension (Product, Geographic)
             dimension_value_parsed: The parsed dimension value
-            order: Global position of this fact
+            position: Global position of this fact
 
         Returns:
             FinancialFact object or None if invalid
@@ -417,7 +417,7 @@ class SECXBRLParser:
                 period_start=period_start,
                 period=period,
                 abstracts=None,  # No hierarchy for disaggregated data
-                order=order,
+                position=position,
             )
 
             return fact
@@ -562,7 +562,7 @@ class SECXBRLParser:
         period_col: str,
         comparative_period_col: Optional[str],
         abstract_hierarchy: list,
-        order: int,
+        position: int,
     ) -> Optional[FinancialFact]:
         """Create a FinancialFact from a statement row with hierarchical abstracts.
 
@@ -572,7 +572,7 @@ class SECXBRLParser:
             period_col: The period column name (e.g., "2025-06-28 (Q2)")
             comparative_period_col: The comparative period (past year) column name (e.g., "2024-06-28 (Q2)")
             abstract_hierarchy: List of parent abstracts in hierarchy
-            order: Global position of this fact in the statement
+            position: Global position of this fact in the statement
 
         Returns:
             FinancialFact object or None if invalid
@@ -654,7 +654,7 @@ class SECXBRLParser:
                 period_start=None,  # Could be calculated if needed
                 period=period,
                 abstracts=abstracts if abstracts else None,
-                order=order,
+                position=position,
             )
 
             return fact

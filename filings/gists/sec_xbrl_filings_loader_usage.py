@@ -26,8 +26,7 @@ def example_load_aapl_filings():
         result = loader.load_company_filings(
             ticker="AAPL",
             form="10-K",
-            limit=20,
-            # override=True,
+            limit=15,
         )
 
         if "error" in result:

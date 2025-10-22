@@ -143,7 +143,7 @@ class TestSECXBRLParser:
             dimension="srt:ProductOrServiceAxis",
             dimension_parsed="Product",
             dimension_value_parsed=None,
-            order=0,
+            position=0,
         )
 
         assert fact.concept == "Revenue"
@@ -182,7 +182,7 @@ class TestSECXBRLParser:
             dimension="srt:ProductOrServiceAxis",
             dimension_parsed="Product",
             dimension_value_parsed=None,
-            order=0,
+            position=0,
         )
 
         assert fact is None
@@ -212,7 +212,7 @@ class TestSECXBRLParser:
             dimension="srt:ProductOrServiceAxis",
             dimension_parsed="Product",
             dimension_value_parsed=None,
-            order=0,
+            position=0,
         )
 
         # This test ensures that if someone accidentally removes the period field
@@ -253,7 +253,7 @@ class TestSECXBRLParser:
             period_col="2024-03-31 (Q1)",
             comparative_period_col="2023-03-31 (Q1)",
             abstract_hierarchy=abstract_hierarchy,
-            order=0,
+            position=0,
         )
 
         # Verify the fact was created successfully
