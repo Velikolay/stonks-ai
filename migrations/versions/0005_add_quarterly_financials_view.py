@@ -58,6 +58,7 @@ def upgrade() -> None:
                 f.company_id = cn.company_id
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
+                AND ff.label = cn.label
             WHERE f.form_type IN ('10-Q', '10-K')
             WINDOW w AS (
                 PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
