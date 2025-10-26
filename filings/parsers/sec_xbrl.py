@@ -163,13 +163,18 @@ class SECXBRLParser:
 
                 # Add current abstract to hierarchy if it's an abstract
                 if is_abstract:
-                    abstract_hierarchy.append(
-                        {
-                            "level": level,
-                            "concept": self._to_sec_concept(concept),
-                            "label": label,
-                        }
-                    )
+                    # Drop useless abstracts (report issue)
+                    if not any(
+                        pattern in label
+                        for pattern in ["[Abstract]", "[Table]", "[Line Items]"]
+                    ):
+                        abstract_hierarchy.append(
+                            {
+                                "level": level,
+                                "concept": self._to_sec_concept(concept),
+                                "label": label,
+                            }
+                        )
 
                 # Create fact if there's a value (not an abstract)
                 if not is_abstract:
