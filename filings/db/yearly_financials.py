@@ -93,7 +93,7 @@ class YearlyFinancialsOperations:
                 stmt = stmt.order_by(
                     self.yearly_financials_view.c.company_id,
                     self.yearly_financials_view.c.fiscal_year.desc(),
-                    self.yearly_financials_view.c.label,
+                    self.yearly_financials_view.c.position,
                 )
 
                 result = conn.execute(stmt)
@@ -106,6 +106,7 @@ class YearlyFinancialsOperations:
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
+                        weight=row.weight,
                         unit=row.unit,
                         statement=row.statement,
                         axis=row.axis,
@@ -114,6 +115,7 @@ class YearlyFinancialsOperations:
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
                         fiscal_period_end=row.fiscal_period_end,
+                        position=row.position,
                         source_type=row.source_type,
                     )
                     financials.append(financial)
@@ -193,10 +195,12 @@ class YearlyFinancialsOperations:
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
+                        weight=row.weight,
                         unit=row.unit,
                         statement=row.statement,
                         period_end=row.period_end,
                         fiscal_period_end=row.fiscal_period_end,
+                        position=row.position,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

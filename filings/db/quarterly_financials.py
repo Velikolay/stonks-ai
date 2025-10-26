@@ -109,6 +109,7 @@ class QuarterlyFinancialsOperations:
                     self.quarterly_financials_view.c.company_id,
                     self.quarterly_financials_view.c.fiscal_year.desc(),
                     self.quarterly_financials_view.c.fiscal_quarter.desc(),
+                    self.quarterly_financials_view.c.position,
                 )
 
                 result = conn.execute(stmt)
@@ -123,12 +124,14 @@ class QuarterlyFinancialsOperations:
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
+                        weight=row.weight,
                         unit=row.unit,
                         statement=row.statement,
                         axis=row.axis,
                         member=row.member,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
+                        position=row.position,
                         source_type=row.source_type,
                     )
                     financials.append(financial)
@@ -210,12 +213,14 @@ class QuarterlyFinancialsOperations:
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
+                        weight=row.weight,
                         unit=row.unit,
                         statement=row.statement,
                         axis=row.axis,
                         member=row.member,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
+                        position=row.position,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

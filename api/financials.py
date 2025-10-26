@@ -1,6 +1,7 @@
 """Financial data endpoints."""
 
 import logging
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -40,6 +41,8 @@ class FinancialMetricResponse(BaseModel):
     """Response model for financial metrics."""
 
     normalized_label: str
+    position: int = None
+    weight: Optional[Decimal] = None
     unit: Optional[str] = None
     statement: Optional[str] = None
     axis: Optional[str] = None
@@ -168,6 +171,8 @@ async def get_financials(
             if key not in metric_groups:
                 metric_groups[key] = {
                     "values": [],
+                    "position": metric.position,
+                    "weight": metric.weight,
                     "unit": metric.unit,
                     "abstracts": metric.abstracts,
                 }
@@ -197,6 +202,8 @@ async def get_financials(
         ), group_data in metric_groups.items():
             response_metric = FinancialMetricResponse(
                 normalized_label=normalized_label,
+                position=group_data["position"],
+                weight=group_data["weight"],
                 unit=group_data["unit"],
                 statement=statement,
                 axis=axis,
