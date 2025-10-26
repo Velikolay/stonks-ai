@@ -24,7 +24,9 @@ def upgrade() -> None:
         WITH RECURSIVE facts AS (
           SELECT
             f.company_id,
-            ff.*
+            ff.*,
+            ff.value * ff.weight as normalized_value,
+            ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
             JOIN filings f
             ON ff.filing_id = f.id
@@ -46,10 +48,10 @@ def upgrade() -> None:
           ON
             f1.company_id = f2.company_id
             AND f1.statement = f2.statement
-            AND f1.comparative_value = f2.value
+            AND f1.normalized_comparative_value = f2.normalized_value
             AND f1.comparative_period_end = f2.period_end
           WHERE
-            f1.label != f2.label
+            (f1.concept != f2.concept OR f1.label != f2.label)
             AND f1.period_end > f2.period_end
         ),
 
