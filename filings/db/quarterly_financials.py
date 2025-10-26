@@ -104,14 +104,6 @@ class QuarterlyFinancialsOperations:
 
                 stmt = stmt.where(and_(*conditions))
 
-                # Add ordering
-                stmt = stmt.order_by(
-                    self.quarterly_financials_view.c.company_id,
-                    self.quarterly_financials_view.c.fiscal_year.desc(),
-                    self.quarterly_financials_view.c.fiscal_quarter.desc(),
-                    self.quarterly_financials_view.c.position,
-                )
-
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
@@ -131,7 +123,6 @@ class QuarterlyFinancialsOperations:
                         member=row.member,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
-                        position=row.position,
                         source_type=row.source_type,
                     )
                     financials.append(financial)
@@ -220,7 +211,6 @@ class QuarterlyFinancialsOperations:
                         member=row.member,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
-                        position=row.position,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

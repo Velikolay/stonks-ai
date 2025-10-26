@@ -89,13 +89,6 @@ class YearlyFinancialsOperations:
 
                 stmt = stmt.where(and_(*conditions))
 
-                # Add ordering
-                stmt = stmt.order_by(
-                    self.yearly_financials_view.c.company_id,
-                    self.yearly_financials_view.c.fiscal_year.desc(),
-                    self.yearly_financials_view.c.position,
-                )
-
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
@@ -115,7 +108,6 @@ class YearlyFinancialsOperations:
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
                         fiscal_period_end=row.fiscal_period_end,
-                        position=row.position,
                         source_type=row.source_type,
                     )
                     financials.append(financial)
@@ -200,7 +192,6 @@ class YearlyFinancialsOperations:
                         statement=row.statement,
                         period_end=row.period_end,
                         fiscal_period_end=row.fiscal_period_end,
-                        position=row.position,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

@@ -87,7 +87,7 @@ def upgrade() -> None:
             latest_position as position,
             '10-K' as source_type
         FROM all_filings_data_ext
-        ORDER BY company_id, fiscal_year DESC, statement;
+        ORDER BY company_id, statement, fiscal_year DESC, position;
     """
     )
 

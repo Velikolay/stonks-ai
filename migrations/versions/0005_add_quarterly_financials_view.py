@@ -298,7 +298,7 @@ def upgrade() -> None:
             source_type
         FROM missing_quarters
         WHERE value IS NOT NULL AND value != 0
-        ORDER BY company_id, fiscal_year DESC, fiscal_quarter DESC, statement;
+        ORDER BY company_id, statement, fiscal_year DESC, fiscal_quarter DESC, position;
     """
     )
 
