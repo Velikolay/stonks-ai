@@ -26,7 +26,11 @@ def upgrade() -> None:
                 f.company_id,
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
-                ff.value,
+                CASE
+                    -- opposite weights means we have to flip the value
+                    WHEN ff.weight * FIRST_VALUE(ff.weight) OVER w < 0 THEN -1 * ff.value
+                    ELSE ff.value
+                END as value,
                 ff.unit,
                 ff.parsed_axis as axis,
                 ff.parsed_member as member,

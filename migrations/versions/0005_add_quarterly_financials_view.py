@@ -30,7 +30,11 @@ def upgrade() -> None:
                 f.fiscal_quarter,  -- This is already calculated correctly in the filings table
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
-                ff.value,
+                CASE
+                    -- opposite weights means we have to flip the value
+                    WHEN ff.weight * FIRST_VALUE(ff.weight) OVER w < 0 THEN -1 * ff.value
+                    ELSE ff.value
+                END as value,
                 ff.unit,
                 ff.statement,
                 ff.concept,
