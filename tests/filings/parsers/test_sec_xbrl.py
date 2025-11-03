@@ -83,7 +83,7 @@ class TestSECXBRLParser:
             {
                 "concept": ["Revenue", "Revenue"],
                 "label": ["Contract Revenue", "Contract Revenue"],
-                "value": [5000000, 3000000],
+                "numeric_value": [5000000, 3000000],
                 "period_start": ["2024-01-01", "2024-01-01"],
                 "period_end": ["2024-03-31", "2024-03-31"],
                 "dim_srt_StatementGeographicAxis": ["Americas", "Europe"],
@@ -131,7 +131,7 @@ class TestSECXBRLParser:
         row = {
             "concept": "Revenue",
             "label": "Contract Revenue",
-            "value": 1000000,
+            "numeric_value": 1000000,
             "period_start": "2024-01-01",
             "period_end": "2024-03-31",
             "dim_srt_ProductOrServiceAxis": "iPhone",
@@ -200,7 +200,7 @@ class TestSECXBRLParser:
         row = {
             "concept": "Revenue",
             "label": "Contract Revenue",
-            "value": 1000000,
+            "numeric_value": 1000000,
             "period_start": "2024-01-01",
             "period_end": "2024-03-31",
             "dim_srt_ProductOrServiceAxis": "iPhone",
@@ -453,7 +453,7 @@ class TestSECXBRLParser:
             {
                 "concept": ["Revenue", "Revenue", "Revenue"],
                 "label": ["Contract Revenue", "Contract Revenue", "Contract Revenue"],
-                "value": [4000000, 2000000, 1000000],
+                "numeric_value": [4000000, 2000000, 1000000],
                 "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
                 "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
                 "dim_us-gaap_StatementBusinessSegmentsAxis": [
