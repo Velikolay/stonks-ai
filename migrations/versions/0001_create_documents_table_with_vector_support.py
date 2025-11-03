@@ -32,8 +32,6 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_documents_id"), "documents", ["id"], unique=False)
-
     # Create vector column for embeddings (1536 dimensions for OpenAI text-embedding-3-small)
     op.execute("ALTER TABLE documents ADD COLUMN embedding_vector vector(1536)")
 
@@ -110,7 +108,6 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS similarity_search(vector, float, int)")
 
     # Drop table
-    op.drop_index(op.f("ix_documents_id"), table_name="documents")
     op.drop_table("documents")
 
     # Drop extension (optional - might be used by other tables)

@@ -20,18 +20,20 @@ def upgrade() -> None:
     # Create concept normalization mapping table
     op.create_table(
         "concept_normalization_overrides",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
-        sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
-        sa.Column("parent_id", sa.Integer(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "concept",
-            "statement",
-            name="uq_concept_normalization_overrides_concept_statement",
+        sa.Column("parent_concept", sa.String(), nullable=True),
+        sa.PrimaryKeyConstraint("concept", "statement"),
+        sa.ForeignKeyConstraint(
+            ["parent_concept", "statement"],
+            [
+                "concept_normalization_overrides.concept",
+                "concept_normalization_overrides.statement",
+            ],
+            name="fk_concept_normalization_overrides_parent_concept_statement",
         ),
     )
 

@@ -28,7 +28,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("ticker", "exchange", name="uq_companies_ticker_exchange"),
     )
-    op.create_index(op.f("ix_companies_id"), "companies", ["id"], unique=False)
 
     # Create filings table
     op.create_table(
@@ -52,7 +51,6 @@ def upgrade() -> None:
             "source", "filing_number", name="uq_filings_source_filing_number"
         ),
     )
-    op.create_index(op.f("ix_filings_id"), "filings", ["id"], unique=False)
 
     # Create financial_facts table
     op.create_table(
@@ -82,23 +80,17 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_financial_facts_id"), "financial_facts", ["id"], unique=False
-    )
 
 
 def downgrade() -> None:
     # Drop financial_facts table
-    op.drop_index(op.f("ix_financial_facts_id"), table_name="financial_facts")
     op.drop_table("financial_facts")
 
     # Drop the enum type
     op.execute("DROP TYPE IF EXISTS period_type")
 
     # Drop filings table
-    op.drop_index(op.f("ix_filings_id"), table_name="filings")
     op.drop_table("filings")
 
     # Drop companies table
-    op.drop_index(op.f("ix_companies_id"), table_name="companies")
     op.drop_table("companies")
