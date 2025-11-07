@@ -292,7 +292,6 @@ Quarterly Data:
     "unit": "USD",
     "statement": "IncomeStatement",
     "period_end": "2023-03-31",
-    "period_start": "2023-01-01",
     "source_type": "10-Q"
   }
 ]
@@ -313,7 +312,6 @@ Yearly Data:
     "unit": "USD",
     "statement": "IncomeStatement",
     "period_end": "2023-09-30",
-    "period_start": "2022-10-01",
     "source_type": "10-K"
   }
 ]

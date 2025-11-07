@@ -126,14 +126,14 @@ def upgrade() -> None:
         ('us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent', 'Non-current Marketable Securities', 'Balance Sheet', False),
 
         -- Deferred Revenue concepts
-        ('us-gaap:DeferredRevenueCurrent', 'Deferred revenue', 'Balance Sheet', False),
-        ('us-gaap:ContractWithCustomerLiabilityCurrent', 'Deferred revenue', 'Balance Sheet', False),
-        ('us-gaap:DeferredRevenueNoncurrent', 'Deferred revenue non-current', 'Balance Sheet', False),
+        ('us-gaap:DeferredRevenueCurrent', 'Deferred Revenue', 'Balance Sheet', False),
+        ('us-gaap:ContractWithCustomerLiabilityCurrent', 'Deferred Revenue', 'Balance Sheet', False),
+        ('us-gaap:DeferredRevenueNoncurrent', 'Deferred Revenue Non-current', 'Balance Sheet', False),
 
         -- Other
-        ('us-gaap:ProceedsFromPaymentsForOtherFinancingActivities', 'Other financing activities', 'Cash Flow Statement', False),
-        ('us-gaap:PaymentsForProceedsFromOtherInvestingActivities', 'Other investing activities', 'Cash Flow Statement', False),
-        ('us-gaap:OtherNoncashIncomeExpense', 'Other income expenses', 'Cash Flow Statement', False)
+        ('us-gaap:ProceedsFromPaymentsForOtherFinancingActivities', 'Other Financing Activities', 'Cash Flow Statement', False),
+        ('us-gaap:PaymentsForProceedsFromOtherInvestingActivities', 'Other Investing Activities', 'Cash Flow Statement', False),
+        ('us-gaap:OtherNoncashIncomeExpense', 'Other Income Expenses', 'Cash Flow Statement', False)
     """
     )
 

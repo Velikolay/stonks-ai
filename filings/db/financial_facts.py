@@ -1,9 +1,9 @@
 """Financial facts database operations."""
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
-from sqlalchemy import MetaData, Table, insert, select
+from sqlalchemy import MetaData, Table, insert, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,16 +25,18 @@ class FinancialFactOperations:
         )
         self.filings_table = Table("filings", metadata, autoload_with=engine)
 
-    def insert_financial_fact(self, fact: FinancialFactCreate) -> Optional[int]:
+    def insert_financial_fact(self, fact: FinancialFact) -> Optional[int]:
         """Insert a new financial fact and return its ID."""
         try:
             with self.engine.connect() as conn:
                 stmt = (
                     insert(self.financial_facts_table)
                     .values(
+                        parent_id=fact.parent_id,
                         filing_id=fact.filing_id,
                         concept=fact.concept,
                         label=fact.label,
+                        is_abstract=fact.is_abstract,
                         value=fact.value,
                         comparative_value=fact.comparative_value,
                         weight=fact.weight,
@@ -46,13 +48,7 @@ class FinancialFactOperations:
                         statement=fact.statement,
                         period_end=fact.period_end,
                         comparative_period_end=fact.comparative_period_end,
-                        period_start=fact.period_start,
                         period=fact.period.value if fact.period is not None else None,
-                        abstracts=(
-                            [abstract.model_dump() for abstract in fact.abstracts]
-                            if fact.abstracts is not None
-                            else None
-                        ),
                         position=fact.position,
                     )
                     .returning(self.financial_facts_table.c.id)
@@ -62,22 +58,20 @@ class FinancialFactOperations:
                 fact_id = result.scalar()
                 conn.commit()
 
-                logger.info(
-                    f"Inserted financial fact: {fact.concept} with ID: {fact_id}"
-                )
                 return fact_id
 
         except SQLAlchemyError as e:
-            logger.error(f"Error inserting financial fact: {e}")
+            logger.error(f"Error inserting financial fact ${fact}: {e}")
             return None
 
     def insert_financial_facts_batch(
-        self, facts: List[FinancialFactCreate]
-    ) -> List[int]:
+        self, facts: list[FinancialFactCreate]
+    ) -> list[int]:
         """Insert multiple financial facts and return their IDs."""
         try:
             with self.engine.connect() as conn:
                 fact_ids = []
+                key_id_map = {}
                 for fact in facts:
                     stmt = (
                         insert(self.financial_facts_table)
@@ -85,6 +79,7 @@ class FinancialFactOperations:
                             filing_id=fact.filing_id,
                             concept=fact.concept,
                             label=fact.label,
+                            is_abstract=fact.is_abstract,
                             value=fact.value,
                             comparative_value=fact.comparative_value,
                             weight=fact.weight,
@@ -96,14 +91,8 @@ class FinancialFactOperations:
                             statement=fact.statement,
                             period_end=fact.period_end,
                             comparative_period_end=fact.comparative_period_end,
-                            period_start=fact.period_start,
                             period=(
                                 fact.period.value if fact.period is not None else None
-                            ),
-                            abstracts=(
-                                [abstract.model_dump() for abstract in fact.abstracts]
-                                if fact.abstracts is not None
-                                else None
                             ),
                             position=fact.position,
                         )
@@ -113,6 +102,18 @@ class FinancialFactOperations:
                     result = conn.execute(stmt)
                     fact_id = result.scalar()
                     fact_ids.append(fact_id)
+                    key_id_map[fact.key] = fact_id
+
+                for fact in facts:
+                    if fact.parent_key:
+                        id = key_id_map.get(fact.key)
+                        parent_id = key_id_map[fact.parent_key]
+
+                        conn.execute(
+                            update(self.financial_facts_table)
+                            .where(self.financial_facts_table.c.id == id)
+                            .values(parent_id=parent_id)
+                        )
 
                 conn.commit()
                 logger.info(f"Inserted {len(fact_ids)} financial facts")
@@ -122,7 +123,7 @@ class FinancialFactOperations:
             logger.error(f"Error inserting financial facts batch: {e}")
             return []
 
-    def get_financial_facts_by_filing(self, filing_id: int) -> List[FinancialFact]:
+    def get_financial_facts_by_filing(self, filing_id: int) -> list[FinancialFact]:
         """Get all financial facts for a filing."""
         try:
             with self.engine.connect() as conn:
@@ -137,9 +138,11 @@ class FinancialFactOperations:
                     facts.append(
                         FinancialFact(
                             id=row.id,
+                            parent_id=row.parent_id,
                             filing_id=row.filing_id,
                             concept=row.concept,
                             label=row.label,
+                            is_abstract=row.is_abstract,
                             value=row.value,
                             comparative_value=row.comparative_value,
                             weight=row.weight,
@@ -151,13 +154,11 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
-                            period_start=row.period_start,
                             period=(
                                 PeriodType(row.period)
                                 if row.period is not None
                                 else None
                             ),
-                            abstracts=row.abstracts,
                             position=row.position,
                         )
                     )
@@ -169,7 +170,7 @@ class FinancialFactOperations:
 
     def get_financial_facts_by_concept(
         self, company_id: int, concept: str, limit: int = 10
-    ) -> List[FinancialFact]:
+    ) -> list[FinancialFact]:
         """Get financial facts by company and concept."""
         try:
             with self.engine.connect() as conn:
@@ -195,9 +196,11 @@ class FinancialFactOperations:
                     facts.append(
                         FinancialFact(
                             id=row.id,
+                            parent_id=row.parent_id,
                             filing_id=row.filing_id,
                             concept=row.concept,
                             label=row.label,
+                            is_abstract=row.is_abstract,
                             value=row.value,
                             comparative_value=row.comparative_value,
                             weight=row.weight,
@@ -209,13 +212,11 @@ class FinancialFactOperations:
                             statement=row.statement,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
-                            period_start=row.period_start,
                             period=(
                                 PeriodType(row.period)
                                 if row.period is not None
                                 else None
                             ),
-                            abstracts=row.abstracts,
                             position=row.position,
                         )
                     )
@@ -225,7 +226,7 @@ class FinancialFactOperations:
             logger.error(f"Error getting financial facts by concept: {e}")
             return []
 
-    def get_financial_facts_by_filing_id(self, filing_id: int) -> List[FinancialFact]:
+    def get_financial_facts_by_filing_id(self, filing_id: int) -> list[FinancialFact]:
         """Get all financial facts for a specific filing."""
         try:
             with self.engine.connect() as conn:
@@ -239,8 +240,10 @@ class FinancialFactOperations:
                 for row in rows:
                     fact = FinancialFact(
                         id=row.id,
+                        parent_id=row.parent_id,
                         filing_id=row.filing_id,
                         concept=row.concept,
+                        is_abstract=row.is_abstract,
                         label=row.label,
                         value=row.value,
                         comparative_value=row.comparative_value,
@@ -253,11 +256,10 @@ class FinancialFactOperations:
                         statement=row.statement,
                         period_end=row.period_end,
                         comparative_period_end=row.comparative_period_end,
-                        period_start=row.period_start,
                         period=(
                             PeriodType(row.period) if row.period is not None else None
                         ),
-                        abstracts=row.abstracts,
+                        position=row.position,
                     )
                     facts.append(fact)
 

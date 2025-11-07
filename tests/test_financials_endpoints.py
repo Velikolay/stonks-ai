@@ -70,7 +70,6 @@ class TestFinancialsEndpoints:
         mock_quarterly_metric.unit = "USD"
         mock_quarterly_metric.statement = "IncomeStatement"
         mock_quarterly_metric.period_end = None
-        mock_quarterly_metric.period_start = None
         mock_quarterly_metric.source_type = "10-Q"
 
         mock_filings_db.quarterly_financials.get_quarterly_financials.return_value = [
@@ -108,7 +107,6 @@ class TestFinancialsEndpoints:
         mock_yearly_metric.unit = "USD"
         mock_yearly_metric.statement = "IncomeStatement"
         mock_yearly_metric.period_end = None
-        mock_yearly_metric.period_start = None
         mock_yearly_metric.source_type = "10-K"
 
         mock_filings_db.yearly_financials.get_yearly_financials.return_value = [

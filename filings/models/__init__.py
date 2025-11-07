@@ -4,7 +4,6 @@ from .company import Company, CompanyBase, CompanyCreate
 from .filing import Filing, FilingBase, FilingCreate
 from .financial_fact import (
     FinancialFact,
-    FinancialFactAbstract,
     FinancialFactBase,
     FinancialFactCreate,
     PeriodType,
@@ -22,7 +21,6 @@ __all__ = [
     "FinancialFactBase",
     "FinancialFactCreate",
     "FinancialFact",
-    "FinancialFactAbstract",
     "PeriodType",
     "QuarterlyFinancial",
     "QuarterlyFinancialsFilter",

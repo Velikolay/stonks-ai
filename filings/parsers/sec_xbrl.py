@@ -2,18 +2,26 @@
 
 import logging
 import math
+import uuid
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 
 import pandas as pd
 from edgar import Company, Filing
 
-from ..models import FinancialFact, FinancialFactAbstract, PeriodType
+from ..models import FinancialFactCreate, PeriodType
 from .geography import GeographyParser
 from .product import ProductParser
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class HierarchyEntry:
+    level: int
+    key: str
 
 
 class SECXBRLParser:
@@ -32,7 +40,7 @@ class SECXBRLParser:
         self.geography_parser = geography_parser
         self.product_parser = product_parser
 
-    def parse_filing(self, filing: Filing) -> List[FinancialFact]:
+    def parse_filing(self, filing: Filing) -> list[FinancialFactCreate]:
         """Parse an XBRL filing and extract financial facts.
 
         Args:
@@ -89,7 +97,7 @@ class SECXBRLParser:
 
     def _parse_statement(
         self, statement_df: pd.DataFrame, statement_type: str
-    ) -> List[FinancialFact]:
+    ) -> list[FinancialFactCreate]:
         """Parse a financial statement dataframe and extract facts.
 
         Args:
@@ -129,7 +137,7 @@ class SECXBRLParser:
             )
 
             # Track the hierarchy of abstracts
-            abstract_hierarchy = []
+            hierarchy = []
 
             # Track global fact position (only for facts, not abstracts)
             position = 0
@@ -143,59 +151,42 @@ class SECXBRLParser:
             # Iterate through each row in the statement
             for _, row in statement_df.iterrows():
                 level = row.get("level", 1)
-                concept = row.get("concept", "")
-                label = row.get("label", "")
-                value = row.get(latest_period_col)
 
-                # Detect abstract by lack of numeric value
-                is_abstract = (
-                    value is None
-                    or (isinstance(value, str) and not value.strip())
-                    or math.isnan(value)
+                # Update hierarchy based on level
+                while len(hierarchy) > 0 and hierarchy[-1].level >= level:
+                    hierarchy.pop()
+
+                # Create financial fact with hierarchy context
+                fact = self._create_financial_fact_with_hierarchy(
+                    row,
+                    statement_type,
+                    latest_period_col,
+                    comparative_period_col,
+                    hierarchy,
+                    position,
                 )
 
-                # Update abstract hierarchy based on level
-                while (
-                    len(abstract_hierarchy) > 0
-                    and abstract_hierarchy[-1]["level"] >= level
-                ):
-                    abstract_hierarchy.pop()
+                if fact:
+                    facts.append(fact)
+                    position += 1
 
                 # Add current abstract to hierarchy if it's an abstract
-                if is_abstract:
-                    # Drop useless abstracts (report issue)
-                    if not any(
-                        pattern in label
-                        for pattern in ["[Abstract]", "[Table]", "[Line Items]"]
-                    ):
-                        abstract_hierarchy.append(
-                            {
-                                "level": level,
-                                "concept": self._to_sec_concept(concept),
-                                "label": label,
-                            }
+                if fact and fact.is_abstract:
+                    hierarchy.append(
+                        HierarchyEntry(
+                            level=level,
+                            key=fact.key,
                         )
-
-                # Create fact if there's a value (not an abstract)
-                if not is_abstract:
-                    position += 1
-                    fact = self._create_financial_fact_with_hierarchy(
-                        row,
-                        statement_type,
-                        latest_period_col,
-                        comparative_period_col,
-                        abstract_hierarchy,
-                        position,
                     )
-                    if fact:
-                        facts.append(fact)
 
         except Exception:
             logger.exception(f"Error parsing {statement_type}")
 
         return facts
 
-    def _parse_disaggregated_metrics(self, xbrl, metric: str) -> List[FinancialFact]:
+    def _parse_disaggregated_metrics(
+        self, xbrl, metric: str
+    ) -> list[FinancialFactCreate]:
         """Parse disaggregated metrics using XBRL queries.
 
         Args:
@@ -316,7 +307,7 @@ class SECXBRLParser:
 
         return facts
 
-    def _parse_disaggregated_revenues(self, xbrl) -> List[FinancialFact]:
+    def _parse_disaggregated_revenues(self, xbrl) -> list[FinancialFactCreate]:
         """Parse disaggregated revenues using XBRL queries.
 
         Args:
@@ -327,7 +318,7 @@ class SECXBRLParser:
         """
         return self._parse_disaggregated_metrics(xbrl, "Revenue")
 
-    def _parse_disaggregated_operating_income(self, xbrl) -> List[FinancialFact]:
+    def _parse_disaggregated_operating_income(self, xbrl) -> list[FinancialFactCreate]:
         """Parse disaggregated operating income using XBRL queries.
 
         Args:
@@ -346,7 +337,7 @@ class SECXBRLParser:
         dimension_parsed: str,
         dimension_value_parsed: Optional[str],
         position: int,
-    ) -> Optional[FinancialFact]:
+    ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact for disaggregated metrics.
 
         Args:
@@ -403,11 +394,13 @@ class SECXBRLParser:
             period = self._determine_period_type(period_start, period_end)
 
             # Create the financial fact
-            fact = FinancialFact(
-                id=0,  # Will be set by database
-                filing_id=0,  # Will be set by caller
+            fact = FinancialFactCreate(
+                key=str(uuid.uuid4()),
+                parent_key=None,
+                filing_id=0,
                 concept=concept,
                 label=label,
+                is_abstract=False,
                 value=value_decimal,
                 weight=weight_decimal,
                 comparative_value=None,  # Temporarily unsupported
@@ -419,9 +412,7 @@ class SECXBRLParser:
                 statement="Income Statement",
                 period_end=period_end,
                 comparative_period_end=None,
-                period_start=period_start,
                 period=period,
-                abstracts=None,  # No hierarchy for disaggregated data
                 position=position,
             )
 
@@ -495,7 +486,7 @@ class SECXBRLParser:
         return PeriodType.YTD
 
     def _extract_comparative_period_column(
-        self, period_columns: List[str], latest_period_col: str
+        self, period_columns: list[str], latest_period_col: str
     ) -> Optional[str]:
         period_info = latest_period_col.split(" ")
         if len(period_info) == 1:
@@ -566,9 +557,9 @@ class SECXBRLParser:
         statement_type: str,
         period_col: str,
         comparative_period_col: Optional[str],
-        abstract_hierarchy: list,
+        hierarchy: list[HierarchyEntry],
         position: int,
-    ) -> Optional[FinancialFact]:
+    ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact from a statement row with hierarchical abstracts.
 
         Args:
@@ -576,7 +567,7 @@ class SECXBRLParser:
             statement_type: Type of financial statement
             period_col: The period column name (e.g., "2025-06-28 (Q2)")
             comparative_period_col: The comparative period (past year) column name (e.g., "2024-06-28 (Q2)")
-            abstract_hierarchy: List of parent abstracts in hierarchy
+            hierarchy: List of parent abstracts in hierarchy
             position: Global position of this fact in the statement
 
         Returns:
@@ -586,23 +577,43 @@ class SECXBRLParser:
             # Extract basic information
             concept = self._to_sec_concept(row.get("concept", ""))
             label = row.get("label", concept)
-            unit = row.get("unit", "usd")
+            is_abstract = row.get("abstract")
+            unit = row.get("unit", "usd" if not is_abstract else None)
             value = row.get(period_col)
             comparative_value = (
                 row.get(comparative_period_col) if comparative_period_col else None
             )
             weight = row.get("weight")
 
-            # Skip if no value or concept
-            if not value or math.isnan(value) or not concept:
+            # Skip if concept is empty
+            if not concept:
+                return None
+
+            # Skip facts without a value
+            if not is_abstract and (not value or math.isnan(value)):
+                return None
+
+            # Skip undesired abstracts
+            if is_abstract and any(
+                pattern in label
+                for pattern in [
+                    "[Abstract]",
+                    "[Table]",
+                    "[Line Items]",
+                    "[Axis]",
+                    "[Domain]",
+                ]
+            ):
                 return None
 
             # Convert value to Decimal
-            try:
-                value_decimal = Decimal(str(value))
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid value for concept {concept}: {value}")
-                return None
+            value_decimal = None
+            if value and not math.isnan(value):
+                try:
+                    value_decimal = Decimal(str(value))
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid value for concept {concept}: {value}")
+                    return None
 
             # Convert comparative value to Decimal
             comparative_value_decimal = None
@@ -632,22 +643,15 @@ class SECXBRLParser:
             # Determine period type based on the period column name
             period = self._determine_period_type_from_column(period_col, statement_type)
 
-            # Create abstracts from hierarchy (only parent abstracts, not the element itself)
-            abstracts = [
-                FinancialFactAbstract(
-                    concept=abstract["concept"],
-                    label=abstract["label"],
-                )
-                for abstract in abstract_hierarchy
-            ]
-
             # Create the financial fact
-            fact = FinancialFact(
-                id=0,  # Will be set by database
-                filing_id=0,  # Will be set by caller
+            fact = FinancialFactCreate(
+                key=str(uuid.uuid4()),
+                parent_key=hierarchy[-1].key if hierarchy else None,
+                filing_id=0,
                 concept=concept,
                 label=label,
                 value=value_decimal,
+                is_abstract=is_abstract,
                 comparative_value=comparative_value_decimal,
                 weight=weight_decimal,
                 unit=unit,
@@ -656,9 +660,7 @@ class SECXBRLParser:
                 statement=statement_type,
                 period_end=period_end,
                 comparative_period_end=comparative_period_end,
-                period_start=None,  # Could be calculated if needed
                 period=period,
-                abstracts=abstracts if abstracts else None,
                 position=position,
             )
 
@@ -693,7 +695,7 @@ class SECXBRLParser:
 
     def parse_company_filings(
         self, ticker: str, form: str = "10-Q", limit: int = 5
-    ) -> List[FinancialFact]:
+    ) -> list[FinancialFactCreate]:
         """Parse multiple filings for a company.
 
         Args:

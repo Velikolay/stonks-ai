@@ -17,10 +17,23 @@ depends_on = None
 
 def upgrade() -> None:
     # Create yearly financial metrics view based on 10-K filings only
+
     op.execute(
         """
         CREATE MATERIALIZED VIEW yearly_financials AS
-        WITH all_filings_data AS (
+        WITH RECURSIVE abstracts AS (
+            SELECT id, parent_id, filing_id, label, ARRAY[label] AS path
+            FROM financial_facts
+            WHERE parent_id IS NULL AND is_abstract = TRUE
+
+            UNION ALL
+
+            SELECT ff.id, ff.parent_id, ff.filing_id, ff.label, a.path || ff.label
+            FROM financial_facts ff
+            JOIN abstracts a ON ff.parent_id = a.id AND ff.filing_id = a.filing_id
+            WHERE ff.is_abstract = TRUE
+        ),
+        all_filings_data AS (
             -- Get all filing data with latest abstracts for each unique metric combination
             SELECT
                 f.company_id,
@@ -39,11 +52,17 @@ def upgrade() -> None:
                 f.fiscal_year,
                 f.fiscal_period_end,
                 -- Get the latest abstracts for this metric combination
-                FIRST_VALUE(ff.abstracts) OVER w AS latest_abstracts,
+                FIRST_VALUE(a.path) OVER w AS latest_abstracts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
-            JOIN filings f ON ff.filing_id = f.id
+            JOIN filings f
+            ON
+                ff.filing_id = f.id
+            LEFT JOIN abstracts a
+            ON
+                ff.filing_id = a.filing_id
+                AND ff.parent_id = a.id
             LEFT JOIN concept_normalization_overrides cno
             ON
                 ff.statement = cno.statement
@@ -54,25 +73,14 @@ def upgrade() -> None:
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
                 AND ff.label = cn.label
-            WHERE f.form_type = '10-K'
+            WHERE
+                f.form_type = '10-K'
+                AND ff.is_abstract = FALSE
             WINDOW w AS (
                 PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
                 ORDER BY f.fiscal_period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
-        ),
-        all_filings_data_ext AS (
-            SELECT
-                all_filings_data.*,
-                CASE
-                    WHEN jsonb_typeof(latest_abstracts) = 'array' THEN (
-                        SELECT array_agg(rtrim(elem->>'label', ':'))
-                        FROM jsonb_array_elements(latest_abstracts) AS elem
-                        WHERE elem->>'label' IS NOT NULL
-                    )
-                    ELSE NULL
-                END AS latest_abstract_labels
-            FROM all_filings_data
         )
         SELECT
             company_id,
@@ -84,13 +92,13 @@ def upgrade() -> None:
             axis,
             member,
             statement,
-            latest_abstract_labels as abstracts,
+            latest_abstracts as abstracts,
             period_end,
             fiscal_year,
             fiscal_period_end,
             latest_position as position,
             '10-K' as source_type
-        FROM all_filings_data_ext
+        FROM all_filings_data
         ORDER BY company_id, statement, fiscal_year DESC, position;
     """
     )

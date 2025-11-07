@@ -8,7 +8,6 @@ Create Date: 2024-12-19 12:00:00.000000
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision = "0002"
@@ -58,8 +57,9 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("filing_id", sa.Integer(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
-        sa.Column("label", sa.String(), nullable=True),
-        sa.Column("value", sa.Numeric(), nullable=False),
+        sa.Column("label", sa.String(), nullable=False),
+        sa.Column("is_abstract", sa.Boolean(), nullable=False),
+        sa.Column("value", sa.Numeric(), nullable=True),
         sa.Column("comparative_value", sa.Numeric(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
@@ -68,15 +68,18 @@ def upgrade() -> None:
         sa.Column("parsed_axis", sa.String(), nullable=True),
         sa.Column("parsed_member", sa.String(), nullable=True),
         sa.Column("statement", sa.String(), nullable=True),
-        sa.Column("abstracts", JSONB(), nullable=True),
         sa.Column("period_end", sa.Date(), nullable=True),
         sa.Column("comparative_period_end", sa.Date(), nullable=True),
-        sa.Column("period_start", sa.Date(), nullable=True),
         sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=True),
         sa.Column("position", sa.Integer(), nullable=True),
+        sa.Column("parent_id", sa.BigInteger(), nullable=True),
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["parent_id"],
+            ["financial_facts.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
     )

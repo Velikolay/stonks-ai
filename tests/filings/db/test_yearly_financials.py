@@ -44,7 +44,6 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
-                        period_start=None,
                         fiscal_period_end=None,
                         source_type="10-K",
                     ),
@@ -57,7 +56,6 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
-                        period_start=None,
                         fiscal_period_end=None,
                         source_type="10-K",
                     ),
@@ -74,7 +72,6 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
-                        period_start=None,
                         fiscal_period_end=None,
                         source_type="10-K",
                     )
@@ -91,7 +88,6 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
-                        period_start=None,
                         fiscal_period_end=None,
                         source_type="10-K",
                     )

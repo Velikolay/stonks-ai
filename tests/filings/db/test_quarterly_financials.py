@@ -47,7 +47,6 @@ class TestQuarterlyFinancialsOperations:
                     unit="USD",
                     statement="Income Statement",
                     period_end=None,
-                    period_start=None,
                     source_type="10-Q",
                 )
                 test_financial2 = QuarterlyFinancial(
@@ -60,7 +59,6 @@ class TestQuarterlyFinancialsOperations:
                     unit="USD",
                     statement="Income Statement",
                     period_end=None,
-                    period_start=None,
                     source_type="10-Q",
                 )
                 mock_get.return_value = [test_financial1, test_financial2]

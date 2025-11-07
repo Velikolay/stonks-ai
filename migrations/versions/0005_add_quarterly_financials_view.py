@@ -22,7 +22,19 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE MATERIALIZED VIEW quarterly_financials AS
-        WITH all_filings_data AS (
+        WITH RECURSIVE abstracts AS (
+            SELECT id, parent_id, filing_id, label, ARRAY[label] AS path
+            FROM financial_facts
+            WHERE parent_id IS NULL AND is_abstract = TRUE
+
+            UNION ALL
+
+            SELECT ff.id, ff.parent_id, ff.filing_id, ff.label, a.path || ff.label
+            FROM financial_facts ff
+            JOIN abstracts a ON ff.parent_id = a.id AND ff.filing_id = a.filing_id
+            WHERE ff.is_abstract = TRUE
+        ),
+        all_filings_data AS (
             -- Get all filing data with proper quarter assignment based on fiscal_period_end
             SELECT
                 f.company_id,
@@ -43,16 +55,21 @@ def upgrade() -> None:
                 ff.parsed_axis,
                 ff.parsed_member,
                 ff.period_end,
-                ff.period_start,
                 ff.period,
                 f.form_type as source_type,
                 f.fiscal_period_end,
                 -- Get the latest abstracts, position, and weight for this metric
-                FIRST_VALUE(ff.abstracts) OVER w AS latest_abstracts,
+                FIRST_VALUE(a.path) OVER w AS latest_abstracts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
-            JOIN filings f ON ff.filing_id = f.id
+            JOIN filings f
+            ON
+                ff.filing_id = f.id
+            LEFT JOIN abstracts a
+            ON
+                ff.filing_id = a.filing_id
+                AND ff.parent_id = a.id
             LEFT JOIN concept_normalization_overrides cno
             ON
                 ff.statement = cno.statement
@@ -63,25 +80,14 @@ def upgrade() -> None:
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
                 AND ff.label = cn.label
-            WHERE f.form_type IN ('10-Q', '10-K')
+            WHERE
+                f.form_type IN ('10-Q', '10-K')
+                AND ff.is_abstract = FALSE
             WINDOW w AS (
                 PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
                 ORDER BY f.fiscal_period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
-        ),
-        all_filings_data_ext AS (
-            SELECT
-                all_filings_data.*,
-                CASE
-                    WHEN jsonb_typeof(latest_abstracts) = 'array' THEN (
-                        SELECT array_agg(rtrim(elem->>'label', ':'))
-                        FROM jsonb_array_elements(latest_abstracts) AS elem
-                        WHERE elem->>'label' IS NOT NULL
-                    )
-                    ELSE NULL
-                END AS latest_abstract_labels
-            FROM all_filings_data
         ),
         quarterly_filings_raw AS (
             -- Get quarterly data from 10-Q filings
@@ -99,15 +105,14 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
-                latest_abstract_labels as abstracts,
+                latest_abstracts as abstracts,
                 latest_weight as weight,
                 latest_position as position,
                 period_end,
-                period_start,
                 period,
                 fiscal_period_end,
                 source_type
-            FROM all_filings_data_ext
+            FROM all_filings_data
             WHERE source_type = '10-Q'
         ),
         quarterly_filings_with_prev AS (
@@ -171,13 +176,13 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
-                latest_abstract_labels as abstracts,
+                latest_abstracts as abstracts,
                 period_end,
                 normalized_label,
                 fiscal_period_end,
                 latest_position as position,
                 source_type
-            FROM all_filings_data_ext
+            FROM all_filings_data
             WHERE source_type = '10-K'
         ),
         quarterly_with_ranks AS (

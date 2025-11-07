@@ -3,13 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from filings import (
-    FilingCreate,
-    FinancialFact,
-    FinancialFactAbstract,
-    FinancialFactCreate,
-    PeriodType,
-)
+from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
 
 
 class TestFinancialFactOperations:
@@ -60,11 +54,7 @@ class TestFinancialFactOperations:
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
-                abstracts=[
-                    FinancialFactAbstract(concept="us-gaap:Revenues", label="Revenues"),
-                ],
                 period_end=date(2024, 9, 28),
-                period_start=date(2024, 6, 30),
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
@@ -74,13 +64,7 @@ class TestFinancialFactOperations:
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
-                abstracts=[
-                    FinancialFactAbstract(
-                        concept="us-gaap:NetIncomeLoss", label="Net Income (Loss)"
-                    ),
-                ],
                 period_end=date(2024, 9, 28),
-                period_start=date(2024, 6, 30),
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
@@ -109,20 +93,6 @@ class TestFinancialFactOperations:
         assert any(f.concept == "us-gaap:Revenues" for f in facts)
         assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
         assert any(f.concept == "us-gaap:Assets" for f in facts)
-
-        # Verify abstracts for facts that have them
-        revenue_fact = next(f for f in facts if f.concept == "us-gaap:Revenues")
-        net_income_fact = next(f for f in facts if f.concept == "us-gaap:NetIncomeLoss")
-
-        assert revenue_fact.abstracts is not None
-        assert len(revenue_fact.abstracts) == 1
-        assert revenue_fact.abstracts[0].concept == "us-gaap:Revenues"
-        assert revenue_fact.abstracts[0].label == "Revenues"
-
-        assert net_income_fact.abstracts is not None
-        assert len(net_income_fact.abstracts) == 1
-        assert net_income_fact.abstracts[0].concept == "us-gaap:NetIncomeLoss"
-        assert net_income_fact.abstracts[0].label == "Net Income (Loss)"
 
     def test_get_financial_facts_by_filing(self, db, sample_company, sample_filing):
         """Test retrieving financial facts by filing."""
@@ -286,7 +256,6 @@ class TestFinancialFactOperations:
             unit="USD",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
             period=PeriodType.Q,
         )
         assert fact.filing_id == 1
@@ -296,7 +265,6 @@ class TestFinancialFactOperations:
         assert fact.unit == "USD"
         assert fact.statement == "Income Statement"
         assert fact.period_end == date(2024, 9, 28)
-        assert fact.period_start == date(2024, 6, 30)
 
         # Financial fact with ID (complete model)
         complete_fact = FinancialFact(
@@ -308,7 +276,6 @@ class TestFinancialFactOperations:
             unit="USD",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
             period=PeriodType.Q,
         )
         assert complete_fact.id == 1
@@ -337,7 +304,6 @@ class TestFinancialFactOperations:
             member="iPhone",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
             period=PeriodType.Q,
         )
 
@@ -351,121 +317,6 @@ class TestFinancialFactOperations:
         assert fact.axis == "Segment"
         assert fact.member == "iPhone"
         assert fact.statement == "Income Statement"
-
-    def test_financial_fact_with_abstracts(
-        self, db, sample_company, sample_filing, sample_financial_fact_with_abstracts
-    ):
-        """Test financial fact with abstracts."""
-        # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
-        sample_filing.company_id = company.id
-        filing = db.filings.get_or_create_filing(sample_filing)
-        sample_financial_fact_with_abstracts.filing_id = filing.id
-
-        # Insert financial fact with abstracts
-        fact_id = db.financial_facts.insert_financial_fact(
-            sample_financial_fact_with_abstracts
-        )
-
-        # Verify fact was inserted
-        assert fact_id is not None
-        assert isinstance(fact_id, int)
-        assert fact_id > 0
-
-        # Retrieve and verify fact data
-        fact = db.financial_facts.get_financial_facts_by_filing(filing.id)[0]
-        assert fact is not None
-        assert fact.id == fact_id
-        assert fact.filing_id == filing.id
-        assert fact.concept == sample_financial_fact_with_abstracts.concept
-        assert fact.label == sample_financial_fact_with_abstracts.label
-        assert fact.value == sample_financial_fact_with_abstracts.value
-        assert fact.abstracts is not None
-        assert len(fact.abstracts) == 2
-
-        # Verify abstracts content
-        assert fact.abstracts[0].concept == "us-gaap:Revenues"
-        assert fact.abstracts[0].label == "Revenues"
-        assert fact.abstracts[1].concept == "us-gaap:NetIncomeLoss"
-        assert fact.abstracts[1].label == "Net Income (Loss)"
-
-    def test_financial_fact_abstracts_model_validation(self):
-        """Test financial fact abstract model validation."""
-        # Valid abstract
-        abstract = FinancialFactAbstract(concept="us-gaap:Revenues", label="Revenues")
-        assert abstract.concept == "us-gaap:Revenues"
-        assert abstract.label == "Revenues"
-
-        # Test with different concepts
-        abstract2 = FinancialFactAbstract(
-            concept="us-gaap:NetIncomeLoss", label="Net Income (Loss)"
-        )
-        assert abstract2.concept == "us-gaap:NetIncomeLoss"
-        assert abstract2.label == "Net Income (Loss)"
-
-    def test_financial_fact_with_empty_abstracts(
-        self, db, sample_company, sample_filing
-    ):
-        """Test financial fact with empty abstracts list."""
-        # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
-        sample_filing.company_id = company.id
-        filing = db.filings.get_or_create_filing(sample_filing)
-
-        # Create fact with empty abstracts
-        fact_data = FinancialFactCreate(
-            filing_id=filing.id,
-            concept="us-gaap:Revenues",
-            label="Revenues",
-            value=Decimal("89498.0"),
-            unit="USD",
-            statement="Income Statement",
-            period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
-            period=PeriodType.Q,
-            abstracts=[],
-        )
-
-        fact_id = db.financial_facts.insert_financial_fact(fact_data)
-
-        # Retrieve and verify
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
-        fact = facts[0]
-
-        assert fact.id == fact_id
-        assert fact.abstracts == []
-
-    def test_financial_fact_with_none_abstracts(
-        self, db, sample_company, sample_filing
-    ):
-        """Test financial fact with None abstracts."""
-        # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
-        sample_filing.company_id = company.id
-        filing = db.filings.get_or_create_filing(sample_filing)
-
-        # Create fact with None abstracts
-        fact_data = FinancialFactCreate(
-            filing_id=filing.id,
-            concept="us-gaap:Revenues",
-            label="Revenues",
-            value=Decimal("89498.0"),
-            unit="USD",
-            statement="Income Statement",
-            period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
-            period=PeriodType.Q,
-            abstracts=None,
-        )
-
-        fact_id = db.financial_facts.insert_financial_fact(fact_data)
-
-        # Retrieve and verify
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
-        fact = facts[0]
-
-        assert fact.id == fact_id
-        assert fact.abstracts is None
 
     def test_financial_fact_with_period_field(self, db, sample_company, sample_filing):
         """Test financial fact with period field."""
@@ -483,7 +334,6 @@ class TestFinancialFactOperations:
             unit="USD",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 1, 1),
             period=PeriodType.YTD,
         )
 
@@ -498,7 +348,6 @@ class TestFinancialFactOperations:
             unit="USD",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
             period=PeriodType.Q,
         )
 
@@ -584,7 +433,6 @@ class TestFinancialFactOperations:
             unit="USD",
             statement="Income Statement",
             period_end=date(2024, 9, 28),
-            period_start=date(2024, 6, 30),
             period=PeriodType.Q,
         )
         assert fact_with_period.period == PeriodType.Q

@@ -12,7 +12,6 @@ from filings import (
     CompanyCreate,
     FilingCreate,
     FilingsDatabase,
-    FinancialFactAbstract,
     FinancialFactCreate,
     PeriodType,
 )
@@ -176,33 +175,10 @@ def sample_financial_fact() -> FinancialFactCreate:
         filing_id=1,  # Will be set in tests
         concept="us-gaap:Revenues",
         label="Revenues",
+        is_abstract=False,
         value=Decimal("89498.0"),
         unit="USD",
         statement="Income Statement",
         period_end=date(2024, 9, 28),
-        period_start=date(2024, 6, 30),
         period=PeriodType.Q,
-    )
-
-
-@pytest.fixture(scope="function")
-def sample_financial_fact_with_abstracts() -> FinancialFactCreate:
-    """Sample financial fact data with abstracts for testing."""
-    abstracts = [
-        FinancialFactAbstract(concept="us-gaap:Revenues", label="Revenues"),
-        FinancialFactAbstract(
-            concept="us-gaap:NetIncomeLoss", label="Net Income (Loss)"
-        ),
-    ]
-    return FinancialFactCreate(
-        filing_id=1,  # Will be set in tests
-        concept="us-gaap:Revenues",
-        label="Revenues",
-        value=Decimal("89498.0"),
-        unit="USD",
-        statement="Income Statement",
-        period_end=date(2024, 9, 28),
-        period_start=date(2024, 6, 30),
-        period=PeriodType.Q,
-        abstracts=abstracts,
     )
