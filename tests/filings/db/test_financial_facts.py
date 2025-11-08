@@ -1,7 +1,11 @@
 """Tests for financial facts database operations."""
 
+import uuid
 from datetime import date
 from decimal import Decimal
+
+import pytest
+from pydantic import ValidationError
 
 from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
 
@@ -48,9 +52,11 @@ class TestFinancialFactOperations:
         # Create multiple facts
         facts_data = [
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -58,9 +64,11 @@ class TestFinancialFactOperations:
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
+                is_abstract=False,
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -68,9 +76,11 @@ class TestFinancialFactOperations:
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:Assets",
                 label="Total Assets",
+                is_abstract=False,
                 value=Decimal("352755.0"),
                 unit="USD",
                 statement="Balance Sheet",
@@ -94,6 +104,81 @@ class TestFinancialFactOperations:
         assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
         assert any(f.concept == "us-gaap:Assets" for f in facts)
 
+    def test_insert_financial_facts_with_abstract(
+        self, db, sample_company, sample_filing
+    ):
+        """Test inserting multiple financial facts with abstract."""
+        # Create company and filing first
+        company = db.companies.get_or_create_company(sample_company)
+        sample_filing.company_id = company.id
+        filing = db.filings.get_or_create_filing(sample_filing)
+
+        abstract_key = str(uuid.uuid4())
+
+        # Create multiple facts
+        facts_data = [
+            FinancialFactCreate(
+                key=str(uuid.uuid4()),
+                parent_key=abstract_key,
+                filing_id=filing.id,
+                concept="us-gaap:Revenues",
+                label="Revenues",
+                is_abstract=False,
+                value=Decimal("89498.0"),
+                unit="USD",
+                statement="Income Statement",
+                period_end=date(2024, 9, 28),
+                period=PeriodType.Q,
+            ),
+            FinancialFactCreate(
+                key=str(uuid.uuid4()),
+                parent_key=abstract_key,
+                filing_id=filing.id,
+                concept="us-gaap:NetIncomeLoss",
+                label="Net Income (Loss)",
+                is_abstract=False,
+                value=Decimal("22956.0"),
+                unit="USD",
+                statement="Income Statement",
+                period_end=date(2024, 9, 28),
+                period=PeriodType.Q,
+            ),
+            FinancialFactCreate(
+                key=abstract_key,
+                filing_id=filing.id,
+                concept="us-gaap:IncomeStatementAbstract",
+                label="Income Statement",
+                is_abstract=True,
+                statement="Income Statement",
+                period_end=date(2024, 9, 28),
+                period=PeriodType.Q,
+            ),
+        ]
+
+        # Insert facts
+        fact_ids = db.financial_facts.insert_financial_facts_batch(facts_data)
+
+        # Verify facts were inserted
+        assert len(fact_ids) == 3
+        assert all(isinstance(fid, int) for fid in fact_ids)
+        assert all(fid > 0 for fid in fact_ids)
+
+        # Retrieve and verify facts
+        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        assert len(facts) >= 3
+        assert any(f.concept == "us-gaap:IncomeStatementAbstract" for f in facts)
+        assert any(f.concept == "us-gaap:Revenues" for f in facts)
+        assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
+
+        abstract_fact = next(
+            f for f in facts if f.concept == "us-gaap:IncomeStatementAbstract"
+        )
+        revenues_fact = next(f for f in facts if f.concept == "us-gaap:Revenues")
+        net_income_fact = next(f for f in facts if f.concept == "us-gaap:NetIncomeLoss")
+
+        assert revenues_fact.parent_id == abstract_fact.id
+        assert net_income_fact.parent_id == abstract_fact.id
+
     def test_get_financial_facts_by_filing(self, db, sample_company, sample_filing):
         """Test retrieving financial facts by filing."""
         # Create company and filing
@@ -104,21 +189,27 @@ class TestFinancialFactOperations:
         # Create multiple facts
         facts_data = [
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
+                is_abstract=False,
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
+                period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             ),
         ]
@@ -171,23 +262,29 @@ class TestFinancialFactOperations:
         filing2_obj = db.filings.get_or_create_filing(filing2)
 
         # Create revenue facts for both filings
-        fact1 = FinancialFactCreate(
+        fact1 = FinancialFact(
+            id=1,
             filing_id=filing1_obj.id,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
+            period_end=date(2024, 9, 28),
             period=PeriodType.Q,
         )
 
-        fact2 = FinancialFactCreate(
+        fact2 = FinancialFact(
+            id=2,
             filing_id=filing2_obj.id,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("81797.0"),
             unit="USD",
             statement="Income Statement",
+            period_end=date(2024, 9, 28),
             period=PeriodType.Q,
         )
 
@@ -224,13 +321,16 @@ class TestFinancialFactOperations:
 
             filing_obj = db.filings.get_or_create_filing(filing)
 
-            fact = FinancialFactCreate(
+            fact = FinancialFact(
+                id=1,
                 filing_id=filing_obj.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             )
 
@@ -249,9 +349,11 @@ class TestFinancialFactOperations:
         """Test financial fact model validation."""
         # Valid financial fact
         fact = FinancialFactCreate(
+            key=str(uuid.uuid4()),
             filing_id=1,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
@@ -261,10 +363,25 @@ class TestFinancialFactOperations:
         assert fact.filing_id == 1
         assert fact.concept == "us-gaap:Revenues"
         assert fact.label == "Revenues"
+        assert fact.is_abstract is False
         assert fact.value == Decimal("89498.0")
         assert fact.unit == "USD"
         assert fact.statement == "Income Statement"
         assert fact.period_end == date(2024, 9, 28)
+
+        # Valid financial fact abstract
+        fact_abstract = FinancialFactCreate(
+            key=str(uuid.uuid4()),
+            filing_id=1,
+            concept="us-gaap:Revenues",
+            label="Revenues",
+            is_abstract=True,
+            statement="Income Statement",
+            period_end=date(2024, 9, 28),
+            period=PeriodType.Q,
+        )
+        assert fact_abstract.value is None
+        assert fact_abstract.unit is None
 
         # Financial fact with ID (complete model)
         complete_fact = FinancialFact(
@@ -272,6 +389,7 @@ class TestFinancialFactOperations:
             filing_id=1,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
@@ -282,7 +400,55 @@ class TestFinancialFactOperations:
         assert complete_fact.filing_id == 1
         assert complete_fact.concept == "us-gaap:Revenues"
         assert complete_fact.label == "Revenues"
+        assert complete_fact.is_abstract is False
         assert complete_fact.value == Decimal("89498.0")
+
+        # Financial fact abstract with ID (complete model)
+        complete_fact_abstract = FinancialFact(
+            id=1,
+            filing_id=1,
+            concept="us-gaap:Revenues",
+            label="Revenues",
+            is_abstract=True,
+            statement="Income Statement",
+            period_end=date(2024, 9, 28),
+            period=PeriodType.Q,
+        )
+        assert complete_fact_abstract.value is None
+        assert complete_fact_abstract.unit is None
+
+    def test_financial_fact_create_requires_value_when_not_abstract(self):
+        """Ensure FinancialFactCreate enforces value for non-abstract facts."""
+        with pytest.raises(ValidationError) as exc:
+            FinancialFactCreate(
+                key=str(uuid.uuid4()),
+                filing_id=1,
+                concept="us-gaap:Revenues",
+                label="Revenues",
+                is_abstract=False,
+                value=None,
+                statement="Income Statement",
+                period_end=date(2024, 9, 28),
+            )
+
+        assert "value cannot be None when is_abstract is False" in str(exc.value)
+
+    def test_financial_fact_requires_value_when_not_abstract(self):
+        """Ensure FinancialFact enforces value for non-abstract facts."""
+        with pytest.raises(ValidationError) as exc:
+            FinancialFact(
+                id=1,
+                parent_id=None,
+                filing_id=1,
+                concept="us-gaap:Revenues",
+                label="Revenues",
+                is_abstract=False,
+                value=None,
+                statement="Income Statement",
+                period_end=date(2024, 9, 28),
+            )
+
+        assert "value cannot be None when is_abstract is False" in str(exc.value)
 
     def test_financial_fact_with_optional_fields(
         self, db, sample_company, sample_filing
@@ -294,10 +460,12 @@ class TestFinancialFactOperations:
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Create fact with optional fields
-        fact_data = FinancialFactCreate(
+        fact_data = FinancialFact(
+            id=0,
             filing_id=filing.id,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             axis="Segment",
@@ -326,10 +494,12 @@ class TestFinancialFactOperations:
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Test with YTD period
-        fact_data_ytd = FinancialFactCreate(
+        fact_data_ytd = FinancialFact(
+            id=0,
             filing_id=filing.id,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
@@ -340,10 +510,12 @@ class TestFinancialFactOperations:
         fact_id_ytd = db.financial_facts.insert_financial_fact(fact_data_ytd)
 
         # Test with Q period
-        fact_data_q = FinancialFactCreate(
+        fact_data_q = FinancialFact(
+            id=0,
             filing_id=filing.id,
             concept="us-gaap:NetIncomeLoss",
             label="Net Income (Loss)",
+            is_abstract=False,
             value=Decimal("22956.0"),
             unit="USD",
             statement="Income Statement",
@@ -354,10 +526,12 @@ class TestFinancialFactOperations:
         fact_id_q = db.financial_facts.insert_financial_fact(fact_data_q)
 
         # Test with Q period for assets
-        fact_data_q_assets = FinancialFactCreate(
+        fact_data_q_assets = FinancialFact(
+            id=0,
             filing_id=filing.id,
             concept="us-gaap:Assets",
             label="Total Assets",
+            is_abstract=False,
             value=Decimal("352755.0"),
             unit="USD",
             statement="Balance Sheet",
@@ -398,9 +572,11 @@ class TestFinancialFactOperations:
         """Test that FinancialFact period field is optional."""
         # Test FinancialFactCreate without period field should work (for balance sheet items)
         fact_create = FinancialFactCreate(
+            key=str(uuid.uuid4()),
             filing_id=1,
             concept="us-gaap:Assets",
             label="Total Assets",
+            is_abstract=False,
             value=Decimal("352755.0"),
             unit="USD",
             statement="Balance Sheet",
@@ -415,6 +591,7 @@ class TestFinancialFactOperations:
             filing_id=1,
             concept="us-gaap:Assets",
             label="Total Assets",
+            is_abstract=False,
             value=Decimal("352755.0"),
             unit="USD",
             statement="Balance Sheet",
@@ -429,6 +606,7 @@ class TestFinancialFactOperations:
             filing_id=1,
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",

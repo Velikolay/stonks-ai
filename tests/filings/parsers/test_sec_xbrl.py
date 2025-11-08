@@ -1,5 +1,6 @@
 """Tests for SEC 10-Q parser."""
 
+import uuid
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -7,7 +8,7 @@ import pandas as pd
 
 from filings.parsers.geography import GeographyParser
 from filings.parsers.product import ProductParser
-from filings.parsers.sec_xbrl import SECXBRLParser
+from filings.parsers.sec_xbrl import HierarchyEntry, SECXBRLParser
 
 
 class TestSECXBRLParser:
@@ -240,11 +241,12 @@ class TestSECXBRLParser:
             "label": "Revenues",
             "2024-03-31 (Q1)": 1000000,  # Period column with value
             "2023-03-31 (Q1)": 500000,  # Period column with value
+            "abstract": False,
         }
 
         # Mock abstract hierarchy
-        abstract_hierarchy = [
-            {"concept": "us-gaap:IncomeStatementAbstract", "label": "Income Statement"}
+        hierarchy = [
+            HierarchyEntry(level=1, key=str(uuid.uuid4())),
         ]
 
         fact = parser._create_financial_fact_with_hierarchy(
@@ -252,7 +254,7 @@ class TestSECXBRLParser:
             statement_type="Income Statement",
             period_col="2024-03-31 (Q1)",
             comparative_period_col="2023-03-31 (Q1)",
-            abstract_hierarchy=abstract_hierarchy,
+            hierarchy=hierarchy,
             position=0,
         )
 

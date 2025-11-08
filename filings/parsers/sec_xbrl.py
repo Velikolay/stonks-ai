@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HierarchyEntry:
-    level: int
     key: str
+    level: int
 
 
 class SECXBRLParser:

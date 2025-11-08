@@ -12,7 +12,7 @@ from filings import (
     CompanyCreate,
     FilingCreate,
     FilingsDatabase,
-    FinancialFactCreate,
+    FinancialFact,
     PeriodType,
 )
 
@@ -169,9 +169,10 @@ def sample_filing(sample_company: CompanyCreate) -> FilingCreate:
 
 
 @pytest.fixture(scope="function")
-def sample_financial_fact() -> FinancialFactCreate:
+def sample_financial_fact() -> FinancialFact:
     """Sample financial fact data for testing."""
-    return FinancialFactCreate(
+    return FinancialFact(
+        id=0,
         filing_id=1,  # Will be set in tests
         concept="us-gaap:Revenues",
         label="Revenues",

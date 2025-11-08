@@ -1,9 +1,16 @@
 """Integration tests for database operations."""
 
+import uuid
 from datetime import date
 from decimal import Decimal
 
-from filings import CompanyCreate, FilingCreate, FinancialFactCreate, PeriodType
+from filings import (
+    CompanyCreate,
+    FilingCreate,
+    FinancialFact,
+    FinancialFactCreate,
+    PeriodType,
+)
 
 
 class TestDatabaseIntegration:
@@ -39,9 +46,11 @@ class TestDatabaseIntegration:
         # 3. Create financial facts
         facts_data = [
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -49,9 +58,11 @@ class TestDatabaseIntegration:
                 period=PeriodType.Q,
             ),
             FinancialFactCreate(
+                key=str(uuid.uuid4()),
                 filing_id=filing.id,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
+                is_abstract=False,
                 value=Decimal("22956.0"),
                 unit="USD",
                 statement="Income Statement",
@@ -113,13 +124,16 @@ class TestDatabaseIntegration:
 
         # Create financial facts for each filing
         for filing in filings:
-            fact_data = FinancialFactCreate(
+            fact_data = FinancialFact(
+                id=1,
                 filing_id=filing.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("50000.0"),
                 unit="USD",
                 statement="Income Statement",
+                period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             )
             db.financial_facts.insert_financial_fact(fact_data)
@@ -199,13 +213,16 @@ class TestDatabaseIntegration:
 
         # Create financial fact
         fact_id = db.financial_facts.insert_financial_fact(
-            FinancialFactCreate(
+            FinancialFact(
+                id=0,
                 filing_id=filing.id,
                 concept="us-gaap:Revenues",
                 label="Revenues",
+                is_abstract=False,
                 value=Decimal("89498.0"),
                 unit="USD",
                 statement="Income Statement",
+                period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             )
         )
@@ -241,13 +258,16 @@ class TestDatabaseIntegration:
         assert filing_id is None
 
         # Test inserting financial fact with non-existent filing
-        fact_data = FinancialFactCreate(
+        fact_data = FinancialFact(
+            id=0,
             filing_id=99999,  # Non-existent filing
             concept="us-gaap:Revenues",
             label="Revenues",
+            is_abstract=False,
             value=Decimal("89498.0"),
             unit="USD",
             statement="Income Statement",
+            period_end=date(2024, 9, 28),
             period=PeriodType.Q,
         )
 
