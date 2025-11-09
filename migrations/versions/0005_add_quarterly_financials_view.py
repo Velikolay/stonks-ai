@@ -22,6 +22,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE MATERIALIZED VIEW quarterly_financials AS
+
         WITH RECURSIVE abstracts AS (
             SELECT id, parent_id, filing_id, label, ARRAY[label] AS path
             FROM financial_facts

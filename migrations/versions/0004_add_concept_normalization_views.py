@@ -393,9 +393,103 @@ def upgrade() -> None:
         """
     )
 
+    op.execute(
+        """
+        CREATE VIEW abstract_normalization_overrides AS
+
+        WITH RECURSIVE abstract_normalization_overrides_cte AS (
+            SELECT
+                statement,
+                concept,
+                is_abstract,
+                ARRAY[normalized_label] AS path,
+                ARRAY[concept] AS concept_path
+            FROM concept_normalization_overrides
+            -- start from a top level abstracts and work down
+            WHERE
+                is_abstract = TRUE
+                AND parent_concept IS NULL
+
+            UNION ALL
+
+            SELECT
+                cno.statement,
+                cno.concept,
+                cno.is_abstract,
+                CASE
+                    WHEN cno.is_abstract THEN ano.path || cno.normalized_label
+                    ELSE ano.path
+                END AS path,
+                CASE
+                    WHEN cno.is_abstract THEN ano.concept_path || cno.concept
+                    ELSE ano.concept_path
+                END AS concept_path
+            FROM concept_normalization_overrides cno
+            JOIN abstract_normalization_overrides_cte ano
+            ON
+                cno.parent_concept = ano.concept
+                AND cno.statement = ano.statement
+        )
+        SELECT * FROM abstract_normalization_overrides_cte
+        """
+    )
+
+    op.execute(
+        """
+        CREATE VIEW abstract_normalization AS
+
+        WITH RECURSIVE abstract_normalization_cte AS (
+            SELECT
+                ff.id,
+                ff.filing_id,
+                ff.statement,
+                COALESCE(ano.path, ARRAY[ff.label]) AS path,
+                COALESCE(ano.concept_path, ARRAY[ff.concept]) AS concept_path
+            FROM financial_facts ff
+            LEFT JOIN abstract_normalization_overrides ano
+            ON
+                ff.concept = ano.concept
+                AND ff.statement = ano.statement
+            -- start from a top level abstracts and work down
+            WHERE
+                ff.is_abstract = TRUE
+                AND ff.parent_id IS NULL
+
+            UNION ALL
+
+            SELECT
+                ff.id,
+                ff.filing_id,
+                ff.statement,
+                CASE
+                    WHEN ano.path IS NULL THEN a.path || ARRAY[ff.label]
+                    ELSE ano.path
+                END AS path,
+                CASE
+                    WHEN ano.concept_path IS NULL THEN a.concept_path || ARRAY[ff.concept]
+                    ELSE ano.concept_path
+                END AS concept_path
+            FROM financial_facts ff
+            LEFT JOIN abstract_normalization_overrides ano
+            ON
+                ff.concept = ano.concept
+                AND ff.statement = ano.statement
+            JOIN abstract_normalization_cte a
+            ON
+                a.id = ff.parent_id
+                AND a.filing_id = ff.filing_id
+            WHERE
+                ff.is_abstract = TRUE
+        )
+        SELECT * FROM abstract_normalization_cte
+        """
+    )
+
 
 def downgrade() -> None:
     # Drop the views
+    op.execute("DROP VIEW IF EXISTS abstract_normalization")
+    op.execute("DROP VIEW IF EXISTS abstract_normalization_overrides")
     op.execute("DROP VIEW IF EXISTS concept_normalization")
     op.execute("DROP VIEW IF EXISTS concept_normalization_combined")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
