@@ -23,19 +23,7 @@ def upgrade() -> None:
         """
         CREATE MATERIALIZED VIEW quarterly_financials AS
 
-        WITH RECURSIVE abstracts AS (
-            SELECT id, parent_id, filing_id, label, ARRAY[label] AS path
-            FROM financial_facts
-            WHERE parent_id IS NULL AND is_abstract = TRUE
-
-            UNION ALL
-
-            SELECT ff.id, ff.parent_id, ff.filing_id, ff.label, a.path || ff.label
-            FROM financial_facts ff
-            JOIN abstracts a ON ff.parent_id = a.id AND ff.filing_id = a.filing_id
-            WHERE ff.is_abstract = TRUE
-        ),
-        all_filings_data AS (
+        WITH all_filings_data AS (
             -- Get all filing data with proper quarter assignment based on fiscal_period_end
             SELECT
                 f.company_id,
@@ -60,17 +48,21 @@ def upgrade() -> None:
                 f.form_type as source_type,
                 f.fiscal_period_end,
                 -- Get the latest abstracts, position, and weight for this metric
-                FIRST_VALUE(a.path) OVER w AS latest_abstracts,
+                FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
             JOIN filings f
             ON
                 ff.filing_id = f.id
-            LEFT JOIN abstracts a
+            LEFT JOIN abstract_normalization_overrides ano
             ON
-                ff.filing_id = a.filing_id
-                AND ff.parent_id = a.id
+                ff.statement = ano.statement
+                AND ff.concept = ano.concept
+            LEFT JOIN abstract_normalization an
+            ON
+                ff.filing_id = an.filing_id
+                AND ff.parent_id = an.id
             LEFT JOIN concept_normalization_overrides cno
             ON
                 ff.statement = cno.statement

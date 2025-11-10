@@ -143,21 +143,7 @@ def upgrade() -> None:
     """
     )
 
-    # Create index on concept_normalization_overrides for performance
-    op.create_index(
-        op.f("ix_concept_normalization_overrides_concept"),
-        "concept_normalization_overrides",
-        ["concept"],
-        unique=False,
-    )
-
 
 def downgrade() -> None:
-    # Drop indexes
-    op.drop_index(
-        op.f("ix_concept_normalization_overrides_concept"),
-        table_name="concept_normalization_overrides",
-    )
-
     # Drop concept_normalization_overrides table
     op.drop_table("concept_normalization_overrides")

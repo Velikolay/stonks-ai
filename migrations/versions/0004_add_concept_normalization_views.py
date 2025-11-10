@@ -28,9 +28,9 @@ def upgrade() -> None:
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
-            JOIN filings f
-            ON ff.filing_id = f.id
-            WHERE f.form_type = '10-K'
+          JOIN filings f
+          ON ff.filing_id = f.id
+          WHERE f.form_type = '10-K'
         ),
 
         candidate_matches AS (
@@ -51,7 +51,7 @@ def upgrade() -> None:
             AND f1.normalized_comparative_value = f2.normalized_value
             AND f1.comparative_period_end = f2.period_end
           WHERE
-            (f1.concept != f2.concept OR f1.label != f2.label)
+            (f1.concept <> f2.concept OR f1.label <> f2.label)
             AND f1.period_end > f2.period_end
         ),
 
@@ -289,7 +289,7 @@ def upgrade() -> None:
             ON c1.company_id = c2.company_id
             AND c1.statement = c2.statement
             AND c1.concept = c2.concept
-            AND c1.group_id != c2.group_id
+            AND c1.group_id <> c2.group_id
         ),
 
         transitive_merges AS (
@@ -327,7 +327,7 @@ def upgrade() -> None:
             tm.company_id = gl.company_id
             AND tm.statement = gl.statement
             AND tm.group_id_2 = gl.group_id_1
-        WHERE tm.group_id_1 != gl.group_id_2
+        WHERE tm.group_id_1 <> gl.group_id_2
         ),
 
         canonical_groups AS (

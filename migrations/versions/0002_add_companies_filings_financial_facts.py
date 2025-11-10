@@ -83,10 +83,16 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        "ix_financial_facts_statement_concept",
+        "financial_facts",
+        ["statement", "concept"],
+    )
 
 
 def downgrade() -> None:
     # Drop financial_facts table
+    op.drop_index("ix_financial_facts_statement_concept", table_name="financial_facts")
     op.drop_table("financial_facts")
 
     # Drop the enum type
