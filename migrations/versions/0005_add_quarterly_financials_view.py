@@ -185,6 +185,7 @@ def upgrade() -> None:
                 a.company_id as k_company_id,
                 a.fiscal_year as k_fiscal_year,
                 a.fiscal_quarter as k_fiscal_quarter,
+                a.concept as k_concept,
                 a.value as k_value,
                 a.weight as k_weight,
                 a.unit as k_unit,
@@ -215,6 +216,7 @@ def upgrade() -> None:
                 k_company_id as company_id,
                 k_fiscal_year as fiscal_year,
                 k_fiscal_quarter as fiscal_quarter,
+                k_concept as concept,
                 k_label as label,
                 k_value - COALESCE(SUM(value) FILTER (WHERE rn <= 3), 0) as value,
                 k_unit as unit,
@@ -233,13 +235,14 @@ def upgrade() -> None:
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_fiscal_period_end, k_abstracts, k_position
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_concept, k_period_end, k_fiscal_period_end, k_abstracts, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
 
         -- Combine all quarterly data
         SELECT
             company_id,
+            concept,
             label,
             normalized_label,
             value,
@@ -261,6 +264,7 @@ def upgrade() -> None:
         -- Balance Sheet data is point in time accumulation
         SELECT
             company_id,
+            concept,
             label,
             normalized_label,
             value,
@@ -284,6 +288,7 @@ def upgrade() -> None:
 
         SELECT
             company_id,
+            concept,
             label,
             normalized_label,
             value,

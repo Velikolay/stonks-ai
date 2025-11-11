@@ -50,6 +50,11 @@ def upgrade() -> None:
             "source", "filing_number", name="uq_filings_source_filing_number"
         ),
     )
+    op.create_index(
+        "ix_filings_form_type",
+        "filings",
+        ["form_type"],
+    )
 
     # Create financial_facts table
     op.create_table(
@@ -99,6 +104,7 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS period_type")
 
     # Drop filings table
+    op.drop_index("ix_filings_form_type", table_name="filings")
     op.drop_table("filings")
 
     # Drop companies table

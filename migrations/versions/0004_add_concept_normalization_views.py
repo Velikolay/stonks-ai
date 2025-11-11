@@ -23,13 +23,15 @@ def upgrade() -> None:
 
         WITH RECURSIVE facts AS (
           SELECT
-            f.company_id,
+            c.id as company_id,
             ff.*,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
           JOIN filings f
           ON ff.filing_id = f.id
+          JOIN companies c
+          ON f.company_id = c.id
           WHERE f.form_type = '10-K'
         ),
 
@@ -194,11 +196,13 @@ def upgrade() -> None:
 
         WITH facts AS (
           SELECT
-            f.company_id,
+            c.id as company_id,
             ff.*
           FROM financial_facts ff
           JOIN filings f
           ON ff.filing_id = f.id
+          JOIN companies c
+          ON f.company_id = c.id
           WHERE f.form_type = '10-K'
         ),
 

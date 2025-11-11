@@ -26,6 +26,7 @@ def upgrade() -> None:
             -- Get all filing data with latest abstracts for each unique metric combination
             SELECT
                 f.company_id,
+                ff.concept,
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
                 CASE
@@ -77,6 +78,7 @@ def upgrade() -> None:
         )
         SELECT
             company_id,
+            concept,
             label,
             normalized_label,
             value,
