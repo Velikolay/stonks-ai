@@ -138,6 +138,7 @@ def upgrade() -> None:
 
         -- Goodwill
         ('us-gaap:Goodwill', 'Goodwill', 'Balance Sheet', False, 'us-gaap:AssetsNoncurrentAbstract'),
+        ('us-gaap:IntangibleAssetsNetExcludingGoodwill', 'Intangible Assets Excluding Goodwill', 'Balance Sheet', False, 'us-gaap:AssetsNoncurrentAbstract'),
         ('us-gaap:AssetsNoncurrentAbstract', 'Non-current Assets', 'Balance Sheet', True, 'us-gaap:AssetsAbstract'),
         ('us-gaap:AssetsAbstract', 'Assets', 'Balance Sheet', True, NULL)
     """
