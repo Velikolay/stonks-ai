@@ -24,6 +24,7 @@ def upgrade() -> None:
         WITH RECURSIVE facts AS (
           SELECT
             c.id as company_id,
+            f.form_type,
             ff.*,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
@@ -32,7 +33,6 @@ def upgrade() -> None:
           ON ff.filing_id = f.id
           JOIN companies c
           ON f.company_id = c.id
-          WHERE f.form_type = '10-K'
         ),
 
         candidate_matches AS (
@@ -49,6 +49,7 @@ def upgrade() -> None:
           JOIN facts f2
           ON
             f1.company_id = f2.company_id
+            AND f1.form_type = f2.form_type
             AND f1.statement = f2.statement
             AND f1.normalized_comparative_value = f2.normalized_value
             AND f1.comparative_period_end = f2.period_end
@@ -203,7 +204,6 @@ def upgrade() -> None:
           ON ff.filing_id = f.id
           JOIN companies c
           ON f.company_id = c.id
-          WHERE f.form_type = '10-K'
         ),
 
         normalized_labels AS (

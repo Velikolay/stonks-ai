@@ -84,6 +84,10 @@ def upgrade() -> None:
         ('us-gaap:Liabilities', 'Total Liabilities', 'Balance Sheet', False, NULL),
         ('us-gaap:LiabilitiesTotal', 'Total Liabilities', 'Balance Sheet', False, NULL),
 
+        -- Accrued Liabilities
+        ('us-gaap:AccruedLiabilities', 'Accrued Liabilities', 'Balance Sheet', False, NULL),
+        ('us-gaap:AccruedLiabilitiesCurrent', 'Accrued Liabilities', 'Balance Sheet', False, NULL),
+
         -- Total Equity
         ('us-gaap:StockholdersEquity', 'Total Equity', 'Balance Sheet', False, NULL),
         ('us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'Total Equity', 'Balance Sheet', False, NULL),
