@@ -49,6 +49,8 @@ class FinancialMetricResponse(BaseModel):
     member: Optional[str] = None
     abstracts: Optional[List[str]] = None
     values: List[FinancialMetricValue]
+    concept: Optional[str] = None
+    abstract_concepts: Optional[List[str]] = None
 
 
 class NormalizedLabelResponse(BaseModel):
@@ -86,6 +88,9 @@ async def get_financials(
     statement: Optional[str] = Query(None, description="Filter by financial statement"),
     axis: Optional[str] = Query(None, description="Filter by axis"),
     short: bool = Query(False, description="Return minimal response"),
+    debug: bool = Query(
+        False, description="Include extra debug fields in the response"
+    ),
 ) -> List[FinancialMetricResponse]:
     """Get quarterly or yearly financial metrics for a company by ticker."""
 
@@ -169,12 +174,18 @@ async def get_financials(
             )
 
             if key not in metric_groups:
-                metric_groups[key] = {
+                group_data = {
                     "values": [],
                     "weight": metric.weight,
                     "unit": metric.unit,
                     "abstracts": metric.abstracts,
                 }
+                if debug:
+                    group_data["concept"] = getattr(metric, "concept", None)
+                    group_data["abstract_concepts"] = getattr(
+                        metric, "abstract_concepts", None
+                    )
+                metric_groups[key] = group_data
 
             # Create the value object
             period_end_str = metric.period_end.isoformat() if metric.period_end else ""
@@ -187,7 +198,7 @@ async def get_financials(
                     getattr(metric, "fiscal_quarter", None) if not short else None
                 ),
                 period_end=period_end_str,
-                source_type=getattr(metric, "source_type", None) if not short else None,
+                source_type=getattr(metric, "source_type", None) if debug else None,
             )
             metric_groups[key]["values"].append(value_obj)
 
@@ -201,12 +212,14 @@ async def get_financials(
         ), group_data in metric_groups.items():
             response_metric = FinancialMetricResponse(
                 normalized_label=normalized_label,
+                concept=group_data["concept"] if debug else None,
                 weight=group_data["weight"],
                 unit=group_data["unit"],
                 statement=statement,
                 axis=axis,
                 member=member,
                 abstracts=group_data["abstracts"],
+                abstract_concepts=group_data["abstract_concepts"] if debug else None,
                 values=group_data["values"],
             )
             response_metrics.append(response_metric)

@@ -109,6 +109,8 @@ class YearlyFinancialsOperations:
                         fiscal_year=row.fiscal_year,
                         fiscal_period_end=row.fiscal_period_end,
                         source_type=row.source_type,
+                        concept=getattr(row, "concept", None),
+                        abstract_concepts=getattr(row, "abstract_concepts", None),
                     )
                     financials.append(financial)
 

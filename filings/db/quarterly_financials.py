@@ -124,6 +124,8 @@ class QuarterlyFinancialsOperations:
                         abstracts=row.abstracts,
                         period_end=row.period_end,
                         source_type=row.source_type,
+                        concept=getattr(row, "concept", None),
+                        abstract_concepts=getattr(row, "abstract_concepts", None),
                     )
                     financials.append(financial)
 
