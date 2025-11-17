@@ -43,6 +43,7 @@ def upgrade() -> None:
                 f.fiscal_period_end,
                 -- Get the latest abstracts for this metric combination
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
+                FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
@@ -88,6 +89,7 @@ def upgrade() -> None:
             member,
             statement,
             latest_abstracts as abstracts,
+            latest_abstract_concepts as abstract_concepts,
             period_end,
             fiscal_year,
             fiscal_period_end,

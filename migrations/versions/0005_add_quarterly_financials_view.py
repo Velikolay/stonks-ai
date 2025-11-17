@@ -49,6 +49,7 @@ def upgrade() -> None:
                 f.fiscal_period_end,
                 -- Get the latest abstracts, position, and weight for this metric
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
+                FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
@@ -99,6 +100,7 @@ def upgrade() -> None:
                 parsed_axis,
                 parsed_member,
                 latest_abstracts as abstracts,
+                latest_abstract_concepts as abstract_concepts,
                 latest_weight as weight,
                 latest_position as position,
                 period_end,
@@ -147,6 +149,7 @@ def upgrade() -> None:
                 parsed_axis,
                 parsed_member,
                 abstracts,
+                abstract_concepts,
                 period_end,
                 fiscal_period_end,
                 position,
@@ -170,6 +173,7 @@ def upgrade() -> None:
                 parsed_axis,
                 parsed_member,
                 latest_abstracts as abstracts,
+                latest_abstract_concepts as abstract_concepts,
                 period_end,
                 normalized_label,
                 fiscal_period_end,
@@ -193,6 +197,7 @@ def upgrade() -> None:
                 a.parsed_member as k_parsed_member,
                 a.statement as k_statement,
                 a.abstracts as k_abstracts,
+                a.abstract_concepts as k_abstract_concepts,
                 a.period_end as k_period_end,
                 a.fiscal_period_end as k_fiscal_period_end,
                 a.label as k_label,
@@ -225,6 +230,7 @@ def upgrade() -> None:
                 k_parsed_member as parsed_member,
                 k_statement as statement,
                 k_abstracts as abstracts,
+                K_abstract_concepts as abstract_concepts,
                 k_period_end as period_end,
                 k_fiscal_period_end as fiscal_period_end,
                 k_normalized_label as normalized_label,
@@ -235,7 +241,7 @@ def upgrade() -> None:
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_concept, k_period_end, k_fiscal_period_end, k_abstracts, k_position
+            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_concept, k_period_end, k_fiscal_period_end, k_abstracts, k_abstract_concepts, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
 
@@ -252,6 +258,7 @@ def upgrade() -> None:
             parsed_member as member,
             statement,
             abstracts,
+            abstract_concepts,
             period_end,
             fiscal_year,
             fiscal_quarter,
@@ -274,6 +281,7 @@ def upgrade() -> None:
             parsed_member as member,
             statement,
             abstracts,
+            abstract_concepts,
             period_end,
             fiscal_year,
             fiscal_quarter,
@@ -298,6 +306,7 @@ def upgrade() -> None:
             parsed_member as member,
             statement,
             abstracts,
+            abstract_concepts,
             period_end,
             fiscal_year,
             fiscal_quarter,
