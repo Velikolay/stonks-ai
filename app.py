@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import financial endpoints
+from api.admin import router as admin_router
+from api.admin import set_filings_db as set_admin_filings_db
 from api.financials import router as financials_router
 from api.financials import set_filings_db
 from filings.db import FilingsDatabase
@@ -39,8 +41,9 @@ async def lifespan(app: FastAPI):
 
         filings_db = FilingsDatabase(database_url)
 
-        # Set the database instance in the financials module
+        # Set the database instance in the financials and admin modules
         set_filings_db(filings_db)
+        set_admin_filings_db(filings_db)
 
         logger.info("RAG system and FilingsDatabase initialized successfully")
     except Exception as e:
@@ -218,5 +221,6 @@ async def process_filing(request: ProcessFilingRequest) -> ProcessFilingResponse
     pass
 
 
-# Include financial endpoints router
+# Include routers
 app.include_router(financials_router)
+app.include_router(admin_router)

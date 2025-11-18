@@ -2,6 +2,7 @@
 
 from .base import DatabaseManager
 from .companies import CompanyOperations
+from .concept_normalization_overrides import ConceptNormalizationOverridesOperations
 from .filings import FilingOperations
 from .financial_facts import FinancialFactOperations
 from .quarterly_financials import QuarterlyFinancialsOperations
@@ -19,6 +20,9 @@ class FilingsDatabase:
         self.financial_facts = FinancialFactOperations(self.manager.engine)
         self.quarterly_financials = QuarterlyFinancialsOperations(self.manager.engine)
         self.yearly_financials = YearlyFinancialsOperations(self.manager.engine)
+        self.concept_normalization_overrides = ConceptNormalizationOverridesOperations(
+            self.manager.engine
+        )
 
     def close(self) -> None:
         """Close database connection."""
