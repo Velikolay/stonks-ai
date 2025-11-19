@@ -28,11 +28,15 @@ class ConceptNormalizationOverridesOperations:
             "concept_normalization_overrides", metadata, autoload_with=engine
         )
 
-    def list_all(self) -> List[ConceptNormalizationOverride]:
-        """Get all concept normalization overrides."""
+    def list_all(
+        self, statement: Optional[str] = None
+    ) -> List[ConceptNormalizationOverride]:
+        """Get all concept normalization overrides, optionally filtered by statement."""
         try:
             with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
+                if statement is not None:
+                    stmt = stmt.where(self.overrides_table.c.statement == statement)
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
@@ -50,6 +54,7 @@ class ConceptNormalizationOverridesOperations:
 
                 logger.info(
                     f"Retrieved {len(overrides)} concept normalization overrides"
+                    + (f" for statement: {statement}" if statement else "")
                 )
                 return overrides
 
