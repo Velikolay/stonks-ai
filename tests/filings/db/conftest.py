@@ -112,6 +112,7 @@ def test_engine(test_db_url: str) -> Engine:
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
+            conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
             conn.commit()
     except Exception as e:
         # Tables might not exist yet, which is fine
@@ -132,6 +133,7 @@ def clean_tables(test_engine: Engine):
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
+            conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
             conn.commit()
     except Exception:
         # Tables might not exist yet, which is fine for the first test
