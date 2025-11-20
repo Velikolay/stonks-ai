@@ -49,6 +49,8 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=row.is_abstract,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at,
                     )
                     overrides.append(override)
 
@@ -85,6 +87,8 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=row.is_abstract,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at,
                     )
                 return None
 
@@ -128,6 +132,8 @@ class ConceptNormalizationOverridesOperations:
                     is_abstract=row.is_abstract,
                     parent_concept=row.parent_concept,
                     description=row.description,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
                 )
 
         except IntegrityError as e:

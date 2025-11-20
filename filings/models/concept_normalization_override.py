@@ -1,5 +1,6 @@
 """Concept normalization override models."""
 
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -33,5 +34,8 @@ class ConceptNormalizationOverrideUpdate(BaseModel):
 
 class ConceptNormalizationOverride(ConceptNormalizationOverrideBase):
     """Complete concept normalization override model."""
+
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -3,6 +3,7 @@
 import csv
 import io
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Path, Query, UploadFile
@@ -39,6 +40,8 @@ class ConceptNormalizationOverrideResponse(BaseModel):
     is_abstract: bool
     parent_concept: Optional[str] = None
     description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 
 @router.get(
@@ -62,6 +65,8 @@ async def list_concept_normalization_overrides(
                 is_abstract=override.is_abstract,
                 parent_concept=override.parent_concept,
                 description=override.description,
+                created_at=override.created_at,
+                updated_at=override.updated_at,
             )
             for override in overrides
         ]
@@ -91,6 +96,8 @@ async def create_concept_normalization_override(
             is_abstract=created_override.is_abstract,
             parent_concept=created_override.parent_concept,
             description=created_override.description,
+            created_at=created_override.created_at,
+            updated_at=created_override.updated_at,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -128,6 +135,8 @@ async def update_concept_normalization_override(
             is_abstract=updated_override.is_abstract,
             parent_concept=updated_override.parent_concept,
             description=updated_override.description,
+            created_at=updated_override.created_at,
+            updated_at=updated_override.updated_at,
         )
     except HTTPException:
         raise
@@ -195,6 +204,8 @@ async def export_concept_normalization_overrides_to_csv(
             "is_abstract",
             "parent_concept",
             "description",
+            "created_at",
+            "updated_at",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
@@ -208,6 +219,12 @@ async def export_concept_normalization_overrides_to_csv(
                     "is_abstract": str(override.is_abstract),
                     "parent_concept": override.parent_concept or "",
                     "description": override.description or "",
+                    "created_at": (
+                        override.created_at.isoformat() if override.created_at else ""
+                    ),
+                    "updated_at": (
+                        override.updated_at.isoformat() if override.updated_at else ""
+                    ),
                 }
             )
 
