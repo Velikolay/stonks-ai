@@ -35,8 +35,8 @@ def upgrade() -> None:
                     ELSE ff.value
                 END as value,
                 ff.unit,
-                ff.parsed_axis as axis,
-                ff.parsed_member as member,
+                COALESCE(ff.parsed_axis, '') as axis,
+                COALESCE(ff.parsed_member, '') as member,
                 ff.statement,
                 ff.period_end,
                 f.fiscal_year,
@@ -100,7 +100,26 @@ def upgrade() -> None:
     """
     )
 
+    # Create unique index on yearly_financials for concurrent refresh
+    # Using a functional index to handle NULL values in axis and member columns
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_yearly_financials_unique
+        ON yearly_financials (
+            company_id,
+            statement,
+            concept,
+            normalized_label,
+            period_end,
+            axis,
+            member
+        );
+    """
+    )
+
 
 def downgrade() -> None:
+    # Drop the unique index
+    op.execute("DROP INDEX IF EXISTS idx_yearly_financials_unique;")
     # Drop the yearly financials view
     op.execute("DROP VIEW IF EXISTS yearly_financials;")

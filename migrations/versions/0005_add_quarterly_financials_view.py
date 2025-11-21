@@ -39,10 +39,10 @@ def upgrade() -> None:
                 ff.unit,
                 ff.statement,
                 ff.concept,
-                ff.axis,
-                ff.member,
-                ff.parsed_axis,
-                ff.parsed_member,
+                COALESCE(ff.axis, '') as axis,
+                COALESCE(ff.member, '') as member,
+                COALESCE(ff.parsed_axis, '') as parsed_axis,
+                COALESCE(ff.parsed_member, '') as parsed_member,
                 ff.period_end,
                 ff.period,
                 f.form_type as source_type,
@@ -318,7 +318,26 @@ def upgrade() -> None:
     """
     )
 
+    # Create unique index on quarterly_financials for concurrent refresh
+    # Using a functional index to handle NULL values in axis and member columns
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_quarterly_financials_unique
+        ON quarterly_financials (
+            company_id,
+            statement,
+            concept,
+            normalized_label,
+            period_end,
+            axis,
+            member
+        );
+    """
+    )
+
 
 def downgrade() -> None:
+    # Drop the unique index
+    op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique;")
     # Drop the quarterly financials view
     op.execute("DROP VIEW IF EXISTS quarterly_financials;")
