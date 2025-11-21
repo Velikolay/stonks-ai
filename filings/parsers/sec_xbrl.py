@@ -397,7 +397,9 @@ class SECXBRLParser:
             fact = FinancialFactCreate(
                 key=str(uuid.uuid4()),
                 parent_key=None,
+                company_id=0,
                 filing_id=0,
+                form_type="",
                 concept=concept,
                 label=label,
                 is_abstract=False,
@@ -647,7 +649,9 @@ class SECXBRLParser:
             fact = FinancialFactCreate(
                 key=str(uuid.uuid4()),
                 parent_key=hierarchy[-1].key if hierarchy else None,
+                company_id=0,
                 filing_id=0,
+                form_type="",
                 concept=concept,
                 label=label,
                 value=value_decimal,

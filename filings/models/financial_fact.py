@@ -18,7 +18,9 @@ class PeriodType(str, Enum):
 class FinancialFactBase(BaseModel):
     """Base financial fact model."""
 
+    company_id: int
     filing_id: int
+    form_type: str
     concept: str
     label: str
     period_end: date

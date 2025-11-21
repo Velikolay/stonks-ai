@@ -50,17 +50,14 @@ def upgrade() -> None:
             "source", "filing_number", name="uq_filings_source_filing_number"
         ),
     )
-    op.create_index(
-        "ix_filings_form_type",
-        "filings",
-        ["form_type"],
-    )
 
     # Create financial_facts table
     op.create_table(
         "financial_facts",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("filing_id", sa.Integer(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("form_type", sa.String(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
@@ -68,12 +65,12 @@ def upgrade() -> None:
         sa.Column("comparative_value", sa.Numeric(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
-        sa.Column("axis", sa.String(), nullable=True),
-        sa.Column("member", sa.String(), nullable=True),
-        sa.Column("parsed_axis", sa.String(), nullable=True),
-        sa.Column("parsed_member", sa.String(), nullable=True),
-        sa.Column("statement", sa.String(), nullable=True),
-        sa.Column("period_end", sa.Date(), nullable=True),
+        sa.Column("axis", sa.String(), nullable=False),
+        sa.Column("member", sa.String(), nullable=False),
+        sa.Column("parsed_axis", sa.String(), nullable=False),
+        sa.Column("parsed_member", sa.String(), nullable=False),
+        sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("period_end", sa.Date(), nullable=False),
         sa.Column("comparative_period_end", sa.Date(), nullable=True),
         sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=True),
         sa.Column("position", sa.Integer(), nullable=True),
@@ -81,6 +78,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
         ),
         sa.ForeignKeyConstraint(
             ["parent_id"],
@@ -93,18 +94,29 @@ def upgrade() -> None:
         "financial_facts",
         ["statement", "concept"],
     )
+    op.create_index(
+        "ix_financial_facts_form_type",
+        "financial_facts",
+        ["form_type"],
+    )
+    op.create_index(
+        "ix_financial_facts_company_id",
+        "financial_facts",
+        ["company_id"],
+    )
 
 
 def downgrade() -> None:
     # Drop financial_facts table
     op.drop_index("ix_financial_facts_statement_concept", table_name="financial_facts")
+    op.drop_index("ix_financial_facts_form_type", table_name="financial_facts")
+    op.drop_index("ix_financial_facts_company_id", table_name="financial_facts")
     op.drop_table("financial_facts")
 
     # Drop the enum type
     op.execute("DROP TYPE IF EXISTS period_type")
 
-    # Drop filings table
-    op.drop_index("ix_filings_form_type", table_name="filings")
+    # Drop filings tabl
     op.drop_table("filings")
 
     # Drop companies table

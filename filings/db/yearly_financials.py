@@ -40,16 +40,16 @@ class YearlyFinancialsOperations:
                 )
 
                 # Handle fiscal year range
-                if filter_params.fiscal_year_start is not None:
-                    conditions.append(
-                        self.yearly_financials_view.c.fiscal_year
-                        >= filter_params.fiscal_year_start
-                    )
-                if filter_params.fiscal_year_end is not None:
-                    conditions.append(
-                        self.yearly_financials_view.c.fiscal_year
-                        <= filter_params.fiscal_year_end
-                    )
+                # if filter_params.fiscal_year_start is not None:
+                #     conditions.append(
+                #         self.yearly_financials_view.c.fiscal_year
+                #         >= filter_params.fiscal_year_start
+                #     )
+                # if filter_params.fiscal_year_end is not None:
+                #     conditions.append(
+                #         self.yearly_financials_view.c.fiscal_year
+                #         <= filter_params.fiscal_year_end
+                #     )
 
                 if filter_params.labels is not None:
                     label_conditions = []
@@ -75,17 +75,13 @@ class YearlyFinancialsOperations:
 
                 # Handle axis filter
                 if filter_params.axis is not None:
-                    if filter_params.axis == "":
-                        # Empty string means filter for NULL axis
-                        conditions.append(self.yearly_financials_view.c.axis.is_(None))
-                    else:
-                        # Specific axis value
-                        conditions.append(
-                            self.yearly_financials_view.c.axis == filter_params.axis
-                        )
+                    # Specific axis value
+                    conditions.append(
+                        self.yearly_financials_view.c.axis == filter_params.axis
+                    )
                 else:
-                    # If axis filter is not provided, only return records where axis is NULL
-                    conditions.append(self.yearly_financials_view.c.axis.is_(None))
+                    # If axis filter is not provided, only return records where axis is empty
+                    conditions.append(self.yearly_financials_view.c.axis == "")
 
                 stmt = stmt.where(and_(*conditions))
 
@@ -96,18 +92,19 @@ class YearlyFinancialsOperations:
                 for row in rows:
                     financial = YearlyFinancial(
                         company_id=row.company_id,
+                        filing_id=row.filing_id,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
                         weight=row.weight,
                         unit=row.unit,
-                        statement=row.statement,
-                        axis=row.axis,
-                        member=row.member,
+                        statement=row.statement if row.statement else None,
+                        axis=row.axis if row.axis else None,
+                        member=row.member if row.member else None,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
-                        fiscal_year=row.fiscal_year,
-                        fiscal_period_end=row.fiscal_period_end,
+                        # fiscal_year=row.fiscal_year,
+                        # fiscal_period_end=row.fiscal_period_end,
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
                         abstract_concepts=getattr(row, "abstract_concepts", None),
@@ -120,17 +117,6 @@ class YearlyFinancialsOperations:
         except SQLAlchemyError as e:
             logger.error(f"Error retrieving yearly metrics: {e}")
             return []
-
-    def get_metrics_by_company_and_year(
-        self, company_id: int, fiscal_year: int
-    ) -> List[YearlyFinancial]:
-        """Get all yearly metrics for a specific company and fiscal year."""
-        filter_params = YearlyFinancialsFilter(
-            company_id=company_id,
-            fiscal_year_start=fiscal_year,
-            fiscal_year_end=fiscal_year,
-        )
-        return self.get_yearly_financials(filter_params)
 
     def get_metrics_by_company(self, company_id: int) -> List[YearlyFinancial]:
         """Get yearly metrics for a specific company."""
@@ -172,7 +158,7 @@ class YearlyFinancialsOperations:
                     select(self.yearly_financials_view)
                     .where(self.yearly_financials_view.c.company_id == company_id)
                     .order_by(
-                        self.yearly_financials_view.c.fiscal_year.desc(),
+                        self.yearly_financials_view.c.period_end.desc(),
                         self.yearly_financials_view.c.label,
                     )
                     .limit(limit)
@@ -185,15 +171,15 @@ class YearlyFinancialsOperations:
                 for row in rows:
                     metric = YearlyFinancial(
                         company_id=row.company_id,
-                        fiscal_year=row.fiscal_year,
+                        filing_id=row.filing_id,
+                        # fiscal_year=row.fiscal_year,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
                         weight=row.weight,
                         unit=row.unit,
-                        statement=row.statement,
+                        statement=row.statement if row.statement else None,
                         period_end=row.period_end,
-                        fiscal_period_end=row.fiscal_period_end,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)
@@ -264,9 +250,9 @@ class YearlyFinancialsOperations:
                 for row in rows:
                     label_info = {
                         "normalized_label": row.normalized_label,
-                        "statement": row.statement,
-                        "axis": row.axis,
-                        "member": row.member,
+                        "statement": row.statement if row.statement else None,
+                        "axis": row.axis if row.axis else None,
+                        "member": row.member if row.member else None,
                         "count": row.count,
                     }
                     labels.append(label_info)

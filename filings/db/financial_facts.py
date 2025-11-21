@@ -33,7 +33,9 @@ class FinancialFactOperations:
                     insert(self.financial_facts_table)
                     .values(
                         parent_id=fact.parent_id,
+                        company_id=fact.company_id,
                         filing_id=fact.filing_id,
+                        form_type=fact.form_type,
                         concept=fact.concept,
                         label=fact.label,
                         is_abstract=fact.is_abstract,
@@ -41,11 +43,15 @@ class FinancialFactOperations:
                         comparative_value=fact.comparative_value,
                         weight=fact.weight,
                         unit=fact.unit,
-                        axis=fact.axis,
-                        member=fact.member,
-                        parsed_axis=fact.parsed_axis,
-                        parsed_member=fact.parsed_member,
-                        statement=fact.statement,
+                        axis=fact.axis if fact.axis is not None else "",
+                        member=fact.member if fact.member is not None else "",
+                        parsed_axis=(
+                            fact.parsed_axis if fact.parsed_axis is not None else ""
+                        ),
+                        parsed_member=(
+                            fact.parsed_member if fact.parsed_member is not None else ""
+                        ),
+                        statement=fact.statement if fact.statement is not None else "",
                         period_end=fact.period_end,
                         comparative_period_end=fact.comparative_period_end,
                         period=fact.period.value if fact.period is not None else None,
@@ -76,7 +82,9 @@ class FinancialFactOperations:
                     stmt = (
                         insert(self.financial_facts_table)
                         .values(
+                            company_id=fact.company_id,
                             filing_id=fact.filing_id,
+                            form_type=fact.form_type,
                             concept=fact.concept,
                             label=fact.label,
                             is_abstract=fact.is_abstract,
@@ -84,11 +92,19 @@ class FinancialFactOperations:
                             comparative_value=fact.comparative_value,
                             weight=fact.weight,
                             unit=fact.unit,
-                            axis=fact.axis,
-                            member=fact.member,
-                            parsed_axis=fact.parsed_axis,
-                            parsed_member=fact.parsed_member,
-                            statement=fact.statement,
+                            axis=fact.axis if fact.axis is not None else "",
+                            member=fact.member if fact.member is not None else "",
+                            parsed_axis=(
+                                fact.parsed_axis if fact.parsed_axis is not None else ""
+                            ),
+                            parsed_member=(
+                                fact.parsed_member
+                                if fact.parsed_member is not None
+                                else ""
+                            ),
+                            statement=(
+                                fact.statement if fact.statement is not None else ""
+                            ),
                             period_end=fact.period_end,
                             comparative_period_end=fact.comparative_period_end,
                             period=(
@@ -139,7 +155,9 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             parent_id=row.parent_id,
+                            company_id=row.company_id,
                             filing_id=row.filing_id,
+                            form_type=row.form_type,
                             concept=row.concept,
                             label=row.label,
                             is_abstract=row.is_abstract,
@@ -147,11 +165,13 @@ class FinancialFactOperations:
                             comparative_value=row.comparative_value,
                             weight=row.weight,
                             unit=row.unit,
-                            axis=row.axis,
-                            member=row.member,
-                            parsed_axis=row.parsed_axis,
-                            parsed_member=row.parsed_member,
-                            statement=row.statement,
+                            axis=row.axis if row.axis else None,
+                            member=row.member if row.member else None,
+                            parsed_axis=row.parsed_axis if row.parsed_axis else None,
+                            parsed_member=(
+                                row.parsed_member if row.parsed_member else None
+                            ),
+                            statement=row.statement if row.statement else None,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
                             period=(
@@ -197,7 +217,9 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             parent_id=row.parent_id,
+                            company_id=row.company_id,
                             filing_id=row.filing_id,
+                            form_type=row.form_type,
                             concept=row.concept,
                             label=row.label,
                             is_abstract=row.is_abstract,
@@ -205,11 +227,13 @@ class FinancialFactOperations:
                             comparative_value=row.comparative_value,
                             weight=row.weight,
                             unit=row.unit,
-                            axis=row.axis,
-                            member=row.member,
-                            parsed_axis=row.parsed_axis,
-                            parsed_member=row.parsed_member,
-                            statement=row.statement,
+                            axis=row.axis if row.axis else None,
+                            member=row.member if row.member else None,
+                            parsed_axis=row.parsed_axis if row.parsed_axis else None,
+                            parsed_member=(
+                                row.parsed_member if row.parsed_member else None
+                            ),
+                            statement=row.statement if row.statement else None,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
                             period=(
@@ -241,7 +265,9 @@ class FinancialFactOperations:
                     fact = FinancialFact(
                         id=row.id,
                         parent_id=row.parent_id,
+                        company_id=row.company_id,
                         filing_id=row.filing_id,
+                        form_type=row.form_type,
                         concept=row.concept,
                         is_abstract=row.is_abstract,
                         label=row.label,
@@ -249,11 +275,11 @@ class FinancialFactOperations:
                         comparative_value=row.comparative_value,
                         weight=row.weight,
                         unit=row.unit,
-                        axis=row.axis,
-                        member=row.member,
-                        parsed_axis=row.parsed_axis,
-                        parsed_member=row.parsed_member,
-                        statement=row.statement,
+                        axis=row.axis if row.axis else None,
+                        member=row.member if row.member else None,
+                        parsed_axis=row.parsed_axis if row.parsed_axis else None,
+                        parsed_member=row.parsed_member if row.parsed_member else None,
+                        statement=row.statement if row.statement else None,
                         period_end=row.period_end,
                         comparative_period_end=row.comparative_period_end,
                         period=(

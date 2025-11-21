@@ -11,8 +11,9 @@ class QuarterlyFinancial(BaseModel):
     """Model for quarterly financial metrics from the view."""
 
     company_id: int
-    fiscal_year: int
-    fiscal_quarter: int
+    filing_id: int
+    # fiscal_year: int
+    # fiscal_quarter: int
     label: str
     normalized_label: str
     value: Decimal

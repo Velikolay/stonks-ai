@@ -11,6 +11,7 @@ class YearlyFinancial(BaseModel):
     """Model for yearly financial metrics from the view."""
 
     company_id: int
+    filing_id: int
     label: str
     normalized_label: str
     value: Decimal
@@ -21,8 +22,7 @@ class YearlyFinancial(BaseModel):
     member: Optional[str] = None
     abstracts: Optional[List[str]] = None
     period_end: Optional[date] = None
-    fiscal_year: int
-    fiscal_period_end: Optional[date] = None
+    # fiscal_year: int
     # Debug fields
     source_type: str  # '10-K'
     concept: Optional[str] = None

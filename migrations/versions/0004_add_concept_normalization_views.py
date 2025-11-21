@@ -23,16 +23,10 @@ def upgrade() -> None:
 
         WITH RECURSIVE facts AS (
           SELECT
-            c.id as company_id,
-            f.form_type,
             ff.*,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
-          JOIN filings f
-          ON ff.filing_id = f.id
-          JOIN companies c
-          ON f.company_id = c.id
         ),
 
         candidate_matches AS (
@@ -195,18 +189,7 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization_grouping AS
 
-        WITH facts AS (
-          SELECT
-            c.id as company_id,
-            ff.*
-          FROM financial_facts ff
-          JOIN filings f
-          ON ff.filing_id = f.id
-          JOIN companies c
-          ON f.company_id = c.id
-        ),
-
-        normalized_labels AS (
+        WITH normalized_labels AS (
           SELECT
             company_id,
             statement,
@@ -214,7 +197,7 @@ def upgrade() -> None:
             (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
             gen_random_uuid() AS group_id,
             MAX(period_end) AS group_max_period_end
-          FROM facts
+          FROM financial_facts
           GROUP BY
             company_id,
             statement,
@@ -231,7 +214,7 @@ def upgrade() -> None:
           nl.group_id,
           nl.group_max_period_end
         FROM normalized_labels nl
-        JOIN facts f
+        JOIN financial_facts f
         ON
           nl.company_id = f.company_id
           AND nl.statement = f.statement

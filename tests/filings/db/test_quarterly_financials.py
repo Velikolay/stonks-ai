@@ -39,8 +39,9 @@ class TestQuarterlyFinancialsOperations:
                 # Create test data
                 test_financial1 = QuarterlyFinancial(
                     company_id=1,
-                    fiscal_year=2024,
-                    fiscal_quarter=1,
+                    filing_id=1,
+                    # fiscal_year=2024,
+                    # fiscal_quarter=1,
                     label="Revenue",
                     normalized_label="Revenue",
                     value=Decimal("1000000.00"),
@@ -51,8 +52,9 @@ class TestQuarterlyFinancialsOperations:
                 )
                 test_financial2 = QuarterlyFinancial(
                     company_id=1,
-                    fiscal_year=2024,
-                    fiscal_quarter=2,
+                    filing_id=2,
+                    # fiscal_year=2024,
+                    # fiscal_quarter=2,
                     label="Revenue",
                     normalized_label="Revenue",
                     value=Decimal("1100000.00"),

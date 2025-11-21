@@ -26,9 +26,10 @@ def upgrade() -> None:
         WITH all_filings_data AS (
             -- Get all filing data with proper quarter assignment based on fiscal_period_end
             SELECT
-                f.company_id,
-                f.fiscal_year,
-                f.fiscal_quarter,  -- This is already calculated correctly in the filings table
+                ff.company_id,
+                ff.filing_id,
+                -- f.fiscal_year,
+                -- f.fiscal_quarter,  -- This is already calculated correctly in the filings table
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
                 CASE
@@ -39,23 +40,22 @@ def upgrade() -> None:
                 ff.unit,
                 ff.statement,
                 ff.concept,
-                COALESCE(ff.axis, '') as axis,
-                COALESCE(ff.member, '') as member,
-                COALESCE(ff.parsed_axis, '') as parsed_axis,
-                COALESCE(ff.parsed_member, '') as parsed_member,
+                ff.axis,
+                ff.member,
+                ff.parsed_axis,
+                ff.parsed_member,
                 ff.period_end,
                 ff.period,
-                f.form_type as source_type,
-                f.fiscal_period_end,
+                ff.form_type as source_type,
                 -- Get the latest abstracts, position, and weight for this metric
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
-            JOIN filings f
-            ON
-                ff.filing_id = f.id
+            -- JOIN filings f
+            -- ON
+            --    ff.filing_id = f.id
             LEFT JOIN abstract_normalization_overrides ano
             ON
                 ff.statement = ano.statement
@@ -70,16 +70,16 @@ def upgrade() -> None:
                 AND ff.concept = cno.concept
             LEFT JOIN concept_normalization cn
             ON
-                f.company_id = cn.company_id
+                ff.company_id = cn.company_id
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
                 AND ff.label = cn.label
             WHERE
-                f.form_type IN ('10-Q', '10-K')
-                AND ff.is_abstract = FALSE
+                ff.is_abstract = FALSE
+                -- AND ff.form_type IN ('10-Q', '10-K')
             WINDOW w AS (
-                PARTITION BY f.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
-                ORDER BY f.fiscal_period_end DESC
+                PARTITION BY ff.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
+                ORDER BY ff.period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
         ),
@@ -87,8 +87,9 @@ def upgrade() -> None:
             -- Get quarterly data from 10-Q filings
             SELECT
                 company_id,
-                fiscal_year,
-                fiscal_quarter,
+                filing_id,
+                -- fiscal_year,
+                -- fiscal_quarter,
                 label,
                 normalized_label,
                 value,
@@ -105,7 +106,6 @@ def upgrade() -> None:
                 latest_position as position,
                 period_end,
                 period,
-                fiscal_period_end,
                 source_type
             FROM all_filings_data
             WHERE source_type = '10-Q'
@@ -115,22 +115,23 @@ def upgrade() -> None:
             SELECT
                 q.*,
                 CASE
-                    WHEN (fiscal_period_end - LAG(fiscal_period_end) OVER w) BETWEEN 80 AND 100
+                    WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
                     THEN LAG(value) OVER w
                     ELSE NULL
                 END AS prev_value
             FROM quarterly_filings_raw q
             WINDOW w AS (
                 PARTITION BY company_id, statement, normalized_label, axis, member
-                ORDER BY fiscal_period_end
+                ORDER BY period_end
             )
         ),
         quarterly_filings AS (
             -- Convert YTD data to quarterly values
             SELECT
                 company_id,
-                fiscal_year,
-                fiscal_quarter,
+                filing_id,
+                -- fiscal_year,
+                -- fiscal_quarter,
                 label,
                 normalized_label,
                 CASE
@@ -151,7 +152,6 @@ def upgrade() -> None:
                 abstracts,
                 abstract_concepts,
                 period_end,
-                fiscal_period_end,
                 position,
                 source_type
             FROM quarterly_filings_with_prev
@@ -160,8 +160,9 @@ def upgrade() -> None:
             -- Get annual data from 10-K filings
             SELECT
                 company_id,
-                fiscal_year,
-                fiscal_quarter,
+                filing_id,
+                -- fiscal_year,
+                -- fiscal_quarter,
                 label,
                 value,
                 latest_weight as weight,
@@ -176,7 +177,6 @@ def upgrade() -> None:
                 latest_abstract_concepts as abstract_concepts,
                 period_end,
                 normalized_label,
-                fiscal_period_end,
                 latest_position as position,
                 source_type
             FROM all_filings_data
@@ -187,8 +187,9 @@ def upgrade() -> None:
             SELECT
                 q.*,
                 a.company_id as k_company_id,
-                a.fiscal_year as k_fiscal_year,
-                a.fiscal_quarter as k_fiscal_quarter,
+                a.filing_id as k_filing_id,
+                -- a.fiscal_year as k_fiscal_year,
+                -- a.fiscal_quarter as k_fiscal_quarter,
                 a.concept as k_concept,
                 a.value as k_value,
                 a.weight as k_weight,
@@ -199,28 +200,28 @@ def upgrade() -> None:
                 a.abstracts as k_abstracts,
                 a.abstract_concepts as k_abstract_concepts,
                 a.period_end as k_period_end,
-                a.fiscal_period_end as k_fiscal_period_end,
                 a.label as k_label,
                 a.normalized_label as k_normalized_label,
                 a.position as k_position,
                 ROW_NUMBER() OVER (
-                    PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.fiscal_period_end
-                    ORDER BY q.fiscal_period_end DESC
+                    PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
+                    ORDER BY q.period_end DESC
                 ) as rn
             FROM quarterly_filings q
             JOIN annual_filings a ON
                 q.company_id = a.company_id
                 AND q.statement = a.statement
                 AND q.normalized_label = a.normalized_label
-                AND COALESCE(q.axis, '') = COALESCE(a.axis, '')
-                AND COALESCE(q.member, '') = COALESCE(a.member, '')
-                AND q.fiscal_period_end < a.fiscal_period_end
+                AND q.axis = a.axis
+                AND q.member = a.member
+                AND q.period_end < a.period_end
         ),
         missing_quarters AS (
             SELECT
                 k_company_id as company_id,
-                k_fiscal_year as fiscal_year,
-                k_fiscal_quarter as fiscal_quarter,
+                k_filing_id as filing_id,
+                -- k_fiscal_year as fiscal_year,
+                -- k_fiscal_quarter as fiscal_quarter,
                 k_concept as concept,
                 k_label as label,
                 k_value - COALESCE(SUM(value) FILTER (WHERE rn <= 3), 0) as value,
@@ -232,7 +233,6 @@ def upgrade() -> None:
                 k_abstracts as abstracts,
                 K_abstract_concepts as abstract_concepts,
                 k_period_end as period_end,
-                k_fiscal_period_end as fiscal_period_end,
                 k_normalized_label as normalized_label,
                 k_position as position,
                 'calculated' as source_type
@@ -241,13 +241,14 @@ def upgrade() -> None:
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_fiscal_year, k_fiscal_quarter, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_concept, k_period_end, k_fiscal_period_end, k_abstracts, k_abstract_concepts, k_position
+            GROUP BY k_company_id, k_filing_id, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_concept, k_period_end, k_abstracts, k_abstract_concepts, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         )
 
         -- Combine all quarterly data
         SELECT
             company_id,
+            filing_id,
             concept,
             label,
             normalized_label,
@@ -260,8 +261,8 @@ def upgrade() -> None:
             abstracts,
             abstract_concepts,
             period_end,
-            fiscal_year,
-            fiscal_quarter,
+            -- fiscal_year,
+            -- fiscal_quarter,
             position,
             source_type
         FROM quarterly_filings
@@ -271,6 +272,7 @@ def upgrade() -> None:
         -- Balance Sheet data is point in time accumulation
         SELECT
             company_id,
+            filing_id,
             concept,
             label,
             normalized_label,
@@ -283,8 +285,8 @@ def upgrade() -> None:
             abstracts,
             abstract_concepts,
             period_end,
-            fiscal_year,
-            fiscal_quarter,
+            -- fiscal_year,
+            -- fiscal_quarter,
             position,
             source_type
         FROM annual_filings
@@ -296,6 +298,7 @@ def upgrade() -> None:
 
         SELECT
             company_id,
+            filing_id,
             concept,
             label,
             normalized_label,
@@ -308,13 +311,13 @@ def upgrade() -> None:
             abstracts,
             abstract_concepts,
             period_end,
-            fiscal_year,
-            fiscal_quarter,
+            -- fiscal_year,
+            -- fiscal_quarter,
             position,
             source_type
         FROM missing_quarters
         WHERE value IS NOT NULL AND value != 0
-        ORDER BY company_id, statement, fiscal_year DESC, fiscal_quarter DESC, position;
+        ORDER BY company_id, statement, period_end DESC, position;
     """
     )
 

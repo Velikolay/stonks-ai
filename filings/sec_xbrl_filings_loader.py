@@ -257,7 +257,9 @@ class SECXBRLFilingsLoader:
 
             # Set filing_id for all facts
             for fact in facts:
+                fact.company_id = company_id
                 fact.filing_id = filing_id
+                fact.form_type = filing.form
 
             # Insert facts in batch
             inserted_facts = self.database.financial_facts.insert_financial_facts_batch(
