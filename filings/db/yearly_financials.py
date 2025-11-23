@@ -40,16 +40,16 @@ class YearlyFinancialsOperations:
                 )
 
                 # Handle fiscal year range
-                # if filter_params.fiscal_year_start is not None:
-                #     conditions.append(
-                #         self.yearly_financials_view.c.fiscal_year
-                #         >= filter_params.fiscal_year_start
-                #     )
-                # if filter_params.fiscal_year_end is not None:
-                #     conditions.append(
-                #         self.yearly_financials_view.c.fiscal_year
-                #         <= filter_params.fiscal_year_end
-                #     )
+                if filter_params.fiscal_year_start is not None:
+                    conditions.append(
+                        self.yearly_financials_view.c.fiscal_year
+                        >= filter_params.fiscal_year_start
+                    )
+                if filter_params.fiscal_year_end is not None:
+                    conditions.append(
+                        self.yearly_financials_view.c.fiscal_year
+                        <= filter_params.fiscal_year_end
+                    )
 
                 if filter_params.labels is not None:
                     label_conditions = []
@@ -103,8 +103,7 @@ class YearlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
-                        # fiscal_year=row.fiscal_year,
-                        # fiscal_period_end=row.fiscal_period_end,
+                        fiscal_year=row.fiscal_year,
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
                         abstract_concepts=getattr(row, "abstract_concepts", None),
@@ -172,7 +171,7 @@ class YearlyFinancialsOperations:
                     metric = YearlyFinancial(
                         company_id=row.company_id,
                         filing_id=row.filing_id,
-                        # fiscal_year=row.fiscal_year,
+                        fiscal_year=row.fiscal_year,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,

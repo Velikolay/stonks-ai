@@ -40,16 +40,16 @@ def upgrade() -> None:
                 ff.parsed_member as member,
                 ff.statement,
                 ff.period_end,
-                -- f.fiscal_year,
+                f.fiscal_year,
                 -- Get the latest abstracts for this metric combination
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM financial_facts ff
-            -- JOIN filings f
-            -- ON
-            --    ff.filing_id = f.id
+            JOIN filings f
+            ON
+              ff.filing_id = f.id
             LEFT JOIN abstract_normalization_overrides ano
             ON
                 ff.statement = ano.statement
@@ -92,7 +92,7 @@ def upgrade() -> None:
             latest_abstracts as abstracts,
             latest_abstract_concepts as abstract_concepts,
             period_end,
-            -- fiscal_year,
+            fiscal_year,
             latest_position as position,
             '10-K' as source_type
         FROM all_filings_data

@@ -12,8 +12,8 @@ class QuarterlyFinancial(BaseModel):
 
     company_id: int
     filing_id: int
-    # fiscal_year: int
-    # fiscal_quarter: int
+    fiscal_year: int
+    fiscal_quarter: int
     label: str
     normalized_label: str
     value: Decimal

@@ -193,10 +193,10 @@ async def get_financials(
             value_obj = FinancialMetricValue(
                 label=metric.label if not short else None,
                 value=float(metric.value),
-                # fiscal_year=metric.fiscal_year if not short else None,
-                # fiscal_quarter=(
-                # getattr(metric, "fiscal_quarter", None) if not short else None
-                # ),
+                fiscal_year=metric.fiscal_year if not short else None,
+                fiscal_quarter=(
+                    getattr(metric, "fiscal_quarter", None) if not short else None
+                ),
                 period_end=period_end_str,
                 source_type=getattr(metric, "source_type", None) if debug else None,
             )

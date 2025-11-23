@@ -41,28 +41,28 @@ class QuarterlyFinancialsOperations:
                 )
 
                 # Handle fiscal year range
-                # if filter_params.fiscal_year_start is not None:
-                #     conditions.append(
-                #         self.quarterly_financials_view.c.fiscal_year
-                #         >= filter_params.fiscal_year_start
-                #     )
-                # if filter_params.fiscal_year_end is not None:
-                #     conditions.append(
-                #         self.quarterly_financials_view.c.fiscal_year
-                #         <= filter_params.fiscal_year_end
-                #     )
+                if filter_params.fiscal_year_start is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_year
+                        >= filter_params.fiscal_year_start
+                    )
+                if filter_params.fiscal_year_end is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_year
+                        <= filter_params.fiscal_year_end
+                    )
 
                 # Handle fiscal quarter range
-                # if filter_params.fiscal_quarter_start is not None:
-                #     conditions.append(
-                #         self.quarterly_financials_view.c.fiscal_quarter
-                #         >= filter_params.fiscal_quarter_start
-                #     )
-                # if filter_params.fiscal_quarter_end is not None:
-                #     conditions.append(
-                #         self.quarterly_financials_view.c.fiscal_quarter
-                #         <= filter_params.fiscal_quarter_end
-                #     )
+                if filter_params.fiscal_quarter_start is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_quarter
+                        >= filter_params.fiscal_quarter_start
+                    )
+                if filter_params.fiscal_quarter_end is not None:
+                    conditions.append(
+                        self.quarterly_financials_view.c.fiscal_quarter
+                        <= filter_params.fiscal_quarter_end
+                    )
 
                 if filter_params.labels is not None:
                     label_conditions = []
@@ -105,8 +105,8 @@ class QuarterlyFinancialsOperations:
                     financial = QuarterlyFinancial(
                         company_id=row.company_id,
                         filing_id=row.filing_id,
-                        # fiscal_year=row.fiscal_year,
-                        # fiscal_quarter=row.fiscal_quarter,
+                        fiscal_year=row.fiscal_year,
+                        fiscal_quarter=row.fiscal_quarter,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
@@ -184,8 +184,8 @@ class QuarterlyFinancialsOperations:
                     metric = QuarterlyFinancial(
                         company_id=row.company_id,
                         filing_id=row.filing_id,
-                        # fiscal_year=row.fiscal_year,
-                        # fiscal_quarter=row.fiscal_quarter,
+                        fiscal_year=row.fiscal_year,
+                        fiscal_quarter=row.fiscal_quarter,
                         label=row.label,
                         normalized_label=row.normalized_label,
                         value=row.value,
