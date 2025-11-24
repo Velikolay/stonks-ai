@@ -230,8 +230,8 @@ class SECXBRLFilingsLoader:
                 source="SEC",
                 filing_number=filing.accession_number,
                 form_type=filing.form,
-                filing_date=filing.filing_date,
-                fiscal_period_end=filing.period_of_report,
+                filing_date=self._parse_date(filing.filing_date),
+                fiscal_period_end=self._parse_date(filing.period_of_report),
                 fiscal_year=(
                     self._parse_date(filing.period_of_report).year
                     if filing.period_of_report
@@ -249,21 +249,34 @@ class SECXBRLFilingsLoader:
 
             # Parse financial facts
             facts = self.parser.parse_filing(filing)
-            if not facts:
+
+            # Filter invalid facts
+            valid_facts = [
+                fact
+                for fact in facts
+                if fact.period_end == filing_data.fiscal_period_end
+            ]
+
+            if not valid_facts:
                 logger.warning(
                     f"No facts extracted from filing {filing.accession_number}"
                 )
                 return 0, False
 
-            # Set filing_id for all facts
-            for fact in facts:
+            if len(valid_facts) != len(facts):
+                logger.warning(
+                    f"Skipped {len(facts) - len(valid_facts)} facts due to period end mismatch for filing {filing.accession_number} and period end {filing.period_of_report}"
+                )
+
+            # Set filing_id for all valid facts
+            for fact in valid_facts:
                 fact.company_id = company_id
                 fact.filing_id = filing_id
-                fact.form_type = filing.form
+                fact.form_type = filing_data.form_type
 
             # Insert facts in batch
             inserted_facts = self.database.financial_facts.insert_financial_facts_batch(
-                facts
+                valid_facts
             )
 
             if inserted_facts:
