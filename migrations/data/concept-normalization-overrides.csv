@@ -25,7 +25,6 @@ us-gaap:Liabilities,Balance Sheet,Total Liabilities,False,,,
 us-gaap:LiabilitiesTotal,Balance Sheet,Total Liabilities,False,,,
 us-gaap:AccruedLiabilities,Balance Sheet,Accrued Liabilities,False,,,
 us-gaap:AccruedLiabilitiesCurrent,Balance Sheet,Accrued Liabilities,False,,,
-us-gaap:StockholdersEquity,Balance Sheet,Total Equity,False,,,
 us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest,Balance Sheet,Total Equity,False,,,
 us-gaap:Equity,Balance Sheet,Total Equity,False,,,
 us-gaap:NetCashProvidedByUsedInOperatingActivities,Cash Flow Statement,Operating Cash Flow,False,,,
@@ -53,7 +52,7 @@ us-gaap:DeferredRevenueNoncurrent,Balance Sheet,Deferred Revenue Non-current,Fal
 us-gaap:ProceedsFromPaymentsForOtherFinancingActivities,Cash Flow Statement,Other Financing Activities,False,,,
 us-gaap:PaymentsForProceedsFromOtherInvestingActivities,Cash Flow Statement,Other Investing Activities,False,,,
 us-gaap:OtherNoncashIncomeExpense,Cash Flow Statement,Other Income Expenses,False,,,
-us-gaap:Goodwill,Balance Sheet,Goodwill,False,us-gaap:AssetsNoncurrentAbstract,
+us-gaap:Goodwill,Balance Sheet,Goodwill,False,us-gaap:AssetsNoncurrentAbstract,,
 us-gaap:IntangibleAssetsNetExcludingGoodwill,Balance Sheet,Intangible Assets Excluding Goodwill,False,us-gaap:AssetsNoncurrentAbstract,,
 us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,us-gaap:AssetsAbstract,,
 us-gaap:AssetsAbstract,Balance Sheet,Assets,True,,,
@@ -61,3 +60,9 @@ us-gaap:LiabilitiesAndStockholdersEquityAbstract,Balance Sheet,Liabilities and S
 us-gaap:LiabilitiesCurrentAbstract,Balance Sheet,Current liabilities,True,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,
 us-gaap:AccountsPayable,Balance Sheet,Accounts Payable,False,us-gaap:LiabilitiesCurrentAbstract,,
 us-gaap:AccountsPayableCurrent,Balance Sheet,Accounts Payable,False,us-gaap:LiabilitiesCurrentAbstract,,
+us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,,,SUM_GROUP
+us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,us-gaap:AssetsNoncurrentAbstract,,SUM_GROUP
+us-gaap:LiabilitiesCurrent,Balance Sheet,Total Current Liabilities,False,us-gaap:LiabilitiesCurrentAbstract,,SUM_GROUP
+us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,,,SUM_GROUP
+us-gaap:OperatingExpenses,Income Statement,Operating Expenses,False,,,SUM_GROUP
+us-gaap:StockholdersEquity,Balance Sheet,Total Equity,False,,,SUM_GROUP

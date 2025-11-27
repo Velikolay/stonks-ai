@@ -209,8 +209,6 @@ async def export_concept_normalization_overrides_to_csv(
             "parent_concept",
             "description",
             "aggregation",
-            "created_at",
-            "updated_at",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
@@ -225,12 +223,6 @@ async def export_concept_normalization_overrides_to_csv(
                     "parent_concept": override.parent_concept or "",
                     "description": override.description or "",
                     "aggregation": override.aggregation or "",
-                    "created_at": (
-                        override.created_at.isoformat() if override.created_at else ""
-                    ),
-                    "updated_at": (
-                        override.updated_at.isoformat() if override.updated_at else ""
-                    ),
                 }
             )
 
