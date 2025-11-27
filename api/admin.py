@@ -40,6 +40,7 @@ class ConceptNormalizationOverrideResponse(BaseModel):
     is_abstract: bool
     parent_concept: Optional[str] = None
     description: Optional[str] = None
+    aggregation: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -65,6 +66,7 @@ async def list_concept_normalization_overrides(
                 is_abstract=override.is_abstract,
                 parent_concept=override.parent_concept,
                 description=override.description,
+                aggregation=override.aggregation,
                 created_at=override.created_at,
                 updated_at=override.updated_at,
             )
@@ -96,6 +98,7 @@ async def create_concept_normalization_override(
             is_abstract=created_override.is_abstract,
             parent_concept=created_override.parent_concept,
             description=created_override.description,
+            aggregation=created_override.aggregation,
             created_at=created_override.created_at,
             updated_at=created_override.updated_at,
         )
@@ -135,6 +138,7 @@ async def update_concept_normalization_override(
             is_abstract=updated_override.is_abstract,
             parent_concept=updated_override.parent_concept,
             description=updated_override.description,
+            aggregation=updated_override.aggregation,
             created_at=updated_override.created_at,
             updated_at=updated_override.updated_at,
         )
@@ -204,6 +208,7 @@ async def export_concept_normalization_overrides_to_csv(
             "is_abstract",
             "parent_concept",
             "description",
+            "aggregation",
             "created_at",
             "updated_at",
         ]
@@ -219,6 +224,7 @@ async def export_concept_normalization_overrides_to_csv(
                     "is_abstract": str(override.is_abstract),
                     "parent_concept": override.parent_concept or "",
                     "description": override.description or "",
+                    "aggregation": override.aggregation or "",
                     "created_at": (
                         override.created_at.isoformat() if override.created_at else ""
                     ),
@@ -307,6 +313,7 @@ async def import_concept_normalization_overrides_from_csv(
                     is_abstract=is_abstract,
                     parent_concept=row.get("parent_concept", "").strip() or None,
                     description=row.get("description", "").strip() or None,
+                    aggregation=row.get("aggregation", "").strip() or None,
                 )
 
                 # Check if record exists
@@ -322,6 +329,7 @@ async def import_concept_normalization_overrides_from_csv(
                             is_abstract=override_create.is_abstract,
                             parent_concept=override_create.parent_concept,
                             description=override_create.description,
+                            aggregation=override_create.aggregation,
                         )
                         filings_db.concept_normalization_overrides.update(
                             override_create.concept,

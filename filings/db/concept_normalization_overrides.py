@@ -49,6 +49,7 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=row.is_abstract,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        aggregation=row.aggregation,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
                     )
@@ -87,6 +88,7 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=row.is_abstract,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        aggregation=row.aggregation,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
                     )
@@ -113,6 +115,7 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=override.is_abstract,
                         parent_concept=override.parent_concept,
                         description=override.description,
+                        aggregation=override.aggregation,
                     )
                     .returning(self.overrides_table)
                 )
@@ -132,6 +135,7 @@ class ConceptNormalizationOverridesOperations:
                     is_abstract=row.is_abstract,
                     parent_concept=row.parent_concept,
                     description=row.description,
+                    aggregation=row.aggregation,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
                 )
@@ -168,6 +172,8 @@ class ConceptNormalizationOverridesOperations:
                     update_values["parent_concept"] = override_update.parent_concept
                 if override_update.description is not None:
                     update_values["description"] = override_update.description
+                if override_update.aggregation is not None:
+                    update_values["aggregation"] = override_update.aggregation
 
                 if not update_values:
                     # No fields to update, return existing record
@@ -200,6 +206,9 @@ class ConceptNormalizationOverridesOperations:
                         is_abstract=row.is_abstract,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        aggregation=row.aggregation,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at,
                     )
                 return None
 

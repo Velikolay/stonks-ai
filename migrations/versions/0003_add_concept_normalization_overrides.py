@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
+        sa.Column("aggregation", sa.String(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -82,6 +83,7 @@ def upgrade() -> None:
             # Convert empty strings to None for nullable fields
             parent_concept = row.get("parent_concept") or None
             description = row.get("description") or None
+            aggregation = row.get("aggregation") or None
 
             rows.append(
                 {
@@ -91,6 +93,7 @@ def upgrade() -> None:
                     "is_abstract": is_abstract,
                     "parent_concept": parent_concept,
                     "description": description,
+                    "aggregation": aggregation,
                 }
             )
 

@@ -41,6 +41,7 @@ def upgrade() -> None:
                 ff.statement,
                 ff.period_end,
                 f.fiscal_year,
+                cno.aggregation,
                 -- Get the latest abstracts for this metric combination
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
@@ -94,9 +95,10 @@ def upgrade() -> None:
             period_end,
             fiscal_year,
             latest_position as position,
+            aggregation,
             '10-K' as source_type
         FROM all_filings_data
-        ORDER BY company_id, statement, period_end DESC, position;
+        ORDER BY company_id, statement, period_end DESC, position
     """
     )
 
