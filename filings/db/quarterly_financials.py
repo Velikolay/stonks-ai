@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, func, or_, select
+from sqlalchemy import MetaData, Table, and_, func, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -117,6 +117,7 @@ class QuarterlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
+                        aggregation=getattr(row, "aggregation", None),
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
                         abstract_concepts=getattr(row, "abstract_concepts", None),
@@ -272,3 +273,15 @@ class QuarterlyFinancialsOperations:
                 f"Error retrieving normalized labels for quarterly financials: {e}"
             )
             return []
+
+    def refresh_materialized_view(self, concurrent: bool = False) -> None:
+        """Refresh the quarterly_financials materialized view."""
+        view_name = "quarterly_financials"
+        with self.engine.connect() as conn:
+            if concurrent:
+                sql = text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name}")
+            else:
+                sql = text(f"REFRESH MATERIALIZED VIEW {view_name}")
+
+            conn.execute(sql)
+            conn.commit()

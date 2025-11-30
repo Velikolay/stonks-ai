@@ -23,6 +23,7 @@ class YearlyFinancial(BaseModel):
     abstracts: Optional[List[str]] = None
     period_end: Optional[date] = None
     fiscal_year: int
+    aggregation: Optional[str] = None
     # Debug fields
     source_type: str  # '10-K'
     concept: Optional[str] = None

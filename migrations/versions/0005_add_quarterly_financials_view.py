@@ -249,84 +249,152 @@ def upgrade() -> None:
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
             GROUP BY k_company_id, k_filing_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position, k_aggregation
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
+        ),
+        normalized_concepts AS (
+            -- Combine all quarterly data
+            SELECT
+                company_id,
+                filing_id,
+                concept,
+                label,
+                normalized_label,
+                value,
+                weight,
+                unit,
+                parsed_axis as axis,
+                parsed_member as member,
+                statement,
+                abstracts,
+                abstract_concepts,
+                period_end,
+                fiscal_year,
+                fiscal_quarter,
+                position,
+                aggregation,
+                source_type
+            FROM quarterly_filings
+
+            UNION ALL
+
+            -- Balance Sheet data is point in time accumulation
+            SELECT
+                company_id,
+                filing_id,
+                concept,
+                label,
+                normalized_label,
+                value,
+                weight,
+                unit,
+                parsed_axis as axis,
+                parsed_member as member,
+                statement,
+                abstracts,
+                abstract_concepts,
+                period_end,
+                fiscal_year,
+                fiscal_quarter,
+                position,
+                aggregation,
+                source_type
+            FROM annual_filings
+            WHERE
+                statement = 'Balance Sheet'
+                OR normalized_label ILIKE 'Shares Outstanding%'
+
+            UNION ALL
+
+            SELECT
+                company_id,
+                filing_id,
+                concept,
+                label,
+                normalized_label,
+                value,
+                weight,
+                unit,
+                parsed_axis as axis,
+                parsed_member as member,
+                statement,
+                abstracts,
+                abstract_concepts,
+                period_end,
+                fiscal_year,
+                fiscal_quarter,
+                position,
+                aggregation,
+                source_type
+            FROM missing_quarters
+            WHERE value IS NOT NULL AND value != 0
+            ORDER BY company_id, statement, period_end DESC, position
+        ),
+        -- Calculate missing group aggregations / totals
+        aggregated_concepts AS (
+            SELECT DISTINCT ON (company_id, statement, normalized_label)
+                *
+            FROM normalized_concepts
+            WHERE aggregation IS NOT NULL
+            ORDER BY company_id, statement, normalized_label, period_end DESC
+        ),
+        missing_aggregated_concepts AS (
+            SELECT
+                nc.company_id,
+                nc.filing_id,
+                ac.concept,
+                ac.label,
+                ac.normalized_label,
+                SUM(nc.value),
+                ac.weight,
+                ac.unit,
+                ac.axis,
+                ac.member,
+                ac.statement,
+                ac.abstracts,
+                ac.abstract_concepts,
+                nc.period_end,
+                nc.fiscal_year,
+                nc.fiscal_quarter,
+                ac.position,
+                ac.aggregation,
+                nc.source_type
+            FROM normalized_concepts nc
+            JOIN aggregated_concepts ac
+            ON
+                nc.company_id = ac.company_id
+                AND nc.statement = ac.statement
+                AND nc.abstracts = ac.abstracts
+            WHERE
+                nc.normalized_label != ac.normalized_label
+                AND NOT EXISTS (
+                    SELECT 1 FROM normalized_concepts nc_check
+                    WHERE nc_check.company_id = nc.company_id
+                        AND nc_check.filing_id = nc.filing_id
+                        AND nc_check.statement = nc.statement
+                        AND nc_check.normalized_label = ac.normalized_label
+                )
+            GROUP BY
+                nc.company_id,
+                nc.filing_id,
+                ac.concept,
+                ac.label,
+                ac.normalized_label,
+                ac.weight,
+                ac.unit,
+                ac.axis,
+                ac.member,
+                ac.statement,
+                ac.abstracts,
+                ac.abstract_concepts,
+                nc.period_end,
+                nc.fiscal_year,
+                nc.fiscal_quarter,
+                ac.position,
+                ac.aggregation,
+                nc.source_type
         )
-
-        -- Combine all quarterly data
-        SELECT
-            company_id,
-            filing_id,
-            concept,
-            label,
-            normalized_label,
-            value,
-            weight,
-            unit,
-            parsed_axis as axis,
-            parsed_member as member,
-            statement,
-            abstracts,
-            abstract_concepts,
-            period_end,
-            fiscal_year,
-            fiscal_quarter,
-            position,
-            aggregation,
-            source_type
-        FROM quarterly_filings
-
+        SELECT * FROM normalized_concepts
         UNION ALL
-
-        -- Balance Sheet data is point in time accumulation
-        SELECT
-            company_id,
-            filing_id,
-            concept,
-            label,
-            normalized_label,
-            value,
-            weight,
-            unit,
-            parsed_axis as axis,
-            parsed_member as member,
-            statement,
-            abstracts,
-            abstract_concepts,
-            period_end,
-            fiscal_year,
-            fiscal_quarter,
-            position,
-            aggregation,
-            source_type
-        FROM annual_filings
-        WHERE
-            statement = 'Balance Sheet'
-            OR normalized_label ILIKE 'Shares Outstanding%'
-
-        UNION ALL
-
-        SELECT
-            company_id,
-            filing_id,
-            concept,
-            label,
-            normalized_label,
-            value,
-            weight,
-            unit,
-            parsed_axis as axis,
-            parsed_member as member,
-            statement,
-            abstracts,
-            abstract_concepts,
-            period_end,
-            fiscal_year,
-            fiscal_quarter,
-            position,
-            aggregation,
-            source_type
-        FROM missing_quarters
-        WHERE value IS NOT NULL AND value != 0
-        ORDER BY company_id, statement, period_end DESC, position;
+        SELECT * FROM missing_aggregated_concepts;
     """
     )
 

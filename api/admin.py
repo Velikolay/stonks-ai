@@ -356,3 +356,82 @@ async def import_concept_normalization_overrides_from_csv(
     except Exception as e:
         logger.error(f"Error importing concept normalization overrides: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class FinancialsRefreshResponse(BaseModel):
+    """Response model for financials refresh operation."""
+
+    message: str
+    view_name: str
+    mode: str
+    success: bool
+
+
+@router.post(
+    "/financials/refresh",
+    response_model=List[FinancialsRefreshResponse],
+)
+async def refresh_financials(
+    concurrent: bool = Query(
+        False, description="Use CONCURRENTLY mode to prevent blocking reads"
+    ),
+) -> List[FinancialsRefreshResponse]:
+    """Refresh both quarterly_financials and yearly_financials materialized views.
+
+    Args:
+        concurrent: If True, uses REFRESH MATERIALIZED VIEW CONCURRENTLY (async). Else, uses standard REFRESH (sync, blocks until complete).
+
+    Returns:
+        List of FinancialsRefreshResponse with refresh status for each view
+    """
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    mode = "CONCURRENTLY" if concurrent else "SYNC"
+    results = []
+
+    # Refresh quarterly financials
+    try:
+        filings_db.quarterly_financials.refresh_materialized_view(concurrent=concurrent)
+        results.append(
+            FinancialsRefreshResponse(
+                message="Successfully refreshed quarterly_financials",
+                view_name="quarterly_financials",
+                mode=mode,
+                success=True,
+            )
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error refreshing quarterly_financials: {e}")
+        results.append(
+            FinancialsRefreshResponse(
+                message=f"Unexpected error: {str(e)}",
+                view_name="quarterly_financials",
+                mode=mode,
+                success=False,
+            )
+        )
+
+    # Refresh yearly financials
+    try:
+        filings_db.yearly_financials.refresh_materialized_view(concurrent=concurrent)
+        results.append(
+            FinancialsRefreshResponse(
+                message="Successfully refreshed yearly_financials",
+                view_name="yearly_financials",
+                mode=mode,
+                success=True,
+            )
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error refreshing yearly_financials: {e}")
+        results.append(
+            FinancialsRefreshResponse(
+                message=f"Unexpected error: {str(e)}",
+                view_name="yearly_financials",
+                mode=mode,
+                success=False,
+            )
+        )
+
+    return results

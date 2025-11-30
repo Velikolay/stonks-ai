@@ -24,6 +24,7 @@ class QuarterlyFinancial(BaseModel):
     member: Optional[str] = None
     abstracts: Optional[List[str]] = None
     period_end: Optional[date] = None
+    aggregation: Optional[str] = None
     # Debug fields
     source_type: str  # '10-Q', or 'calculated'
     concept: Optional[str] = None
