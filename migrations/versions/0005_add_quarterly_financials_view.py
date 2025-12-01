@@ -326,7 +326,6 @@ def upgrade() -> None:
                 source_type
             FROM missing_quarters
             WHERE value IS NOT NULL AND value != 0
-            ORDER BY company_id, statement, period_end DESC, position
         ),
         -- Calculate missing group aggregations / totals
         aggregated_concepts AS (
@@ -394,7 +393,8 @@ def upgrade() -> None:
         )
         SELECT * FROM normalized_concepts
         UNION ALL
-        SELECT * FROM missing_aggregated_concepts;
+        SELECT * FROM missing_aggregated_concepts
+        ORDER BY company_id, statement, position, period_end DESC;
     """
     )
 

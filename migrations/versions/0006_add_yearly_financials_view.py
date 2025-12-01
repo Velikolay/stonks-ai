@@ -99,7 +99,6 @@ def upgrade() -> None:
                 aggregation,
                 '10-K' as source_type
             FROM all_filings_data
-            ORDER BY company_id, statement, period_end DESC, position
         ),
         -- Calculate missing group aggregations / totals
         aggregated_concepts AS (
@@ -165,7 +164,8 @@ def upgrade() -> None:
         )
         SELECT * FROM normalized_concepts
         UNION ALL
-        SELECT * FROM missing_aggregated_concepts;
+        SELECT * FROM missing_aggregated_concepts
+        ORDER BY company_id, statement, position, period_end DESC;
     """
     )
 
