@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from filings import FilingsDatabase
 from filings.models.company import Company
 from filings.models.filing import Filing
-from filings.models.financial_fact import FinancialFact
+from filings.models.financial_fact import FinancialFactCreate
 from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 
@@ -92,16 +92,18 @@ class TestXBRLFilingsLoader:
         mock_filing.url = "https://example.com/filing"
 
         # Mock parser returning facts
-        mock_facts = [Mock(spec=FinancialFact), Mock(spec=FinancialFact)]
+        mock_fact1 = Mock(spec=FinancialFactCreate)
+        mock_fact1.period_end = date(2024, 3, 31)
+        mock_fact2 = Mock(spec=FinancialFactCreate)
+        mock_fact2.period_end = date(2024, 3, 31)
+        mock_facts = [mock_fact1, mock_fact2]
         loader.parser.parse_filing = Mock(return_value=mock_facts)
 
         # Mock database insertions
         mock_db_filing = Mock(spec=Filing)
         mock_db_filing.id = 1
         mock_database.filings.insert_filing.return_value = mock_db_filing
-        mock_database.financial_facts.insert_financial_facts_batch.return_value = (
-            mock_facts
-        )
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = [1, 2]
 
         result = loader._load_single_filing(mock_filing, 1, override=False)
 
@@ -132,14 +134,14 @@ class TestXBRLFilingsLoader:
         mock_filing_q2.period_of_report = "2024-06-30"  # Q2 end date
         mock_filing_q2.url = "https://example.com/filing"
 
-        mock_facts = [Mock(spec=FinancialFact)]
+        mock_fact = Mock(spec=FinancialFactCreate)
+        mock_fact.period_end = date(2024, 6, 30)
+        mock_facts = [mock_fact]
         loader.parser.parse_filing = Mock(return_value=mock_facts)
         mock_db_filing = Mock(spec=Filing)
         mock_db_filing.id = 1
         mock_database.filings.insert_filing.return_value = mock_db_filing
-        mock_database.financial_facts.insert_financial_facts_batch.return_value = (
-            mock_facts
-        )
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = [1]
 
         result = loader._load_single_filing(mock_filing_q2, 1, override=False)
         assert result[0] == 1
@@ -156,6 +158,13 @@ class TestXBRLFilingsLoader:
         mock_filing_q4.filing_date = "2024-12-15"
         mock_filing_q4.period_of_report = "2024-12-31"  # Q4 end date
         mock_filing_q4.url = "https://example.com/filing"
+
+        mock_fact_q4 = Mock(spec=FinancialFactCreate)
+        mock_fact_q4.period_end = date(2024, 12, 31)
+        mock_facts_q4 = [mock_fact_q4]
+        loader.parser.parse_filing = Mock(return_value=mock_facts_q4)
+        mock_database.filings.insert_filing.return_value = mock_db_filing
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = [1]
 
         result = loader._load_single_filing(mock_filing_q4, 1, override=False)
         assert result[0] == 1
@@ -208,16 +217,18 @@ class TestXBRLFilingsLoader:
         mock_filing.url = "https://example.com/filing"
 
         # Mock parser returning facts
-        mock_facts = [Mock(spec=FinancialFact), Mock(spec=FinancialFact)]
+        mock_fact1 = Mock(spec=FinancialFactCreate)
+        mock_fact1.period_end = date(2024, 3, 31)
+        mock_fact2 = Mock(spec=FinancialFactCreate)
+        mock_fact2.period_end = date(2024, 3, 31)
+        mock_facts = [mock_fact1, mock_fact2]
         loader.parser.parse_filing = Mock(return_value=mock_facts)
 
         # Mock database operations - use delete and insert methods
         mock_db_filing = Mock(spec=Filing)
         mock_db_filing.id = 2  # New filing ID after override
         mock_database.filings.insert_filing.return_value = mock_db_filing
-        mock_database.financial_facts.insert_financial_facts_batch.return_value = (
-            mock_facts
-        )
+        mock_database.financial_facts.insert_financial_facts_batch.return_value = [1, 2]
         mock_database.financial_facts.delete_facts_by_filing_id.return_value = True
         mock_database.filings.delete_filing.return_value = True
 

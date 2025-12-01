@@ -136,6 +136,25 @@ class QuarterlyFinancialsOperations:
         filter_params = QuarterlyFinancialsFilter(company_id=company_id)
         return self.get_quarterly_financials(filter_params)
 
+    def get_metrics_by_company_and_year(
+        self, company_id: int, fiscal_year: int
+    ) -> List[QuarterlyFinancial]:
+        """Get quarterly metrics for a specific company and fiscal year.
+
+        Args:
+            company_id: Company ID
+            fiscal_year: Fiscal year to filter by
+
+        Returns:
+            List of quarterly financial metrics
+        """
+        filter_params = QuarterlyFinancialsFilter(
+            company_id=company_id,
+            fiscal_year_start=fiscal_year,
+            fiscal_year_end=fiscal_year,
+        )
+        return self.get_quarterly_financials(filter_params)
+
     def get_metrics_by_label(
         self, company_id: int, label: str
     ) -> List[QuarterlyFinancial]:

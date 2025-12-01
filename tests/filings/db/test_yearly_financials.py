@@ -37,6 +37,7 @@ class TestYearlyFinancialsOperations:
                 company_test_data = [
                     YearlyFinancial(
                         company_id=1,
+                        filing_id=1,
                         fiscal_year=2023,
                         label="Revenue",
                         normalized_label="Revenue",
@@ -48,6 +49,7 @@ class TestYearlyFinancialsOperations:
                     ),
                     YearlyFinancial(
                         company_id=1,
+                        filing_id=2,
                         fiscal_year=2024,
                         label="Revenue",
                         normalized_label="Revenue",
@@ -63,6 +65,7 @@ class TestYearlyFinancialsOperations:
                 year_test_data = [
                     YearlyFinancial(
                         company_id=1,
+                        filing_id=1,
                         fiscal_year=2023,
                         label="Revenue",
                         normalized_label="Revenue",
@@ -78,6 +81,7 @@ class TestYearlyFinancialsOperations:
                 statement_test_data = [
                     YearlyFinancial(
                         company_id=1,
+                        filing_id=1,
                         fiscal_year=2023,
                         label="Revenue",
                         normalized_label="Revenue",

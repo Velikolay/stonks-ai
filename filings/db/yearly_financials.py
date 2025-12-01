@@ -123,6 +123,17 @@ class YearlyFinancialsOperations:
         filter_params = YearlyFinancialsFilter(company_id=company_id)
         return self.get_yearly_financials(filter_params)
 
+    def get_metrics_by_company_and_year(
+        self, company_id: int, fiscal_year: int
+    ) -> List[YearlyFinancial]:
+        """Get yearly metrics for a specific company and fiscal year."""
+        filter_params = YearlyFinancialsFilter(
+            company_id=company_id,
+            fiscal_year_start=fiscal_year,
+            fiscal_year_end=fiscal_year,
+        )
+        return self.get_yearly_financials(filter_params)
+
     def get_metrics_by_label(
         self, company_id: int, label: str
     ) -> List[YearlyFinancial]:

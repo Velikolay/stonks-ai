@@ -21,7 +21,9 @@ class TestFinancialFactOperations:
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
         filing = db.filings.get_or_create_filing(sample_filing)
+        sample_financial_fact.company_id = company.id
         sample_financial_fact.filing_id = filing.id
+        sample_financial_fact.form_type = filing.form_type
 
         # Insert financial fact
         fact_id = db.financial_facts.insert_financial_fact(sample_financial_fact)
@@ -53,7 +55,9 @@ class TestFinancialFactOperations:
         facts_data = [
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -65,7 +69,9 @@ class TestFinancialFactOperations:
             ),
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
                 is_abstract=False,
@@ -77,7 +83,9 @@ class TestFinancialFactOperations:
             ),
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Assets",
                 label="Total Assets",
                 is_abstract=False,
@@ -120,7 +128,9 @@ class TestFinancialFactOperations:
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
                 parent_key=abstract_key,
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -133,7 +143,9 @@ class TestFinancialFactOperations:
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
                 parent_key=abstract_key,
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
                 is_abstract=False,
@@ -145,7 +157,9 @@ class TestFinancialFactOperations:
             ),
             FinancialFactCreate(
                 key=abstract_key,
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:IncomeStatementAbstract",
                 label="Income Statement",
                 is_abstract=True,
@@ -190,7 +204,9 @@ class TestFinancialFactOperations:
         facts_data = [
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -202,7 +218,9 @@ class TestFinancialFactOperations:
             ),
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
                 is_abstract=False,
@@ -264,7 +282,9 @@ class TestFinancialFactOperations:
         # Create revenue facts for both filings
         fact1 = FinancialFact(
             id=1,
+            company_id=company.id,
             filing_id=filing1_obj.id,
+            form_type=filing1_obj.form_type,
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -277,7 +297,9 @@ class TestFinancialFactOperations:
 
         fact2 = FinancialFact(
             id=2,
+            company_id=company.id,
             filing_id=filing2_obj.id,
+            form_type=filing2_obj.form_type,
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -323,7 +345,9 @@ class TestFinancialFactOperations:
 
             fact = FinancialFact(
                 id=1,
+                company_id=company.id,
                 filing_id=filing_obj.id,
+                form_type=filing_obj.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -350,7 +374,9 @@ class TestFinancialFactOperations:
         # Valid financial fact
         fact = FinancialFactCreate(
             key=str(uuid.uuid4()),
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -372,7 +398,9 @@ class TestFinancialFactOperations:
         # Valid financial fact abstract
         fact_abstract = FinancialFactCreate(
             key=str(uuid.uuid4()),
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=True,
@@ -386,7 +414,9 @@ class TestFinancialFactOperations:
         # Financial fact with ID (complete model)
         complete_fact = FinancialFact(
             id=1,
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -406,7 +436,9 @@ class TestFinancialFactOperations:
         # Financial fact abstract with ID (complete model)
         complete_fact_abstract = FinancialFact(
             id=1,
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=True,
@@ -422,7 +454,9 @@ class TestFinancialFactOperations:
         with pytest.raises(ValidationError) as exc:
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=1,
                 filing_id=1,
+                form_type="10-Q",
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -439,7 +473,9 @@ class TestFinancialFactOperations:
             FinancialFact(
                 id=1,
                 parent_id=None,
+                company_id=1,
                 filing_id=1,
+                form_type="10-Q",
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -462,7 +498,9 @@ class TestFinancialFactOperations:
         # Create fact with optional fields
         fact_data = FinancialFact(
             id=0,
+            company_id=company.id,
             filing_id=filing.id,
+            form_type=filing.form_type,
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -496,7 +534,9 @@ class TestFinancialFactOperations:
         # Test with YTD period
         fact_data_ytd = FinancialFact(
             id=0,
+            company_id=company.id,
             filing_id=filing.id,
+            form_type=filing.form_type,
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,
@@ -512,7 +552,9 @@ class TestFinancialFactOperations:
         # Test with Q period
         fact_data_q = FinancialFact(
             id=0,
+            company_id=company.id,
             filing_id=filing.id,
+            form_type=filing.form_type,
             concept="us-gaap:NetIncomeLoss",
             label="Net Income (Loss)",
             is_abstract=False,
@@ -528,7 +570,9 @@ class TestFinancialFactOperations:
         # Test with Q period for assets
         fact_data_q_assets = FinancialFact(
             id=0,
+            company_id=company.id,
             filing_id=filing.id,
+            form_type=filing.form_type,
             concept="us-gaap:Assets",
             label="Total Assets",
             is_abstract=False,
@@ -573,7 +617,9 @@ class TestFinancialFactOperations:
         # Test FinancialFactCreate without period field should work (for balance sheet items)
         fact_create = FinancialFactCreate(
             key=str(uuid.uuid4()),
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Assets",
             label="Total Assets",
             is_abstract=False,
@@ -588,7 +634,9 @@ class TestFinancialFactOperations:
         # Test FinancialFact without period field should work
         fact = FinancialFact(
             id=1,
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Assets",
             label="Total Assets",
             is_abstract=False,
@@ -603,7 +651,9 @@ class TestFinancialFactOperations:
         # Test FinancialFact with period field should work
         fact_with_period = FinancialFact(
             id=1,
+            company_id=1,
             filing_id=1,
+            form_type="10-Q",
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,

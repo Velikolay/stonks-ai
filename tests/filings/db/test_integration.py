@@ -47,7 +47,9 @@ class TestDatabaseIntegration:
         facts_data = [
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -59,7 +61,9 @@ class TestDatabaseIntegration:
             ),
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:NetIncomeLoss",
                 label="Net Income (Loss)",
                 is_abstract=False,
@@ -124,9 +128,13 @@ class TestDatabaseIntegration:
 
         # Create financial facts for each filing
         for filing in filings:
+            # Find the company for this filing
+            company = next(c for c in companies if c.id == filing.company_id)
             fact_data = FinancialFact(
                 id=1,
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -215,7 +223,9 @@ class TestDatabaseIntegration:
         fact_id = db.financial_facts.insert_financial_fact(
             FinancialFact(
                 id=0,
+                company_id=company.id,
                 filing_id=filing.id,
+                form_type=filing.form_type,
                 concept="us-gaap:Revenues",
                 label="Revenues",
                 is_abstract=False,
@@ -260,7 +270,9 @@ class TestDatabaseIntegration:
         # Test inserting financial fact with non-existent filing
         fact_data = FinancialFact(
             id=0,
+            company_id=1,  # Required field, but won't matter since filing doesn't exist
             filing_id=99999,  # Non-existent filing
+            form_type="10-Q",  # Required field
             concept="us-gaap:Revenues",
             label="Revenues",
             is_abstract=False,

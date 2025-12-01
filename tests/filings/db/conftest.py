@@ -175,7 +175,9 @@ def sample_financial_fact() -> FinancialFact:
     """Sample financial fact data for testing."""
     return FinancialFact(
         id=0,
+        company_id=1,  # Will be set in tests
         filing_id=1,  # Will be set in tests
+        form_type="10-Q",
         concept="us-gaap:Revenues",
         label="Revenues",
         is_abstract=False,
