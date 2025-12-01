@@ -115,7 +115,7 @@ def upgrade() -> None:
                 ac.concept,
                 ac.label,
                 ac.normalized_label,
-                SUM(nc.value),
+                SUM(nc.value * nc.weight),
                 ac.unit,
                 ac.weight,
                 ac.axis,
