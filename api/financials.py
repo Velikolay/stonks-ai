@@ -64,6 +64,19 @@ class NormalizedLabelResponse(BaseModel):
     count: int
 
 
+class FinancialFilingResponse(BaseModel):
+    """Response model for financial filings."""
+
+    source: str
+    filing_number: str
+    form_type: str
+    filing_date: str
+    fiscal_period_end: str
+    fiscal_year: int
+    fiscal_quarter: int
+    public_url: Optional[str] = None
+
+
 @router.get(
     "/", response_model=List[FinancialMetricResponse], response_model_exclude_none=True
 )
@@ -296,4 +309,55 @@ async def get_normalized_labels(
         raise
     except Exception as e:
         logger.error(f"Error retrieving normalized labels: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/filings",
+    response_model=List[FinancialFilingResponse],
+    response_model_exclude_none=True,
+)
+async def get_filings(
+    ticker: str = Query(..., description="Company ticker symbol"),
+    form_type: Optional[str] = Query(
+        None,
+        description="Filter by form type (e.g., '10-Q', '10-K'). If None, returns all filings.",
+    ),
+) -> List[FinancialFilingResponse]:
+    """Get filings for a company by ticker, optionally filtered by form type."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        # Get company by ticker
+        company = filings_db.companies.get_company_by_ticker(ticker)
+        if not company:
+            raise HTTPException(
+                status_code=404, detail=f"Company with ticker '{ticker}' not found"
+            )
+
+        # Get filings for the company, optionally filtered by form_type
+        filings = filings_db.filings.get_filings_by_company(company.id, form_type)
+
+        # Convert to response format
+        response_filings = []
+        for filing in filings:
+            response_filing = FinancialFilingResponse(
+                source=filing.source,
+                filing_number=filing.filing_number,
+                form_type=filing.form_type,
+                filing_date=filing.filing_date.isoformat(),
+                fiscal_period_end=filing.fiscal_period_end.isoformat(),
+                fiscal_year=filing.fiscal_year,
+                fiscal_quarter=filing.fiscal_quarter,
+                public_url=filing.public_url,
+            )
+            response_filings.append(response_filing)
+
+        return response_filings
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving filings: {e}")
         raise HTTPException(status_code=500, detail=str(e))

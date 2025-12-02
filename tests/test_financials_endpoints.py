@@ -1,6 +1,10 @@
 """Tests for financials endpoints."""
 
+from datetime import date
 from unittest.mock import Mock, patch
+
+import pytest
+from fastapi.testclient import TestClient
 
 
 class TestFinancialsEndpoints:
@@ -241,3 +245,164 @@ class TestFinancialsEndpoints:
         # Test that the mock is set up correctly
         company = mock_filings_db.companies.get_company_by_ticker("INVALID")
         assert company is None
+
+
+@pytest.fixture
+def client() -> TestClient:
+    """Create a test client for the FastAPI app."""
+    from app import app
+
+    return TestClient(app)
+
+
+class TestGetFilingsEndpoint:
+    """Test the get_filings endpoint."""
+
+    @patch("api.financials.filings_db")
+    def test_get_filings_all_form_types(self, mock_filings_db, client):
+        """Test getting all filings for a company."""
+        # Mock company
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_company.ticker = "AAPL"
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock filings
+        from filings.models.filing import Filing
+
+        mock_filing1 = Filing(
+            id=1,
+            company_id=1,
+            source="SEC",
+            filing_number="0000320193-25-000073",
+            form_type="10-Q",
+            filing_date=date(2024, 12, 19),
+            fiscal_period_end=date(2024, 9, 28),
+            fiscal_year=2024,
+            fiscal_quarter=4,
+            public_url="https://example.com/filing1",
+        )
+        mock_filing2 = Filing(
+            id=2,
+            company_id=1,
+            source="SEC",
+            filing_number="0000320193-25-000074",
+            form_type="10-K",
+            filing_date=date(2024, 11, 1),
+            fiscal_period_end=date(2024, 9, 28),
+            fiscal_year=2024,
+            fiscal_quarter=4,
+            public_url="https://example.com/filing2",
+        )
+        mock_filings_db.filings.get_filings_by_company.return_value = [
+            mock_filing1,
+            mock_filing2,
+        ]
+
+        response = client.get("/financials/filings?ticker=AAPL")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["form_type"] == "10-Q"
+        assert data[0]["filing_date"] == "2024-12-19"
+        assert data[0]["fiscal_period_end"] == "2024-09-28"
+        assert data[1]["form_type"] == "10-K"
+        assert data[1]["filing_date"] == "2024-11-01"
+        assert data[1]["fiscal_period_end"] == "2024-09-28"
+        mock_filings_db.companies.get_company_by_ticker.assert_called_once_with("AAPL")
+        mock_filings_db.filings.get_filings_by_company.assert_called_once_with(1, None)
+
+    @patch("api.financials.filings_db")
+    def test_get_filings_filtered_by_form_type(self, mock_filings_db, client):
+        """Test getting filings filtered by form type."""
+        # Mock company
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_company.ticker = "AAPL"
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock filings filtered by form_type
+        from filings.models.filing import Filing
+
+        mock_filing = Filing(
+            id=1,
+            company_id=1,
+            source="SEC",
+            filing_number="0000320193-25-000073",
+            form_type="10-Q",
+            filing_date=date(2024, 12, 19),
+            fiscal_period_end=date(2024, 9, 28),
+            fiscal_year=2024,
+            fiscal_quarter=4,
+            public_url="https://example.com/filing1",
+        )
+        mock_filings_db.filings.get_filings_by_company.return_value = [mock_filing]
+
+        response = client.get("/financials/filings?ticker=AAPL&form_type=10-Q")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["form_type"] == "10-Q"
+        assert data[0]["filing_number"] == "0000320193-25-000073"
+        assert data[0]["filing_date"] == "2024-12-19"
+        assert data[0]["fiscal_period_end"] == "2024-09-28"
+        assert data[0]["fiscal_year"] == 2024
+        assert data[0]["fiscal_quarter"] == 4
+        mock_filings_db.companies.get_company_by_ticker.assert_called_once_with("AAPL")
+        mock_filings_db.filings.get_filings_by_company.assert_called_once_with(
+            1, "10-Q"
+        )
+
+    @patch("api.financials.filings_db")
+    def test_get_filings_company_not_found(self, mock_filings_db, client):
+        """Test getting filings when company is not found."""
+        mock_filings_db.companies.get_company_by_ticker.return_value = None
+
+        response = client.get("/financials/filings?ticker=INVALID")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+        mock_filings_db.companies.get_company_by_ticker.assert_called_once_with(
+            "INVALID"
+        )
+        mock_filings_db.filings.get_filings_by_company.assert_not_called()
+
+    @patch("api.financials.filings_db", None)
+    def test_get_filings_database_not_initialized(self, client):
+        """Test getting filings when database is not initialized."""
+        response = client.get("/financials/filings?ticker=AAPL")
+
+        assert response.status_code == 500
+        assert "not initialized" in response.json()["detail"].lower()
+
+    @patch("api.financials.filings_db")
+    def test_get_filings_empty_result(self, mock_filings_db, client):
+        """Test getting filings when company has no filings."""
+        # Mock company
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_company.ticker = "AAPL"
+        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+
+        # Mock empty filings list
+        mock_filings_db.filings.get_filings_by_company.return_value = []
+
+        response = client.get("/financials/filings?ticker=AAPL")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 0
+        assert isinstance(data, list)
+        mock_filings_db.companies.get_company_by_ticker.assert_called_once_with("AAPL")
+        mock_filings_db.filings.get_filings_by_company.assert_called_once_with(1, None)
+
+    @patch("api.financials.filings_db")
+    def test_get_filings_missing_ticker(self, mock_filings_db, client):
+        """Test getting filings without ticker parameter."""
+        response = client.get("/financials/filings")
+
+        assert response.status_code == 422  # Validation error
+        mock_filings_db.companies.get_company_by_ticker.assert_not_called()
+        mock_filings_db.filings.get_filings_by_company.assert_not_called()

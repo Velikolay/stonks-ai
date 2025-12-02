@@ -25,8 +25,8 @@ class FinancialFactBase(BaseModel):
     label: str
     period_end: date
     is_abstract: bool
-    value: Optional[Decimal] = Field(None, decimal_places=2)
-    comparative_value: Optional[Decimal] = Field(None, decimal_places=2)
+    value: Optional[Decimal] = Field(None, decimal_places=4)
+    comparative_value: Optional[Decimal] = Field(None, decimal_places=4)
     weight: Optional[Decimal] = None
     unit: Optional[str] = None
     axis: Optional[str] = None
