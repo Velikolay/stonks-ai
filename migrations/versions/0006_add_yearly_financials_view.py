@@ -41,7 +41,6 @@ def upgrade() -> None:
                 ff.statement,
                 ff.period_end,
                 f.fiscal_year,
-                cno.aggregation,
                 -- Get the latest abstracts for this metric combination
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
@@ -96,75 +95,10 @@ def upgrade() -> None:
                 period_end,
                 fiscal_year,
                 latest_position as position,
-                aggregation,
                 '10-K' as source_type
             FROM all_filings_data
-        ),
-        -- Calculate missing group aggregations / totals
-        aggregated_concepts AS (
-            SELECT DISTINCT ON (company_id, statement, normalized_label)
-                *
-            FROM normalized_concepts
-            WHERE aggregation IS NOT NULL
-            ORDER BY company_id, statement, normalized_label, period_end DESC
-        ),
-        missing_aggregated_concepts AS (
-            SELECT
-                nc.company_id,
-                nc.filing_id,
-                ac.concept,
-                ac.label,
-                ac.normalized_label,
-                SUM(nc.value * nc.weight),
-                ac.unit,
-                ac.weight,
-                ac.axis,
-                ac.member,
-                ac.statement,
-                ac.abstracts,
-                ac.abstract_concepts,
-                nc.period_end,
-                nc.fiscal_year,
-                ac.position,
-                ac.aggregation,
-                nc.source_type
-            FROM normalized_concepts nc
-            JOIN aggregated_concepts ac
-            ON
-                nc.company_id = ac.company_id
-                AND nc.statement = ac.statement
-                AND nc.abstracts = ac.abstracts
-            WHERE
-                nc.normalized_label != ac.normalized_label
-                AND NOT EXISTS (
-                    SELECT 1 FROM normalized_concepts nc_check
-                    WHERE nc_check.company_id = nc.company_id
-                        AND nc_check.filing_id = nc.filing_id
-                        AND nc_check.statement = nc.statement
-                        AND nc_check.normalized_label = ac.normalized_label
-                )
-            GROUP BY
-                nc.company_id,
-                nc.filing_id,
-                ac.concept,
-                ac.label,
-                ac.normalized_label,
-                ac.unit,
-                ac.weight,
-                ac.axis,
-                ac.member,
-                ac.statement,
-                ac.abstracts,
-                ac.abstract_concepts,
-                nc.period_end,
-                nc.fiscal_year,
-                ac.position,
-                ac.aggregation,
-                nc.source_type
         )
         SELECT * FROM normalized_concepts
-        UNION ALL
-        SELECT * FROM missing_aggregated_concepts
         ORDER BY company_id, statement, position, period_end DESC;
     """
     )

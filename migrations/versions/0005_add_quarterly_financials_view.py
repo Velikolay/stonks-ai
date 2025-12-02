@@ -47,7 +47,6 @@ def upgrade() -> None:
                 ff.form_type as source_type,
                 f.fiscal_year,
                 f.fiscal_quarter,
-                cno.aggregation,
                 -- Get the latest abstracts, position, and weight for this metric
                 FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
                 FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
@@ -107,7 +106,6 @@ def upgrade() -> None:
                 latest_position as position,
                 period_end,
                 period,
-                aggregation,
                 source_type
             FROM all_filings_data
             WHERE source_type = '10-Q'
@@ -155,7 +153,6 @@ def upgrade() -> None:
                 abstract_concepts,
                 period_end,
                 position,
-                aggregation,
                 source_type
             FROM quarterly_filings_with_prev
         ),
@@ -181,7 +178,6 @@ def upgrade() -> None:
                 period_end,
                 normalized_label,
                 latest_position as position,
-                aggregation,
                 source_type
             FROM all_filings_data
             WHERE source_type = '10-K'
@@ -207,7 +203,6 @@ def upgrade() -> None:
                 a.label as k_label,
                 a.normalized_label as k_normalized_label,
                 a.position as k_position,
-                a.aggregation as k_aggregation,
                 ROW_NUMBER() OVER (
                     PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
                     ORDER BY q.period_end DESC
@@ -240,14 +235,13 @@ def upgrade() -> None:
                 k_period_end as period_end,
                 k_normalized_label as normalized_label,
                 k_position as position,
-                k_aggregation as aggregation,
                 'calculated' as source_type
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_filing_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position, k_aggregation
+            GROUP BY k_company_id, k_filing_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         ),
         normalized_concepts AS (
@@ -270,7 +264,6 @@ def upgrade() -> None:
                 fiscal_year,
                 fiscal_quarter,
                 position,
-                aggregation,
                 source_type
             FROM quarterly_filings
 
@@ -295,7 +288,6 @@ def upgrade() -> None:
                 fiscal_year,
                 fiscal_quarter,
                 position,
-                aggregation,
                 source_type
             FROM annual_filings
             WHERE
@@ -322,78 +314,11 @@ def upgrade() -> None:
                 fiscal_year,
                 fiscal_quarter,
                 position,
-                aggregation,
                 source_type
             FROM missing_quarters
             WHERE value IS NOT NULL AND value != 0
-        ),
-        -- Calculate missing group aggregations / totals
-        aggregated_concepts AS (
-            SELECT DISTINCT ON (company_id, statement, normalized_label)
-                *
-            FROM normalized_concepts
-            WHERE aggregation IS NOT NULL
-            ORDER BY company_id, statement, normalized_label, period_end DESC
-        ),
-        missing_aggregated_concepts AS (
-            SELECT
-                nc.company_id,
-                nc.filing_id,
-                ac.concept,
-                ac.label,
-                ac.normalized_label,
-                SUM(nc.value * nc.weight),
-                ac.weight,
-                ac.unit,
-                ac.axis,
-                ac.member,
-                ac.statement,
-                ac.abstracts,
-                ac.abstract_concepts,
-                nc.period_end,
-                nc.fiscal_year,
-                nc.fiscal_quarter,
-                ac.position,
-                ac.aggregation,
-                nc.source_type
-            FROM normalized_concepts nc
-            JOIN aggregated_concepts ac
-            ON
-                nc.company_id = ac.company_id
-                AND nc.statement = ac.statement
-                AND nc.abstracts = ac.abstracts
-            WHERE
-                nc.normalized_label != ac.normalized_label
-                AND NOT EXISTS (
-                    SELECT 1 FROM normalized_concepts nc_check
-                    WHERE nc_check.company_id = nc.company_id
-                        AND nc_check.filing_id = nc.filing_id
-                        AND nc_check.statement = nc.statement
-                        AND nc_check.normalized_label = ac.normalized_label
-                )
-            GROUP BY
-                nc.company_id,
-                nc.filing_id,
-                ac.concept,
-                ac.label,
-                ac.normalized_label,
-                ac.weight,
-                ac.unit,
-                ac.axis,
-                ac.member,
-                ac.statement,
-                ac.abstracts,
-                ac.abstract_concepts,
-                nc.period_end,
-                nc.fiscal_year,
-                nc.fiscal_quarter,
-                ac.position,
-                ac.aggregation,
-                nc.source_type
         )
         SELECT * FROM normalized_concepts
-        UNION ALL
-        SELECT * FROM missing_aggregated_concepts
         ORDER BY company_id, statement, position, period_end DESC;
     """
     )

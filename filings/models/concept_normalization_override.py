@@ -15,7 +15,6 @@ class ConceptNormalizationOverrideBase(BaseModel):
     is_abstract: bool
     parent_concept: Optional[str] = None
     description: Optional[str] = None
-    aggregation: Optional[str] = None
 
 
 class ConceptNormalizationOverrideCreate(ConceptNormalizationOverrideBase):
@@ -31,7 +30,6 @@ class ConceptNormalizationOverrideUpdate(BaseModel):
     is_abstract: Optional[bool] = None
     parent_concept: Optional[str] = None
     description: Optional[str] = None
-    aggregation: Optional[str] = None
 
 
 class ConceptNormalizationOverride(ConceptNormalizationOverrideBase):

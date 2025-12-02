@@ -40,7 +40,6 @@ def mock_override():
     mock.is_abstract = False
     mock.parent_concept = None
     mock.description = "Test description"
-    mock.aggregation = None
     mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
     mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
     return mock
@@ -145,7 +144,6 @@ class TestAdminEndpoints:
         updated_mock.is_abstract = False
         updated_mock.parent_concept = None
         updated_mock.description = "Updated description"
-        updated_mock.aggregation = None
         updated_mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
         updated_mock.updated_at = datetime(2024, 1, 2, 0, 0, 0)
 
@@ -269,7 +267,6 @@ class TestAdminEndpoints:
         mock_created.is_abstract = False
         mock_created.parent_concept = None
         mock_created.description = "Test description"
-        mock_created.aggregation = None
         mock_created.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_created.updated_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_filings_db.concept_normalization_overrides.create.return_value = (
@@ -329,7 +326,6 @@ class TestAdminEndpoints:
         mock_updated.is_abstract = False
         mock_updated.parent_concept = None
         mock_updated.description = None
-        mock_updated.aggregation = None
         mock_updated.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_updated.updated_at = datetime(2024, 1, 2, 0, 0, 0)
         mock_filings_db.concept_normalization_overrides.update.return_value = (
@@ -511,7 +507,6 @@ class TestAdminEndpoints:
             mock.is_abstract = override.is_abstract
             mock.parent_concept = override.parent_concept
             mock.description = override.description
-            mock.aggregation = getattr(override, "aggregation", None)
             mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
             mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
             return mock

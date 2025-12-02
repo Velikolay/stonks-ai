@@ -104,7 +104,6 @@ class YearlyFinancialsOperations:
                         abstracts=row.abstracts,
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
-                        aggregation=getattr(row, "aggregation", None),
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
                         abstract_concepts=getattr(row, "abstract_concepts", None),

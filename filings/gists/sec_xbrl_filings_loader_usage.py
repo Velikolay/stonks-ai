@@ -24,9 +24,9 @@ def example_load_aapl_filings():
     try:
         # Process filings
         result = loader.load_company_filings(
-            ticker="NVDA",
-            form="10-K",
-            limit=20,
+            ticker="NFLX",
+            form="10-Q",
+            limit=50,
         )
 
         if "error" in result:

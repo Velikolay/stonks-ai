@@ -51,7 +51,6 @@ class FinancialMetricResponse(BaseModel):
     values: List[FinancialMetricValue]
     concept: Optional[str] = None
     abstract_concepts: Optional[List[str]] = None
-    aggregation: Optional[str] = None
 
 
 class NormalizedLabelResponse(BaseModel):
@@ -193,7 +192,6 @@ async def get_financials(
                     "weight": metric.weight,
                     "unit": metric.unit,
                     "abstracts": metric.abstracts,
-                    "aggregation": getattr(metric, "aggregation", None),
                 }
                 if debug:
                     group_data["concept"] = getattr(metric, "concept", None)
@@ -236,7 +234,6 @@ async def get_financials(
                 abstracts=group_data["abstracts"],
                 abstract_concepts=group_data["abstract_concepts"] if debug else None,
                 values=group_data["values"],
-                aggregation=group_data["aggregation"],
             )
             response_metrics.append(response_metric)
 

@@ -117,7 +117,6 @@ class QuarterlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstracts=row.abstracts,
                         period_end=row.period_end,
-                        aggregation=getattr(row, "aggregation", None),
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
                         abstract_concepts=getattr(row, "abstract_concepts", None),
