@@ -53,6 +53,7 @@ class FinancialFactCreate(FinancialFactBase):
     # after db insert these are replaced with auto-generated ids
     key: str
     parent_key: Optional[str] = None
+    abstract_key: Optional[str] = None
 
 
 class FinancialFact(FinancialFactBase):
@@ -60,5 +61,6 @@ class FinancialFact(FinancialFactBase):
 
     id: int
     parent_id: Optional[int] = None
+    abstract_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

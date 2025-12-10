@@ -57,7 +57,7 @@ def upgrade() -> None:
             LEFT JOIN abstract_normalization an
             ON
                 ff.filing_id = an.filing_id
-                AND ff.parent_id = an.id
+                AND ff.abstract_id = an.id
             LEFT JOIN concept_normalization_overrides cno
             ON
                 ff.statement = cno.statement

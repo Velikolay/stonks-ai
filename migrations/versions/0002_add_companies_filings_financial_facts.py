@@ -75,6 +75,7 @@ def upgrade() -> None:
         sa.Column("period", sa.Enum("YTD", "Q", name="period_type"), nullable=True),
         sa.Column("position", sa.Integer(), nullable=True),
         sa.Column("parent_id", sa.BigInteger(), nullable=True),
+        sa.Column("abstract_id", sa.BigInteger(), nullable=True),
         sa.ForeignKeyConstraint(
             ["filing_id"],
             ["filings.id"],
@@ -85,6 +86,10 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["parent_id"],
+            ["financial_facts.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["abstract_id"],
             ["financial_facts.id"],
         ),
         sa.PrimaryKeyConstraint("id"),

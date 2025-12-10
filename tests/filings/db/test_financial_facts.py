@@ -127,7 +127,7 @@ class TestFinancialFactOperations:
         facts_data = [
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
-                parent_key=abstract_key,
+                abstract_key=abstract_key,
                 company_id=company.id,
                 filing_id=filing.id,
                 form_type=filing.form_type,
@@ -142,7 +142,7 @@ class TestFinancialFactOperations:
             ),
             FinancialFactCreate(
                 key=str(uuid.uuid4()),
-                parent_key=abstract_key,
+                abstract_key=abstract_key,
                 company_id=company.id,
                 filing_id=filing.id,
                 form_type=filing.form_type,
@@ -190,8 +190,8 @@ class TestFinancialFactOperations:
         revenues_fact = next(f for f in facts if f.concept == "us-gaap:Revenues")
         net_income_fact = next(f for f in facts if f.concept == "us-gaap:NetIncomeLoss")
 
-        assert revenues_fact.parent_id == abstract_fact.id
-        assert net_income_fact.parent_id == abstract_fact.id
+        assert revenues_fact.abstract_id == abstract_fact.id
+        assert net_income_fact.abstract_id == abstract_fact.id
 
     def test_get_financial_facts_by_filing(self, db, sample_company, sample_filing):
         """Test retrieving financial facts by filing."""
@@ -473,6 +473,7 @@ class TestFinancialFactOperations:
             FinancialFact(
                 id=1,
                 parent_id=None,
+                abstract_id=None,
                 company_id=1,
                 filing_id=1,
                 form_type="10-Q",

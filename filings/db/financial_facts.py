@@ -33,6 +33,7 @@ class FinancialFactOperations:
                     insert(self.financial_facts_table)
                     .values(
                         parent_id=fact.parent_id,
+                        abstract_id=fact.abstract_id,
                         company_id=fact.company_id,
                         filing_id=fact.filing_id,
                         form_type=fact.form_type,
@@ -121,14 +122,15 @@ class FinancialFactOperations:
                     key_id_map[fact.key] = fact_id
 
                 for fact in facts:
-                    if fact.parent_key:
+                    if fact.abstract_key or fact.parent_key:
                         id = key_id_map.get(fact.key)
-                        parent_id = key_id_map[fact.parent_key]
+                        parent_id = key_id_map.get(fact.parent_key)
+                        abstract_id = key_id_map.get(fact.abstract_key)
 
                         conn.execute(
                             update(self.financial_facts_table)
                             .where(self.financial_facts_table.c.id == id)
-                            .values(parent_id=parent_id)
+                            .values(parent_id=parent_id, abstract_id=abstract_id)
                         )
 
                 conn.commit()
@@ -155,6 +157,7 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             parent_id=row.parent_id,
+                            abstract_id=row.abstract_id,
                             company_id=row.company_id,
                             filing_id=row.filing_id,
                             form_type=row.form_type,
@@ -217,6 +220,7 @@ class FinancialFactOperations:
                         FinancialFact(
                             id=row.id,
                             parent_id=row.parent_id,
+                            abstract_id=row.abstract_id,
                             company_id=row.company_id,
                             filing_id=row.filing_id,
                             form_type=row.form_type,
@@ -265,6 +269,7 @@ class FinancialFactOperations:
                     fact = FinancialFact(
                         id=row.id,
                         parent_id=row.parent_id,
+                        abstract_id=row.abstract_id,
                         company_id=row.company_id,
                         filing_id=row.filing_id,
                         form_type=row.form_type,

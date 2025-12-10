@@ -440,7 +440,7 @@ def upgrade() -> None:
             -- start from a top level abstracts and work down
             WHERE
                 ff.is_abstract = TRUE
-                AND ff.parent_id IS NULL
+                AND ff.abstract_id IS NULL
 
             UNION ALL
 
@@ -463,7 +463,7 @@ def upgrade() -> None:
                 AND ff.statement = ano.statement
             JOIN abstract_normalization_cte a
             ON
-                a.id = ff.parent_id
+                a.id = ff.abstract_id
                 AND a.filing_id = ff.filing_id
             WHERE
                 ff.is_abstract = TRUE

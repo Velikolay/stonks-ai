@@ -397,6 +397,7 @@ class SECXBRLParser:
             fact = FinancialFactCreate(
                 key=str(uuid.uuid4()),
                 parent_key=None,
+                abstract_key=None,
                 company_id=0,
                 filing_id=0,
                 form_type="",
@@ -578,6 +579,11 @@ class SECXBRLParser:
         try:
             # Extract basic information
             concept = self._to_sec_concept(row.get("concept", ""))
+            parent_concept = (
+                self._to_sec_concept(row.get("parent_concept"))
+                if row.get("parent_concept")
+                else None
+            )
             label = row.get("label", concept)
             is_abstract = row.get("abstract")
             unit = row.get("unit", "usd" if not is_abstract else None)
@@ -645,10 +651,28 @@ class SECXBRLParser:
             # Determine period type based on the period column name
             period = self._determine_period_type_from_column(period_col, statement_type)
 
+            # Generate deterministic UUID from concept, statement_type, and period_end
+            period_end_str = period_end.isoformat() if period_end else ""
+            fact_key = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_OID, f"{concept}|{statement_type}|{period_end_str}"
+                )
+            )
+
+            parent_key = None
+            if parent_concept:
+                parent_key = str(
+                    uuid.uuid5(
+                        uuid.NAMESPACE_OID,
+                        f"{parent_concept}|{statement_type}|{period_end_str}",
+                    )
+                )
+
             # Create the financial fact
             fact = FinancialFactCreate(
-                key=str(uuid.uuid4()),
-                parent_key=hierarchy[-1].key if hierarchy else None,
+                key=fact_key,
+                parent_key=parent_key,
+                abstract_key=hierarchy[-1].key if hierarchy else None,
                 company_id=0,
                 filing_id=0,
                 form_type="",
