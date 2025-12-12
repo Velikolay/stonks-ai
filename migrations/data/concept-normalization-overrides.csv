@@ -1,4 +1,4 @@
-concept,statement,normalized_label,is_abstract,parent_concept,description
+concept,statement,normalized_label,is_abstract,abstract_concept,description
 us-gaap:Revenues,Income Statement,Revenue,False,,
 us-gaap:SalesRevenueNet,Income Statement,Revenue,False,,
 us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,,

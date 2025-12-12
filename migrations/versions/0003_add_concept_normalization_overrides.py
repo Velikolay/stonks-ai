@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("statement", sa.String(), nullable=False),
         sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
-        sa.Column("parent_concept", sa.String(), nullable=True),
+        sa.Column("abstract_concept", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column(
             "created_at",
@@ -43,12 +43,12 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("concept", "statement"),
         sa.ForeignKeyConstraint(
-            ["parent_concept", "statement"],
+            ["abstract_concept", "statement"],
             [
                 "concept_normalization_overrides.concept",
                 "concept_normalization_overrides.statement",
             ],
-            name="fk_concept_normalization_overrides_parent_concept_statement",
+            name="fk_concept_normalization_overrides_abstract_concept_statement",
         ),
     )
 
@@ -80,7 +80,7 @@ def upgrade() -> None:
             is_abstract = row.get("is_abstract", "").lower() == "true"
 
             # Convert empty strings to None for nullable fields
-            parent_concept = row.get("parent_concept") or None
+            abstract_concept = row.get("abstract_concept") or None
             description = row.get("description") or None
 
             rows.append(
@@ -89,7 +89,7 @@ def upgrade() -> None:
                     "statement": row["statement"],
                     "normalized_label": row["normalized_label"],
                     "is_abstract": is_abstract,
-                    "parent_concept": parent_concept,
+                    "abstract_concept": abstract_concept,
                     "description": description,
                 }
             )
@@ -99,7 +99,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop trigger
+    # Drop triggers
     op.execute(
         "DROP TRIGGER IF EXISTS update_concept_normalization_overrides_updated_at ON concept_normalization_overrides"
     )

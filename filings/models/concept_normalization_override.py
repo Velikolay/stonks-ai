@@ -13,7 +13,7 @@ class ConceptNormalizationOverrideBase(BaseModel):
     statement: str
     normalized_label: str
     is_abstract: bool
-    parent_concept: Optional[str] = None
+    abstract_concept: Optional[str] = None
     description: Optional[str] = None
 
 
@@ -28,7 +28,7 @@ class ConceptNormalizationOverrideUpdate(BaseModel):
 
     normalized_label: Optional[str] = None
     is_abstract: Optional[bool] = None
-    parent_concept: Optional[str] = None
+    abstract_concept: Optional[str] = None
     description: Optional[str] = None
 
 

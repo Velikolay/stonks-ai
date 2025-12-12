@@ -16,7 +16,7 @@ def sample_override() -> ConceptNormalizationOverrideCreate:
         statement="Income Statement",
         normalized_label="Test Label",
         is_abstract=False,
-        parent_concept=None,
+        abstract_concept=None,
         description="Test description",
     )
 
@@ -29,7 +29,7 @@ def sample_override_with_parent() -> ConceptNormalizationOverrideCreate:
         statement="Balance Sheet",
         normalized_label="Child Label",
         is_abstract=False,
-        parent_concept="us-gaap:ParentConcept",
+        abstract_concept="us-gaap:ParentConcept",
         description="Child description",
     )
 
@@ -46,7 +46,7 @@ class TestConceptNormalizationOverridesOperations:
         assert created.statement == sample_override.statement
         assert created.normalized_label == sample_override.normalized_label
         assert created.is_abstract == sample_override.is_abstract
-        assert created.parent_concept == sample_override.parent_concept
+        assert created.abstract_concept == sample_override.abstract_concept
         assert created.description == sample_override.description
 
     def test_create_duplicate_override(self, db, sample_override):
@@ -240,7 +240,7 @@ class TestConceptNormalizationOverridesOperations:
 
         assert deleted is False
 
-    def test_create_with_parent_concept(
+    def test_create_with_abstract_concept(
         self, db, sample_override, sample_override_with_parent
     ):
         """Test creating override with parent concept."""
@@ -250,7 +250,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Balance Sheet",
             normalized_label="Parent Label",
             is_abstract=True,
-            parent_concept=None,
+            abstract_concept=None,
         )
         db.concept_normalization_overrides.create(parent)
 
@@ -258,19 +258,19 @@ class TestConceptNormalizationOverridesOperations:
         child = db.concept_normalization_overrides.create(sample_override_with_parent)
 
         assert child is not None
-        assert child.parent_concept == "us-gaap:ParentConcept"
+        assert child.abstract_concept == "us-gaap:ParentConcept"
 
-    def test_create_with_invalid_parent_concept(self, db, sample_override):
+    def test_create_with_invalid_abstract_concept(self, db, sample_override):
         """Test creating override with invalid parent raises error."""
         override_with_invalid_parent = ConceptNormalizationOverrideCreate(
             concept="us-gaap:ChildConcept",
             statement="Balance Sheet",
             normalized_label="Child Label",
             is_abstract=False,
-            parent_concept="us-gaap:NonExistentParent",
+            abstract_concept="us-gaap:NonExistentParent",
         )
 
-        with pytest.raises(ValueError, match="invalid parent_concept"):
+        with pytest.raises(ValueError, match="invalid abstract_concept"):
             db.concept_normalization_overrides.create(override_with_invalid_parent)
 
     def test_is_abstract_values(self, db):

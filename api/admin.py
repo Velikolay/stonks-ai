@@ -38,7 +38,7 @@ class ConceptNormalizationOverrideResponse(BaseModel):
     statement: str
     normalized_label: str
     is_abstract: bool
-    parent_concept: Optional[str] = None
+    abstract_concept: Optional[str] = None
     description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -63,7 +63,7 @@ async def list_concept_normalization_overrides(
                 statement=override.statement,
                 normalized_label=override.normalized_label,
                 is_abstract=override.is_abstract,
-                parent_concept=override.parent_concept,
+                abstract_concept=override.abstract_concept,
                 description=override.description,
                 created_at=override.created_at,
                 updated_at=override.updated_at,
@@ -94,7 +94,7 @@ async def create_concept_normalization_override(
             statement=created_override.statement,
             normalized_label=created_override.normalized_label,
             is_abstract=created_override.is_abstract,
-            parent_concept=created_override.parent_concept,
+            abstract_concept=created_override.abstract_concept,
             description=created_override.description,
             created_at=created_override.created_at,
             updated_at=created_override.updated_at,
@@ -133,7 +133,7 @@ async def update_concept_normalization_override(
             statement=updated_override.statement,
             normalized_label=updated_override.normalized_label,
             is_abstract=updated_override.is_abstract,
-            parent_concept=updated_override.parent_concept,
+            abstract_concept=updated_override.abstract_concept,
             description=updated_override.description,
             created_at=updated_override.created_at,
             updated_at=updated_override.updated_at,
@@ -202,7 +202,7 @@ async def export_concept_normalization_overrides_to_csv(
             "statement",
             "normalized_label",
             "is_abstract",
-            "parent_concept",
+            "abstract_concept",
             "description",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -215,7 +215,7 @@ async def export_concept_normalization_overrides_to_csv(
                     "statement": override.statement,
                     "normalized_label": override.normalized_label,
                     "is_abstract": str(override.is_abstract),
-                    "parent_concept": override.parent_concept or "",
+                    "abstract_concept": override.abstract_concept or "",
                     "description": override.description or "",
                 }
             )
@@ -297,7 +297,7 @@ async def import_concept_normalization_overrides_from_csv(
                     statement=row["statement"].strip(),
                     normalized_label=row["normalized_label"].strip(),
                     is_abstract=is_abstract,
-                    parent_concept=row.get("parent_concept", "").strip() or None,
+                    abstract_concept=row.get("abstract_concept", "").strip() or None,
                     description=row.get("description", "").strip() or None,
                 )
 
@@ -312,7 +312,7 @@ async def import_concept_normalization_overrides_from_csv(
                         override_update = ConceptNormalizationOverrideUpdate(
                             normalized_label=override_create.normalized_label,
                             is_abstract=override_create.is_abstract,
-                            parent_concept=override_create.parent_concept,
+                            abstract_concept=override_create.abstract_concept,
                             description=override_create.description,
                         )
                         filings_db.concept_normalization_overrides.update(

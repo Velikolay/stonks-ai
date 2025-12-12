@@ -25,7 +25,7 @@ def sample_override_data():
         "statement": "Income Statement",
         "normalized_label": "Test Label",
         "is_abstract": False,
-        "parent_concept": None,
+        "abstract_concept": None,
         "description": "Test description",
     }
 
@@ -38,7 +38,7 @@ def mock_override():
     mock.statement = "Income Statement"
     mock.normalized_label = "Test Label"
     mock.is_abstract = False
-    mock.parent_concept = None
+    mock.abstract_concept = None
     mock.description = "Test description"
     mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
     mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -142,7 +142,7 @@ class TestAdminEndpoints:
         updated_mock.statement = "Income Statement"
         updated_mock.normalized_label = "Updated Label"
         updated_mock.is_abstract = False
-        updated_mock.parent_concept = None
+        updated_mock.abstract_concept = None
         updated_mock.description = "Updated description"
         updated_mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
         updated_mock.updated_at = datetime(2024, 1, 2, 0, 0, 0)
@@ -265,7 +265,7 @@ class TestAdminEndpoints:
         mock_created.statement = "Income Statement"
         mock_created.normalized_label = "Test Label"
         mock_created.is_abstract = False
-        mock_created.parent_concept = None
+        mock_created.abstract_concept = None
         mock_created.description = "Test description"
         mock_created.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_created.updated_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -282,7 +282,7 @@ class TestAdminEndpoints:
                 "statement",
                 "normalized_label",
                 "is_abstract",
-                "parent_concept",
+                "abstract_concept",
                 "description",
             ],
         )
@@ -293,7 +293,7 @@ class TestAdminEndpoints:
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "Test description",
             }
         )
@@ -324,7 +324,7 @@ class TestAdminEndpoints:
         mock_updated.statement = "Income Statement"
         mock_updated.normalized_label = "Updated Label"
         mock_updated.is_abstract = False
-        mock_updated.parent_concept = None
+        mock_updated.abstract_concept = None
         mock_updated.description = None
         mock_updated.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_updated.updated_at = datetime(2024, 1, 2, 0, 0, 0)
@@ -341,7 +341,7 @@ class TestAdminEndpoints:
                 "statement",
                 "normalized_label",
                 "is_abstract",
-                "parent_concept",
+                "abstract_concept",
                 "description",
             ],
         )
@@ -352,7 +352,7 @@ class TestAdminEndpoints:
                 "statement": "Income Statement",
                 "normalized_label": "Updated Label",
                 "is_abstract": "false",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "",
             }
         )
@@ -389,7 +389,7 @@ class TestAdminEndpoints:
                 "statement",
                 "normalized_label",
                 "is_abstract",
-                "parent_concept",
+                "abstract_concept",
                 "description",
             ],
         )
@@ -400,7 +400,7 @@ class TestAdminEndpoints:
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "",
             }
         )
@@ -433,7 +433,7 @@ class TestAdminEndpoints:
                 "statement",
                 "normalized_label",
                 "is_abstract",
-                "parent_concept",
+                "abstract_concept",
                 "description",
             ],
         )
@@ -444,7 +444,7 @@ class TestAdminEndpoints:
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "",
             }
         )
@@ -505,7 +505,7 @@ class TestAdminEndpoints:
             mock.statement = override.statement
             mock.normalized_label = override.normalized_label
             mock.is_abstract = override.is_abstract
-            mock.parent_concept = override.parent_concept
+            mock.abstract_concept = override.abstract_concept
             mock.description = override.description
             mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
             mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -524,7 +524,7 @@ class TestAdminEndpoints:
                 "statement",
                 "normalized_label",
                 "is_abstract",
-                "parent_concept",
+                "abstract_concept",
                 "description",
             ],
         )
@@ -535,7 +535,7 @@ class TestAdminEndpoints:
                 "statement": "Income Statement",
                 "normalized_label": "Label 1",
                 "is_abstract": "false",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "",
             }
         )
@@ -545,7 +545,7 @@ class TestAdminEndpoints:
                 "statement": "Balance Sheet",
                 "normalized_label": "Label 2",
                 "is_abstract": "true",
-                "parent_concept": "",
+                "abstract_concept": "",
                 "description": "",
             }
         )

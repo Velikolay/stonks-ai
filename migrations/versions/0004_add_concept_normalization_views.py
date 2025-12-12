@@ -395,7 +395,7 @@ def upgrade() -> None:
             -- start from a top level abstracts and work down
             WHERE
                 is_abstract = TRUE
-                AND parent_concept IS NULL
+                AND abstract_concept IS NULL
 
             UNION ALL
 
@@ -414,7 +414,7 @@ def upgrade() -> None:
             FROM concept_normalization_overrides cno
             JOIN abstract_normalization_overrides_cte ano
             ON
-                cno.parent_concept = ano.concept
+                cno.abstract_concept = ano.concept
                 AND cno.statement = ano.statement
         )
         SELECT * FROM abstract_normalization_overrides_cte

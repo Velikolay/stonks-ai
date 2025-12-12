@@ -47,7 +47,7 @@ class ConceptNormalizationOverridesOperations:
                         statement=row.statement,
                         normalized_label=row.normalized_label,
                         is_abstract=row.is_abstract,
-                        parent_concept=row.parent_concept,
+                        abstract_concept=row.abstract_concept,
                         description=row.description,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -85,7 +85,7 @@ class ConceptNormalizationOverridesOperations:
                         statement=row.statement,
                         normalized_label=row.normalized_label,
                         is_abstract=row.is_abstract,
-                        parent_concept=row.parent_concept,
+                        abstract_concept=row.abstract_concept,
                         description=row.description,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -111,7 +111,7 @@ class ConceptNormalizationOverridesOperations:
                         statement=override.statement,
                         normalized_label=override.normalized_label,
                         is_abstract=override.is_abstract,
-                        parent_concept=override.parent_concept,
+                        abstract_concept=override.abstract_concept,
                         description=override.description,
                     )
                     .returning(self.overrides_table)
@@ -130,7 +130,7 @@ class ConceptNormalizationOverridesOperations:
                     statement=row.statement,
                     normalized_label=row.normalized_label,
                     is_abstract=row.is_abstract,
-                    parent_concept=row.parent_concept,
+                    abstract_concept=row.abstract_concept,
                     description=row.description,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
@@ -142,7 +142,7 @@ class ConceptNormalizationOverridesOperations:
             )
             conn.rollback()
             raise ValueError(
-                f"Concept normalization override already exists or invalid parent_concept: {e}"
+                f"Concept normalization override already exists or invalid abstract_concept: {e}"
             )
         except SQLAlchemyError as e:
             logger.error(f"Error creating concept normalization override: {e}")
@@ -164,8 +164,8 @@ class ConceptNormalizationOverridesOperations:
                     update_values["normalized_label"] = override_update.normalized_label
                 if override_update.is_abstract is not None:
                     update_values["is_abstract"] = override_update.is_abstract
-                if override_update.parent_concept is not None:
-                    update_values["parent_concept"] = override_update.parent_concept
+                if override_update.abstract_concept is not None:
+                    update_values["abstract_concept"] = override_update.abstract_concept
                 if override_update.description is not None:
                     update_values["description"] = override_update.description
 
@@ -198,7 +198,7 @@ class ConceptNormalizationOverridesOperations:
                         statement=row.statement,
                         normalized_label=row.normalized_label,
                         is_abstract=row.is_abstract,
-                        parent_concept=row.parent_concept,
+                        abstract_concept=row.abstract_concept,
                         description=row.description,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -210,7 +210,7 @@ class ConceptNormalizationOverridesOperations:
                 f"Integrity error updating concept normalization override: {e}"
             )
             conn.rollback()
-            raise ValueError(f"Invalid parent_concept or constraint violation: {e}")
+            raise ValueError(f"Invalid abstract_concept or constraint violation: {e}")
         except SQLAlchemyError as e:
             logger.error(f"Error updating concept normalization override: {e}")
             conn.rollback()
