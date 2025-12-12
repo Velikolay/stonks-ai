@@ -28,6 +28,7 @@ def upgrade() -> None:
         sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("abstract_concept", sa.String(), nullable=True),
+        sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column(
             "created_at",
@@ -49,6 +50,14 @@ def upgrade() -> None:
                 "concept_normalization_overrides.statement",
             ],
             name="fk_concept_normalization_overrides_abstract_concept_statement",
+        ),
+        sa.ForeignKeyConstraint(
+            ["parent_concept", "statement"],
+            [
+                "concept_normalization_overrides.concept",
+                "concept_normalization_overrides.statement",
+            ],
+            name="fk_concept_normalization_overrides_parent_concept_statement",
         ),
     )
 
@@ -81,6 +90,7 @@ def upgrade() -> None:
 
             # Convert empty strings to None for nullable fields
             abstract_concept = row.get("abstract_concept") or None
+            parent_concept = row.get("parent_concept") or None
             description = row.get("description") or None
 
             rows.append(
@@ -90,6 +100,7 @@ def upgrade() -> None:
                     "normalized_label": row["normalized_label"],
                     "is_abstract": is_abstract,
                     "abstract_concept": abstract_concept,
+                    "parent_concept": parent_concept,
                     "description": description,
                 }
             )
