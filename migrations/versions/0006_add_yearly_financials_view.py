@@ -27,6 +27,8 @@ def upgrade() -> None:
             SELECT
                 ff.company_id,
                 ff.filing_id,
+                ff.id,
+                ff.parent_id,
                 ff.concept,
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
@@ -81,6 +83,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 concept,
                 label,
                 normalized_label,

@@ -28,6 +28,8 @@ def upgrade() -> None:
             SELECT
                 ff.company_id,
                 ff.filing_id,
+                ff.id,
+                ff.parent_id,
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
                 CASE
@@ -88,6 +90,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 fiscal_year,
                 fiscal_quarter,
                 label,
@@ -130,6 +134,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 fiscal_year,
                 fiscal_quarter,
                 label,
@@ -161,6 +167,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 fiscal_year,
                 fiscal_quarter,
                 label,
@@ -188,6 +196,8 @@ def upgrade() -> None:
                 q.*,
                 a.company_id as k_company_id,
                 a.filing_id as k_filing_id,
+                a.id as k_id,
+                a.parent_id as k_parent_id,
                 a.fiscal_year as k_fiscal_year,
                 a.fiscal_quarter as k_fiscal_quarter,
                 a.concept as k_concept,
@@ -220,6 +230,8 @@ def upgrade() -> None:
             SELECT
                 k_company_id as company_id,
                 k_filing_id as filing_id,
+                k_id as id,
+                k_parent_id as parent_id,
                 k_fiscal_year as fiscal_year,
                 k_fiscal_quarter as fiscal_quarter,
                 k_concept as concept,
@@ -241,7 +253,7 @@ def upgrade() -> None:
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_filing_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position
+            GROUP BY k_company_id, k_filing_id, k_id, k_parent_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         ),
         normalized_concepts AS (
@@ -249,6 +261,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 concept,
                 label,
                 normalized_label,
@@ -273,6 +287,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 concept,
                 label,
                 normalized_label,
@@ -299,6 +315,8 @@ def upgrade() -> None:
             SELECT
                 company_id,
                 filing_id,
+                id,
+                parent_id,
                 concept,
                 label,
                 normalized_label,

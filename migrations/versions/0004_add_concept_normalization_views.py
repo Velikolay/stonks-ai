@@ -382,6 +382,124 @@ def upgrade() -> None:
 
     op.execute(
         """
+        CREATE VIEW parent_normalization_overrides AS
+
+        WITH concept_expansion AS (
+            SELECT
+                cne.company_id,
+                cne.statement,
+                cno.concept,
+                cno.parent_concept,
+                cne.concept as concept_expand
+            FROM concept_normalization_overrides cno
+            JOIN concept_normalization cn
+            ON
+                cno.statement = cn.statement
+                AND cno.concept = cn.concept
+            JOIN concept_normalization cne
+            ON
+                cn.group_id = cne.group_id
+            WHERE
+                cno.parent_concept IS NOT NULL
+        ),
+        parent_concept_expansion AS (
+            SELECT
+                cne.company_id,
+                cne.statement,
+                cno.concept,
+                cno.parent_concept,
+                cne.concept as parent_concept_expand
+            FROM concept_normalization_overrides cno
+            JOIN concept_normalization cn
+            ON
+                cno.statement = cn.statement
+                AND cno.parent_concept = cn.concept
+            JOIN concept_normalization cne
+            ON
+                cn.group_id = cne.group_id
+            WHERE
+                cno.parent_concept IS NOT NULL
+        ),
+        transitive_expansion AS (
+            SELECT
+                ce.company_id,
+                ce.statement,
+                ce.concept_expand as concept,
+                pce.parent_concept_expand as parent_concept
+            FROM concept_expansion ce
+            JOIN parent_concept_expansion pce
+            ON
+                ce.company_id = pce.company_id
+                AND ce.statement = pce.statement
+                AND ce.concept = pce.concept
+        )
+
+        SELECT company_id, statement, concept_expand as concept, parent_concept FROM concept_expansion
+        UNION
+        SELECT company_id, statement, concept, parent_concept_expand as parent_concept FROM parent_concept_expansion
+        UNION
+        SELECT company_id, statement, concept, parent_concept FROM transitive_expansion
+        """
+    )
+
+    op.execute(
+        """
+        CREATE VIEW parent_normalization AS
+
+        WITH parent_normalization_global AS (
+            SELECT
+                ff.company_id,
+                ff.filing_id,
+                ff.id,
+                ffp.id as parent_id,
+                ff.statement,
+                ff.concept,
+                ffp.concept as parent_concept
+            FROM concept_normalization_overrides cno
+            JOIN financial_facts ff
+            ON
+                cno.statement = ff.statement
+                AND cno.concept = ff.concept
+            JOIN financial_facts ffp
+            ON
+                ff.company_id = ffp.company_id
+                AND ff.filing_id = ffp.filing_id
+                AND ff.statement = ffp.statement
+                AND cno.parent_concept = ffp.concept
+            WHERE
+                cno.parent_concept IS NOT NULL
+        ),
+        parent_normalization_company AS (
+            SELECT
+                ff.company_id,
+                ff.filing_id,
+                ff.id,
+                ffp.id as parent_id,
+                ff.statement,
+                ff.concept,
+                ffp.concept as parent_concept
+            FROM parent_normalization_overrides pno
+            JOIN financial_facts ff
+            ON
+                pno.company_id = ff.company_id
+                AND pno.statement = ff.statement
+                AND pno.concept = ff.concept
+            JOIN financial_facts ffp
+            ON
+                ff.company_id = ffp.company_id
+                AND ff.filing_id = ffp.filing_id
+                AND ff.statement = ffp.statement
+                AND pno.parent_concept = ffp.concept
+        )
+
+        SELECT * FROM parent_normalization_global
+        UNION
+        SELECT * FROM parent_normalization_company
+        """
+    )
+
+    op.execute(
+        """
         CREATE VIEW abstract_normalization_overrides AS
 
         WITH RECURSIVE abstract_normalization_overrides_cte AS (
@@ -477,6 +595,8 @@ def downgrade() -> None:
     # Drop the views
     op.execute("DROP VIEW IF EXISTS abstract_normalization")
     op.execute("DROP VIEW IF EXISTS abstract_normalization_overrides")
+    op.execute("DROP VIEW IF EXISTS parent_normalization")
+    op.execute("DROP VIEW IF EXISTS parent_normalization_overrides")
     op.execute("DROP VIEW IF EXISTS concept_normalization")
     op.execute("DROP VIEW IF EXISTS concept_normalization_combined")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
