@@ -579,9 +579,9 @@ class SECXBRLParser:
         try:
             # Extract basic information
             concept = self._to_sec_concept(row.get("concept", ""))
-            abstract_concept = (
-                self._to_sec_concept(row.get("abstract_concept"))
-                if row.get("abstract_concept")
+            parent_concept = (
+                self._to_sec_concept(row.get("parent_concept"))
+                if row.get("parent_concept")
                 else None
             )
             label = row.get("label", concept)
@@ -660,11 +660,11 @@ class SECXBRLParser:
             )
 
             parent_key = None
-            if abstract_concept:
+            if parent_concept:
                 parent_key = str(
                     uuid.uuid5(
                         uuid.NAMESPACE_OID,
-                        f"{abstract_concept}|{statement_type}|{period_end_str}",
+                        f"{parent_concept}|{statement_type}|{period_end_str}",
                     )
                 )
 
