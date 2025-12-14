@@ -500,6 +500,131 @@ def upgrade() -> None:
 
     op.execute(
         """
+        CREATE MATERIALIZED VIEW normalized_financial_facts AS
+
+        WITH RECURSIVE facts AS (
+            /* -------------------------------------------------
+            * Anchor: existing fact rows (preserve identity)
+            * ------------------------------------------------- */
+            SELECT
+                *,
+                FALSE as is_synthetic
+            FROM financial_facts
+
+            UNION ALL
+
+            /* -------------------------------
+            * Add missing parent / abstract concept
+            * ------------------------------- */
+                SELECT
+                    abs(hashtextextended(
+                        f.statement || '|' || e.edge_type || '|' || cnop.concept || '|' ||
+                        f.filing_id::text || '|' || f.company_id::text,
+                        0
+                    )) AS id,
+                    f.filing_id,
+                    f.company_id,
+                    f.form_type,
+                    cnop.concept,
+                    cnop.normalized_label AS label,
+                    cnop.is_abstract,
+                    NULL AS value,
+                    NULL AS comparative_value,
+                    1 AS weight,
+                    'usd' AS unit,
+                    NULL AS axis,
+                    NULL AS member,
+                    NULL AS parsed_axis,
+                    NULL AS parsed_member,
+                    cnop.statement,
+                    f.period_end,
+                    f.comparative_period_end,
+                    f.period,
+                    1000 AS position,
+                    NULL AS parent_id,
+                    NULL AS abstract_id,
+                    TRUE AS is_synthetic
+                FROM facts f
+                JOIN concept_normalization_overrides cno
+                    ON cno.statement = f.statement
+                    AND cno.concept  = f.concept
+
+                /* -------------------------------
+                * Normalize edges into rows
+                * ------------------------------- */
+                JOIN LATERAL (
+                    VALUES
+                        ('parent',   cno.parent_concept,   f.parent_id),
+                        ('abstract', cno.abstract_concept, f.abstract_id)
+                ) AS e(edge_type, target_concept, existing_id)
+                    ON e.target_concept IS NOT NULL
+
+                JOIN concept_normalization_overrides cnop
+                    ON cnop.statement = cno.statement
+                    AND cnop.concept  = e.target_concept
+
+                LEFT JOIN financial_facts ff
+                    ON ff.statement   = f.statement
+                    AND ff.filing_id  = f.filing_id
+                    AND ff.company_id = f.company_id
+                    AND ff.concept    = e.target_concept
+
+                WHERE
+                    ff.id IS NULL
+                    OR (e.existing_id <> ff.id AND f.is_synthetic IS FALSE)
+        )
+
+        SELECT DISTINCT
+            f.id,
+            f.filing_id,
+            f.company_id,
+            f.form_type,
+            f.concept,
+            f.label,
+            f.is_abstract,
+            f.value,
+            f.comparative_value,
+            f.weight,
+            f.unit,
+            f.axis,
+            f.member,
+            f.parsed_axis,
+            f.parsed_member,
+            f.statement,
+            f.period_end,
+            f.comparative_period_end,
+            f.period,
+            f.position,
+
+            /* parent wiring */
+            COALESCE(fp.id, f.parent_id)   AS parent_id,
+
+            /* abstract wiring */
+            COALESCE(fa.id, f.abstract_id) AS abstract_id,
+
+            f.is_synthetic
+        FROM facts f
+
+        LEFT JOIN concept_normalization_overrides cno
+            ON cno.statement = f.statement
+            AND cno.concept  = f.concept
+
+        LEFT JOIN facts fp
+            ON fp.statement   = f.statement
+            AND fp.filing_id  = f.filing_id
+            AND fp.company_id = f.company_id
+            AND fp.concept    = cno.parent_concept
+
+        LEFT JOIN facts fa
+            ON fa.statement   = f.statement
+            AND fa.filing_id  = f.filing_id
+            AND fa.company_id = f.company_id
+            AND fa.concept    = cno.abstract_concept;
+        """
+    )
+
+    op.execute(
+        """
         CREATE VIEW abstract_normalization_overrides AS
 
         WITH RECURSIVE abstract_normalization_overrides_cte AS (
@@ -595,6 +720,7 @@ def downgrade() -> None:
     # Drop the views
     op.execute("DROP VIEW IF EXISTS abstract_normalization")
     op.execute("DROP VIEW IF EXISTS abstract_normalization_overrides")
+    op.execute("DROP VIEW IF EXISTS normalized_financial_facts")
     op.execute("DROP VIEW IF EXISTS parent_normalization")
     op.execute("DROP VIEW IF EXISTS parent_normalization_overrides")
     op.execute("DROP VIEW IF EXISTS concept_normalization")

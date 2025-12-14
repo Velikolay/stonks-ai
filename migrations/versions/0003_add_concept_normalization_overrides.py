@@ -7,10 +7,13 @@ Create Date: 2025-01-27 10:00:00.000000
 """
 
 import csv
+import logging
 from pathlib import Path
 
 import sqlalchemy as sa
 from alembic import op
+
+logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision = "0003"
@@ -81,29 +84,33 @@ def upgrade() -> None:
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Skip empty rows
-            if not row.get("concept") or not row.get("statement"):
-                continue
+            try:
+                # Skip empty rows
+                if not row.get("concept") or not row.get("statement"):
+                    continue
 
-            # Convert boolean string to boolean
-            is_abstract = row.get("is_abstract", "").lower() == "true"
+                # Convert boolean string to boolean
+                is_abstract = row.get("is_abstract", "").lower() == "true"
 
-            # Convert empty strings to None for nullable fields
-            abstract_concept = row.get("abstract_concept") or None
-            parent_concept = row.get("parent_concept") or None
-            description = row.get("description") or None
+                # Convert empty strings to None for nullable fields
+                abstract_concept = row.get("abstract_concept") or None
+                parent_concept = row.get("parent_concept") or None
+                description = row.get("description") or None
 
-            rows.append(
-                {
-                    "concept": row["concept"],
-                    "statement": row["statement"],
-                    "normalized_label": row["normalized_label"],
-                    "is_abstract": is_abstract,
-                    "abstract_concept": abstract_concept,
-                    "parent_concept": parent_concept,
-                    "description": description,
-                }
-            )
+                rows.append(
+                    {
+                        "concept": row["concept"],
+                        "statement": row["statement"],
+                        "normalized_label": row["normalized_label"],
+                        "is_abstract": is_abstract,
+                        "abstract_concept": abstract_concept,
+                        "parent_concept": parent_concept,
+                        "description": description,
+                    }
+                )
+            except Exception as e:
+                logger.exception(f"Error processing row {row}")
+                raise e
 
     if rows:
         connection.execute(table.insert(), rows)
