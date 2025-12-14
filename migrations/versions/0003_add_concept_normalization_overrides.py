@@ -33,6 +33,8 @@ def upgrade() -> None:
         sa.Column("abstract_concept", sa.String(), nullable=True),
         sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
+        sa.Column("unit", sa.String(), nullable=True),
+        sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -96,6 +98,8 @@ def upgrade() -> None:
                 abstract_concept = row.get("abstract_concept") or None
                 parent_concept = row.get("parent_concept") or None
                 description = row.get("description") or None
+                unit = row.get("unit") or None
+                weight = row.get("weight") or None
 
                 rows.append(
                     {
@@ -106,6 +110,8 @@ def upgrade() -> None:
                         "abstract_concept": abstract_concept,
                         "parent_concept": parent_concept,
                         "description": description,
+                        "unit": unit,
+                        "weight": weight,
                     }
                 )
             except Exception as e:

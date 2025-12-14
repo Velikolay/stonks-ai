@@ -4,6 +4,7 @@ import csv
 import io
 import logging
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Path, Query, UploadFile
@@ -41,6 +42,8 @@ class ConceptNormalizationOverrideResponse(BaseModel):
     abstract_concept: Optional[str] = None
     parent_concept: Optional[str] = None
     description: Optional[str] = None
+    unit: Optional[str] = None
+    weight: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +70,8 @@ async def list_concept_normalization_overrides(
                 abstract_concept=override.abstract_concept,
                 parent_concept=override.parent_concept,
                 description=override.description,
+                unit=override.unit,
+                weight=float(override.weight) if override.weight is not None else None,
                 created_at=override.created_at,
                 updated_at=override.updated_at,
             )
@@ -99,6 +104,12 @@ async def create_concept_normalization_override(
             abstract_concept=created_override.abstract_concept,
             parent_concept=created_override.parent_concept,
             description=created_override.description,
+            unit=created_override.unit,
+            weight=(
+                float(created_override.weight)
+                if created_override.weight is not None
+                else None
+            ),
             created_at=created_override.created_at,
             updated_at=created_override.updated_at,
         )
@@ -139,6 +150,12 @@ async def update_concept_normalization_override(
             abstract_concept=updated_override.abstract_concept,
             parent_concept=updated_override.parent_concept,
             description=updated_override.description,
+            unit=updated_override.unit,
+            weight=(
+                float(updated_override.weight)
+                if updated_override.weight is not None
+                else None
+            ),
             created_at=updated_override.created_at,
             updated_at=updated_override.updated_at,
         )
@@ -209,6 +226,8 @@ async def export_concept_normalization_overrides_to_csv(
             "abstract_concept",
             "parent_concept",
             "description",
+            "unit",
+            "weight",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
@@ -223,6 +242,10 @@ async def export_concept_normalization_overrides_to_csv(
                     "abstract_concept": override.abstract_concept or "",
                     "parent_concept": override.parent_concept or "",
                     "description": override.description or "",
+                    "unit": override.unit or "",
+                    "weight": (
+                        str(override.weight) if override.weight is not None else ""
+                    ),
                 }
             )
 
@@ -297,6 +320,18 @@ async def import_concept_normalization_overrides_from_csv(
                     )
                     continue
 
+                # Parse weight (convert to Decimal if present)
+                weight_str = row.get("weight", "").strip()
+                weight = None
+                if weight_str:
+                    try:
+                        weight = Decimal(weight_str)
+                    except (ValueError, Exception):
+                        errors.append(
+                            f"Row {row_num}: Invalid weight value: {weight_str}"
+                        )
+                        continue
+
                 # Create override object
                 override_create = ConceptNormalizationOverrideCreate(
                     concept=row["concept"].strip(),
@@ -306,6 +341,8 @@ async def import_concept_normalization_overrides_from_csv(
                     abstract_concept=row.get("abstract_concept", "").strip() or None,
                     parent_concept=row.get("parent_concept", "").strip() or None,
                     description=row.get("description", "").strip() or None,
+                    unit=row.get("unit", "").strip() or None,
+                    weight=weight,
                 )
 
                 # Check if record exists
@@ -322,6 +359,8 @@ async def import_concept_normalization_overrides_from_csv(
                             abstract_concept=override_create.abstract_concept,
                             parent_concept=override_create.parent_concept,
                             description=override_create.description,
+                            unit=override_create.unit,
+                            weight=override_create.weight,
                         )
                         filings_db.concept_normalization_overrides.update(
                             override_create.concept,

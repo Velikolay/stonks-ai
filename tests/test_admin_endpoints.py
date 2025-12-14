@@ -40,6 +40,8 @@ def mock_override():
     mock.is_abstract = False
     mock.abstract_concept = None
     mock.description = "Test description"
+    mock.unit = None
+    mock.weight = None
     mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
     mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
     return mock
@@ -144,6 +146,8 @@ class TestAdminEndpoints:
         updated_mock.is_abstract = False
         updated_mock.abstract_concept = None
         updated_mock.description = "Updated description"
+        updated_mock.unit = None
+        updated_mock.weight = None
         updated_mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
         updated_mock.updated_at = datetime(2024, 1, 2, 0, 0, 0)
 
@@ -267,6 +271,8 @@ class TestAdminEndpoints:
         mock_created.is_abstract = False
         mock_created.abstract_concept = None
         mock_created.description = "Test description"
+        mock_created.unit = None
+        mock_created.weight = None
         mock_created.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_created.updated_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_filings_db.concept_normalization_overrides.create.return_value = (
@@ -284,6 +290,8 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "abstract_concept",
                 "description",
+                "unit",
+                "weight",
             ],
         )
         writer.writeheader()
@@ -295,6 +303,8 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "abstract_concept": "",
                 "description": "Test description",
+                "unit": "",
+                "weight": "",
             }
         )
 
@@ -326,6 +336,8 @@ class TestAdminEndpoints:
         mock_updated.is_abstract = False
         mock_updated.abstract_concept = None
         mock_updated.description = None
+        mock_updated.unit = None
+        mock_updated.weight = None
         mock_updated.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_updated.updated_at = datetime(2024, 1, 2, 0, 0, 0)
         mock_filings_db.concept_normalization_overrides.update.return_value = (
@@ -343,6 +355,8 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "abstract_concept",
                 "description",
+                "unit",
+                "weight",
             ],
         )
         writer.writeheader()
@@ -391,6 +405,8 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "abstract_concept",
                 "description",
+                "unit",
+                "weight",
             ],
         )
         writer.writeheader()
@@ -435,6 +451,8 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "abstract_concept",
                 "description",
+                "unit",
+                "weight",
             ],
         )
         writer.writeheader()
@@ -507,6 +525,8 @@ class TestAdminEndpoints:
             mock.is_abstract = override.is_abstract
             mock.abstract_concept = override.abstract_concept
             mock.description = override.description
+            mock.unit = override.unit
+            mock.weight = override.weight
             mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
             mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
             return mock
@@ -526,6 +546,8 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "abstract_concept",
                 "description",
+                "unit",
+                "weight",
             ],
         )
         writer.writeheader()

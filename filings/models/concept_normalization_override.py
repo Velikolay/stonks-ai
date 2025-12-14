@@ -1,6 +1,7 @@
 """Concept normalization override models."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -16,6 +17,8 @@ class ConceptNormalizationOverrideBase(BaseModel):
     abstract_concept: Optional[str] = None
     parent_concept: Optional[str] = None
     description: Optional[str] = None
+    unit: Optional[str] = None
+    weight: Optional[Decimal] = None
 
 
 class ConceptNormalizationOverrideCreate(ConceptNormalizationOverrideBase):
@@ -32,6 +35,8 @@ class ConceptNormalizationOverrideUpdate(BaseModel):
     abstract_concept: Optional[str] = None
     parent_concept: Optional[str] = None
     description: Optional[str] = None
+    unit: Optional[str] = None
+    weight: Optional[Decimal] = None
 
 
 class ConceptNormalizationOverride(ConceptNormalizationOverrideBase):

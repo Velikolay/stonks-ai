@@ -50,6 +50,8 @@ class ConceptNormalizationOverridesOperations:
                         abstract_concept=row.abstract_concept,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        unit=row.unit,
+                        weight=row.weight,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
                     )
@@ -89,6 +91,8 @@ class ConceptNormalizationOverridesOperations:
                         abstract_concept=row.abstract_concept,
                         parent_concept=row.parent_concept,
                         description=row.description,
+                        unit=row.unit,
+                        weight=row.weight,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
                     )
@@ -116,6 +120,8 @@ class ConceptNormalizationOverridesOperations:
                         abstract_concept=override.abstract_concept,
                         parent_concept=override.parent_concept,
                         description=override.description,
+                        unit=override.unit,
+                        weight=override.weight,
                     )
                     .returning(self.overrides_table)
                 )
@@ -136,6 +142,8 @@ class ConceptNormalizationOverridesOperations:
                     abstract_concept=row.abstract_concept,
                     parent_concept=row.parent_concept,
                     description=row.description,
+                    unit=row.unit,
+                    weight=row.weight,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
                 )
@@ -174,6 +182,10 @@ class ConceptNormalizationOverridesOperations:
                     update_values["parent_concept"] = override_update.parent_concept
                 if override_update.description is not None:
                     update_values["description"] = override_update.description
+                if override_update.unit is not None:
+                    update_values["unit"] = override_update.unit
+                if override_update.weight is not None:
+                    update_values["weight"] = override_update.weight
 
                 if not update_values:
                     # No fields to update, return existing record
@@ -205,7 +217,10 @@ class ConceptNormalizationOverridesOperations:
                         normalized_label=row.normalized_label,
                         is_abstract=row.is_abstract,
                         abstract_concept=row.abstract_concept,
+                        parent_concept=row.parent_concept,
                         description=row.description,
+                        unit=row.unit,
+                        weight=row.weight,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
                     )
