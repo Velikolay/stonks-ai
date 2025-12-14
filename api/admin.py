@@ -352,7 +352,7 @@ async def import_concept_normalization_overrides_from_csv(
 
                 if existing:
                     if update_existing:
-                        # Update existing record
+                        # Update existing record (validation happens in DB layer)
                         override_update = ConceptNormalizationOverrideUpdate(
                             normalized_label=override_create.normalized_label,
                             is_abstract=override_create.is_abstract,
@@ -374,7 +374,7 @@ async def import_concept_normalization_overrides_from_csv(
                             f"({override_create.concept}, {override_create.statement})"
                         )
                 else:
-                    # Create new record
+                    # Create new record (validation happens in DB layer)
                     filings_db.concept_normalization_overrides.create(override_create)
                     created += 1
 

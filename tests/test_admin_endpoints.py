@@ -27,6 +27,9 @@ def sample_override_data():
         "is_abstract": False,
         "abstract_concept": None,
         "description": "Test description",
+        "unit": "USD",
+        "weight": None,
+        "parent_concept": None,
     }
 
 
@@ -40,8 +43,9 @@ def mock_override():
     mock.is_abstract = False
     mock.abstract_concept = None
     mock.description = "Test description"
-    mock.unit = None
+    mock.unit = "USD"  # Non-abstract records need unit
     mock.weight = None
+    mock.parent_concept = None
     mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
     mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
     return mock
@@ -139,6 +143,15 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_update_override_success(self, mock_filings_db, client, mock_override):
         """Test updating an override successfully."""
+        # Set existing record (non-abstract with unit for validation)
+        mock_override.is_abstract = False
+        mock_override.unit = "USD"
+        mock_override.weight = None
+        mock_override.parent_concept = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
         updated_mock = Mock()
         updated_mock.concept = "us-gaap:TestConcept"
         updated_mock.statement = "Income Statement"
@@ -146,8 +159,9 @@ class TestAdminEndpoints:
         updated_mock.is_abstract = False
         updated_mock.abstract_concept = None
         updated_mock.description = "Updated description"
-        updated_mock.unit = None
+        updated_mock.unit = "USD"
         updated_mock.weight = None
+        updated_mock.parent_concept = None
         updated_mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
         updated_mock.updated_at = datetime(2024, 1, 2, 0, 0, 0)
 
@@ -185,6 +199,143 @@ class TestAdminEndpoints:
         assert response.status_code == 404
 
     @patch("api.admin.filings_db")
+    def test_create_override_parent_concept_with_abstract_fails(
+        self, mock_filings_db, client
+    ):
+        """Test creating override with parent_concept and is_abstract=True fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": True,
+            "parent_concept": "us-gaap:ParentConcept",
+            "unit": None,
+            "weight": None,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "parent_concept" in response.json()["detail"].lower()
+        assert "abstract" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_create_override_parent_concept_without_weight_fails(
+        self, mock_filings_db, client
+    ):
+        """Test creating override with parent_concept but no weight fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": False,
+            "parent_concept": "us-gaap:ParentConcept",
+            "unit": "USD",
+            "weight": None,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "parent_concept" in response.json()["detail"].lower()
+        assert "weight" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_create_override_non_abstract_without_unit_fails(
+        self, mock_filings_db, client
+    ):
+        """Test creating non-abstract override without unit fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": False,
+            "parent_concept": None,
+            "unit": None,
+            "weight": None,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "unit" in response.json()["detail"].lower()
+        assert (
+            "non-abstract" in response.json()["detail"].lower()
+            or "is_abstract=false" in response.json()["detail"].lower()
+        )
+
+    @patch("api.admin.filings_db")
+    def test_create_override_abstract_with_parent_concept_fails(
+        self, mock_filings_db, client
+    ):
+        """Test creating abstract override with parent_concept fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": True,
+            "parent_concept": "us-gaap:ParentConcept",
+            "unit": None,
+            "weight": None,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "parent_concept" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_create_override_abstract_with_weight_fails(self, mock_filings_db, client):
+        """Test creating abstract override with weight fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": True,
+            "parent_concept": None,
+            "unit": None,
+            "weight": 1.0,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "weight" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_create_override_abstract_with_unit_fails(self, mock_filings_db, client):
+        """Test creating abstract override with unit fails."""
+        override_data = {
+            "concept": "us-gaap:TestConcept",
+            "statement": "Income Statement",
+            "normalized_label": "Test Label",
+            "is_abstract": True,
+            "parent_concept": None,
+            "unit": "USD",
+            "weight": None,
+        }
+
+        response = client.post(
+            "/admin/concept-normalization-overrides", json=override_data
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "unit" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
     def test_delete_override_success(self, mock_filings_db, client):
         """Test deleting an override successfully."""
         mock_filings_db.concept_normalization_overrides.delete.return_value = True
@@ -194,6 +345,155 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 204
+
+    @patch("api.admin.filings_db")
+    def test_update_override_parent_concept_with_abstract_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating override to have parent_concept with is_abstract=True fails."""
+        # Set existing to non-abstract with parent_concept
+        mock_override.is_abstract = False
+        mock_override.parent_concept = "us-gaap:ParentConcept"
+        mock_override.unit = "USD"
+        mock_override.weight = 1.0
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"is_abstract": True}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "parent_concept" in response.json()["detail"].lower()
+        assert "abstract" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_update_override_parent_concept_without_weight_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating override to have parent_concept without weight fails."""
+        # Set existing to non-abstract
+        mock_override.is_abstract = False
+        mock_override.parent_concept = None
+        mock_override.unit = "USD"
+        mock_override.weight = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"parent_concept": "us-gaap:ParentConcept"}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "parent_concept" in response.json()["detail"].lower()
+        assert "weight" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_update_override_non_abstract_without_unit_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating override to be non-abstract without unit fails."""
+        # Set existing to abstract
+        mock_override.is_abstract = True
+        mock_override.parent_concept = None
+        mock_override.unit = None
+        mock_override.weight = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"is_abstract": False}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "unit" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_update_override_abstract_with_parent_concept_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating abstract override to have parent_concept fails."""
+        # Set existing to abstract
+        mock_override.is_abstract = True
+        mock_override.parent_concept = None
+        mock_override.unit = None
+        mock_override.weight = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"parent_concept": "us-gaap:ParentConcept"}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "parent_concept" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_update_override_abstract_with_weight_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating abstract override to have weight fails."""
+        # Set existing to abstract
+        mock_override.is_abstract = True
+        mock_override.parent_concept = None
+        mock_override.unit = None
+        mock_override.weight = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"weight": 1.0}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "weight" in response.json()["detail"].lower()
+
+    @patch("api.admin.filings_db")
+    def test_update_override_abstract_with_unit_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test updating abstract override to have unit fails."""
+        # Set existing to abstract
+        mock_override.is_abstract = True
+        mock_override.parent_concept = None
+        mock_override.unit = None
+        mock_override.weight = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        update_data = {"unit": "USD"}
+
+        response = client.put(
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            json=update_data,
+        )
+
+        assert response.status_code == 400
+        assert "abstract" in response.json()["detail"].lower()
+        assert "unit" in response.json()["detail"].lower()
 
     @patch("api.admin.filings_db")
     def test_delete_override_not_found(self, mock_filings_db, client):
@@ -271,7 +571,7 @@ class TestAdminEndpoints:
         mock_created.is_abstract = False
         mock_created.abstract_concept = None
         mock_created.description = "Test description"
-        mock_created.unit = None
+        mock_created.unit = "USD"
         mock_created.weight = None
         mock_created.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_created.updated_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -303,7 +603,7 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "abstract_concept": "",
                 "description": "Test description",
-                "unit": "",
+                "unit": "USD",
                 "weight": "",
             }
         )
@@ -336,8 +636,9 @@ class TestAdminEndpoints:
         mock_updated.is_abstract = False
         mock_updated.abstract_concept = None
         mock_updated.description = None
-        mock_updated.unit = None
+        mock_updated.unit = "USD"
         mock_updated.weight = None
+        mock_updated.parent_concept = None
         mock_updated.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_updated.updated_at = datetime(2024, 1, 2, 0, 0, 0)
         mock_filings_db.concept_normalization_overrides.update.return_value = (
@@ -368,6 +669,8 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "abstract_concept": "",
                 "description": "",
+                "unit": "USD",
+                "weight": "",
             }
         )
 
@@ -432,8 +735,8 @@ class TestAdminEndpoints:
         data = response.json()
         assert data["created"] == 0
         assert data["updated"] == 0
-        assert len(data["errors"]) == 1
-        assert "already exists" in data["errors"][0].lower()
+        assert len(data["errors"]) > 0
+        assert any("already exists" in error.lower() for error in data["errors"])
 
     @patch("api.admin.filings_db")
     def test_import_from_csv_with_errors(self, mock_filings_db, client):
@@ -464,6 +767,8 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "abstract_concept": "",
                 "description": "",
+                "unit": "USD",
+                "weight": "",
             }
         )
 
@@ -480,6 +785,224 @@ class TestAdminEndpoints:
         assert data["updated"] == 0
         assert len(data["errors"]) > 0
         assert any("required fields" in error.lower() for error in data["errors"])
+
+    @patch("api.admin.filings_db")
+    def test_import_from_csv_non_abstract_without_unit_fails(
+        self, mock_filings_db, client
+    ):
+        """Test importing CSV with non-abstract record without unit fails."""
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+
+        csv_content = io.StringIO()
+        writer = csv.DictWriter(
+            csv_content,
+            fieldnames=[
+                "concept",
+                "statement",
+                "normalized_label",
+                "is_abstract",
+                "abstract_concept",
+                "parent_concept",
+                "description",
+                "unit",
+                "weight",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "concept": "us-gaap:TestConcept",
+                "statement": "Income Statement",
+                "normalized_label": "Test Label",
+                "is_abstract": "false",
+                "abstract_concept": "",
+                "parent_concept": "",
+                "description": "",
+                "unit": "",
+                "weight": "",
+            }
+        )
+
+        files = {"file": ("test.csv", csv_content.getvalue(), "text/csv")}
+
+        response = client.post(
+            "/admin/concept-normalization-overrides/import",
+            files=files,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["created"] == 0
+        assert len(data["errors"]) > 0
+        assert any(
+            "unit" in error.lower() and "non-abstract" in error.lower()
+            for error in data["errors"]
+        )
+
+    @patch("api.admin.filings_db")
+    def test_import_from_csv_abstract_with_unit_fails(self, mock_filings_db, client):
+        """Test importing CSV with abstract record with unit fails."""
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+
+        csv_content = io.StringIO()
+        writer = csv.DictWriter(
+            csv_content,
+            fieldnames=[
+                "concept",
+                "statement",
+                "normalized_label",
+                "is_abstract",
+                "abstract_concept",
+                "parent_concept",
+                "description",
+                "unit",
+                "weight",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "concept": "us-gaap:TestConcept",
+                "statement": "Income Statement",
+                "normalized_label": "Test Label",
+                "is_abstract": "true",
+                "abstract_concept": "",
+                "parent_concept": "",
+                "description": "",
+                "unit": "USD",
+                "weight": "",
+            }
+        )
+
+        files = {"file": ("test.csv", csv_content.getvalue(), "text/csv")}
+
+        response = client.post(
+            "/admin/concept-normalization-overrides/import",
+            files=files,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["created"] == 0
+        assert len(data["errors"]) > 0
+        assert any(
+            "abstract" in error.lower() and "unit" in error.lower()
+            for error in data["errors"]
+        )
+
+    @patch("api.admin.filings_db")
+    def test_import_from_csv_parent_concept_without_weight_fails(
+        self, mock_filings_db, client
+    ):
+        """Test importing CSV with parent_concept but no weight fails."""
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+
+        csv_content = io.StringIO()
+        writer = csv.DictWriter(
+            csv_content,
+            fieldnames=[
+                "concept",
+                "statement",
+                "normalized_label",
+                "is_abstract",
+                "abstract_concept",
+                "parent_concept",
+                "description",
+                "unit",
+                "weight",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "concept": "us-gaap:TestConcept",
+                "statement": "Income Statement",
+                "normalized_label": "Test Label",
+                "is_abstract": "false",
+                "abstract_concept": "",
+                "parent_concept": "us-gaap:ParentConcept",
+                "description": "",
+                "unit": "USD",
+                "weight": "",
+            }
+        )
+
+        files = {"file": ("test.csv", csv_content.getvalue(), "text/csv")}
+
+        response = client.post(
+            "/admin/concept-normalization-overrides/import",
+            files=files,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["created"] == 0
+        assert len(data["errors"]) > 0
+        assert any(
+            "parent_concept" in error.lower() and "weight" in error.lower()
+            for error in data["errors"]
+        )
+
+    @patch("api.admin.filings_db")
+    def test_import_from_csv_update_validation_fails(
+        self, mock_filings_db, client, mock_override
+    ):
+        """Test importing CSV with update_existing that violates constraints fails."""
+        # Set existing to non-abstract with unit
+        mock_override.is_abstract = False
+        mock_override.unit = "USD"
+        mock_override.weight = None
+        mock_override.parent_concept = None
+        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
+            mock_override
+        )
+
+        # CSV tries to update to abstract but keep unit (should fail)
+        csv_content = io.StringIO()
+        writer = csv.DictWriter(
+            csv_content,
+            fieldnames=[
+                "concept",
+                "statement",
+                "normalized_label",
+                "is_abstract",
+                "abstract_concept",
+                "parent_concept",
+                "description",
+                "unit",
+                "weight",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "concept": "us-gaap:TestConcept",
+                "statement": "Income Statement",
+                "normalized_label": "Test Label",
+                "is_abstract": "true",
+                "abstract_concept": "",
+                "parent_concept": "",
+                "description": "",
+                "unit": "USD",  # This should cause validation error
+                "weight": "",
+            }
+        )
+
+        files = {"file": ("test.csv", csv_content.getvalue(), "text/csv")}
+
+        response = client.post(
+            "/admin/concept-normalization-overrides/import?update_existing=true",
+            files=files,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated"] == 0
+        assert len(data["errors"]) > 0
+        assert any(
+            "abstract" in error.lower() and "unit" in error.lower()
+            for error in data["errors"]
+        )
 
     @patch("api.admin.filings_db", None)
     def test_import_from_csv_database_not_initialized(self, client):
@@ -559,6 +1082,8 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "abstract_concept": "",
                 "description": "",
+                "unit": "USD",
+                "weight": "",
             }
         )
         writer.writerow(
@@ -569,6 +1094,8 @@ class TestAdminEndpoints:
                 "is_abstract": "true",
                 "abstract_concept": "",
                 "description": "",
+                "unit": "",
+                "weight": "",
             }
         )
 

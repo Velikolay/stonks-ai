@@ -1,6 +1,7 @@
 """Concept normalization overrides database operations."""
 
 import logging
+from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy import MetaData, Table, and_, delete, insert, select, update
@@ -14,6 +15,47 @@ from ..models.concept_normalization_override import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def validate_override_constraints(
+    is_abstract: bool,
+    parent_concept: Optional[str],
+    unit: Optional[str],
+    weight: Optional[Decimal],
+) -> None:
+    """Validate override constraints.
+
+    Raises:
+        ValueError: If constraints are violated.
+
+    Constraints:
+    - If parent_concept is set: must not be abstract and must have weight
+    - If not abstract: must have unit
+    - If abstract: must not have parent_concept, weight, or unit
+    """
+    if parent_concept is not None:
+        if is_abstract:
+            raise ValueError(
+                "Records with parent_concept cannot be abstract (is_abstract must be False)"
+            )
+        if weight is None:
+            raise ValueError("Records with parent_concept must have a weight specified")
+
+    if not is_abstract:
+        if unit is None:
+            raise ValueError(
+                "Non-abstract records (is_abstract=False) must have a unit specified"
+            )
+
+    if is_abstract:
+        if parent_concept is not None:
+            raise ValueError(
+                "Abstract records (is_abstract=True) cannot have a parent_concept"
+            )
+        if weight is not None:
+            raise ValueError("Abstract records (is_abstract=True) cannot have a weight")
+        if unit is not None:
+            raise ValueError("Abstract records (is_abstract=True) cannot have a unit")
 
 
 class ConceptNormalizationOverridesOperations:
@@ -108,6 +150,14 @@ class ConceptNormalizationOverridesOperations:
         self, override: ConceptNormalizationOverrideCreate
     ) -> ConceptNormalizationOverride:
         """Create a new concept normalization override."""
+        # Validate constraints
+        validate_override_constraints(
+            is_abstract=override.is_abstract,
+            parent_concept=override.parent_concept,
+            unit=override.unit,
+            weight=override.weight,
+        )
+
         try:
             with self.engine.connect() as conn:
                 stmt = (
@@ -168,6 +218,39 @@ class ConceptNormalizationOverridesOperations:
         override_update: ConceptNormalizationOverrideUpdate,
     ) -> Optional[ConceptNormalizationOverride]:
         """Update an existing concept normalization override."""
+        # Get existing record to merge with update for validation
+        existing = self.get_by_key(concept, statement)
+        if not existing:
+            return None
+
+        # Merge existing values with update values for validation
+        final_is_abstract = (
+            override_update.is_abstract
+            if override_update.is_abstract is not None
+            else existing.is_abstract
+        )
+        final_parent_concept = (
+            override_update.parent_concept
+            if override_update.parent_concept is not None
+            else existing.parent_concept
+        )
+        final_unit = (
+            override_update.unit if override_update.unit is not None else existing.unit
+        )
+        final_weight = (
+            override_update.weight
+            if override_update.weight is not None
+            else existing.weight
+        )
+
+        # Validate constraints with merged values
+        validate_override_constraints(
+            is_abstract=final_is_abstract,
+            parent_concept=final_parent_concept,
+            unit=final_unit,
+            weight=final_weight,
+        )
+
         try:
             with self.engine.connect() as conn:
                 # Build update values from non-None fields
@@ -189,7 +272,7 @@ class ConceptNormalizationOverridesOperations:
 
                 if not update_values:
                     # No fields to update, return existing record
-                    return self.get_by_key(concept, statement)
+                    return existing
 
                 stmt = (
                     update(self.overrides_table)
