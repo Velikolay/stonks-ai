@@ -358,7 +358,9 @@ def upgrade() -> None:
         group_overrides AS (
           SELECT
             cn.group_id,
-            MAX(cno.normalized_label) as normalized_label
+            MAX(cno.normalized_label) as normalized_label,
+            MAX(cno.weight) as weight,
+            MAX(cno.unit) as unit
           FROM concept_normalization_stable cn
           JOIN concept_normalization_overrides cno
           ON cn.statement = cno.statement
@@ -372,6 +374,10 @@ def upgrade() -> None:
           cn.concept,
           cn.label,
           COALESCE(go.normalized_label, cn.normalized_label) as normalized_label,
+          -- COALESCE(go.weight, cn.weight) as weight,
+          go.weight as weight,
+          -- COALESCE(go.unit, cn.unit) as unit,
+          go.unit as unit,
           cn.group_id,
           go.normalized_label IS NOT NULL as overridden
         FROM concept_normalization_stable cn
@@ -382,7 +388,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE VIEW parent_normalization_overrides AS
+        CREATE VIEW parent_normalization_expansion AS
 
         WITH concept_expansion AS (
             SELECT
@@ -444,62 +450,6 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE VIEW parent_normalization AS
-
-        WITH parent_normalization_global AS (
-            SELECT
-                ff.company_id,
-                ff.filing_id,
-                ff.id,
-                ffp.id as parent_id,
-                ff.statement,
-                ff.concept,
-                ffp.concept as parent_concept
-            FROM concept_normalization_overrides cno
-            JOIN financial_facts ff
-            ON
-                cno.statement = ff.statement
-                AND cno.concept = ff.concept
-            JOIN financial_facts ffp
-            ON
-                ff.company_id = ffp.company_id
-                AND ff.filing_id = ffp.filing_id
-                AND ff.statement = ffp.statement
-                AND cno.parent_concept = ffp.concept
-            WHERE
-                cno.parent_concept IS NOT NULL
-        ),
-        parent_normalization_company AS (
-            SELECT
-                ff.company_id,
-                ff.filing_id,
-                ff.id,
-                ffp.id as parent_id,
-                ff.statement,
-                ff.concept,
-                ffp.concept as parent_concept
-            FROM parent_normalization_overrides pno
-            JOIN financial_facts ff
-            ON
-                pno.company_id = ff.company_id
-                AND pno.statement = ff.statement
-                AND pno.concept = ff.concept
-            JOIN financial_facts ffp
-            ON
-                ff.company_id = ffp.company_id
-                AND ff.filing_id = ffp.filing_id
-                AND ff.statement = ffp.statement
-                AND pno.parent_concept = ffp.concept
-        )
-
-        SELECT * FROM parent_normalization_global
-        UNION
-        SELECT * FROM parent_normalization_company
-        """
-    )
-
-    op.execute(
-        """
         CREATE MATERIALIZED VIEW normalized_financial_facts AS
 
         WITH RECURSIVE facts AS (
@@ -507,9 +457,41 @@ def upgrade() -> None:
             * Anchor: existing fact rows (preserve identity)
             * ------------------------------------------------- */
             SELECT
-                *,
+                ff.id,
+                ff.filing_id,
+                ff.company_id,
+                ff.form_type,
+                ff.concept,
+                ff.label,
+                COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
+                ff.is_abstract,
+                ff.value,
+                ff.comparative_value,
+                COALESCE(cno.weight, cn.weight, ff.weight) as weight,
+                COALESCE(cno.unit, cn.unit, ff.unit) as unit,
+                ff.axis,
+                ff.member,
+                ff.parsed_axis,
+                ff.parsed_member,
+                ff.statement,
+                ff.period_end,
+                ff.comparative_period_end,
+                ff.period,
+                ff.position,
+                ff.parent_id,
+                ff.abstract_id,
                 FALSE as is_synthetic
-            FROM financial_facts
+            FROM financial_facts ff
+            LEFT JOIN concept_normalization_overrides cno
+            ON
+                ff.statement = cno.statement
+                AND ff.concept = cno.concept
+            LEFT JOIN concept_normalization cn
+            ON
+                ff.company_id = cn.company_id
+                AND ff.statement = cn.statement
+                AND ff.concept = cn.concept
+                AND ff.label = cn.label
 
             UNION ALL
 
@@ -518,7 +500,7 @@ def upgrade() -> None:
             * ------------------------------- */
                 SELECT
                     abs(hashtextextended(
-                        f.statement || '|' || e.edge_type || '|' || cnop.concept || '|' ||
+                        f.statement || '|' || cnop.concept || '|' ||
                         f.filing_id::text || '|' || f.company_id::text,
                         0
                     )) AS id,
@@ -527,6 +509,7 @@ def upgrade() -> None:
                     f.form_type,
                     cnop.concept,
                     cnop.normalized_label AS label,
+                    cnop.normalized_label AS normalized_label,
                     cnop.is_abstract,
                     NULL AS value,
                     NULL AS comparative_value,
@@ -554,9 +537,9 @@ def upgrade() -> None:
                 * ------------------------------- */
                 JOIN LATERAL (
                     VALUES
-                        ('parent',   cno.parent_concept,   f.parent_id),
-                        ('abstract', cno.abstract_concept, f.abstract_id)
-                ) AS e(edge_type, target_concept, existing_id)
+                        (cno.parent_concept,   f.parent_id),
+                        (cno.abstract_concept, f.abstract_id)
+                ) AS e(target_concept, existing_id)
                     ON e.target_concept IS NOT NULL
 
                 JOIN concept_normalization_overrides cnop
@@ -581,6 +564,7 @@ def upgrade() -> None:
             f.form_type,
             f.concept,
             f.label,
+            f.normalized_label,
             f.is_abstract,
             f.value,
             f.comparative_value,
@@ -721,8 +705,7 @@ def downgrade() -> None:
     op.execute("DROP VIEW IF EXISTS abstract_normalization")
     op.execute("DROP VIEW IF EXISTS abstract_normalization_overrides")
     op.execute("DROP VIEW IF EXISTS normalized_financial_facts")
-    op.execute("DROP VIEW IF EXISTS parent_normalization")
-    op.execute("DROP VIEW IF EXISTS parent_normalization_overrides")
+    op.execute("DROP VIEW IF EXISTS parent_normalization_expansion")
     op.execute("DROP VIEW IF EXISTS concept_normalization")
     op.execute("DROP VIEW IF EXISTS concept_normalization_combined")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
