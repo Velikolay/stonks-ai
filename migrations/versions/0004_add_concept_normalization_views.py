@@ -458,8 +458,8 @@ def upgrade() -> None:
             * ------------------------------------------------- */
             SELECT
                 ff.id,
-                ff.filing_id,
                 ff.company_id,
+                ff.filing_id,
                 ff.form_type,
                 ff.concept,
                 ff.label,
@@ -504,8 +504,8 @@ def upgrade() -> None:
                         f.filing_id::text || '|' || f.company_id::text,
                         0
                     )) AS id,
-                    f.filing_id,
                     f.company_id,
+                    f.filing_id,
                     f.form_type,
                     cnop.concept,
                     cnop.normalized_label AS label,
@@ -547,9 +547,9 @@ def upgrade() -> None:
                     AND cnop.concept  = e.target_concept
 
                 LEFT JOIN financial_facts ff
-                    ON ff.statement   = f.statement
+                    ON ff.company_id = f.company_id
                     AND ff.filing_id  = f.filing_id
-                    AND ff.company_id = f.company_id
+                    AND ff.statement   = f.statement
                     AND ff.concept    = e.target_concept
 
                 WHERE
@@ -559,8 +559,8 @@ def upgrade() -> None:
 
         SELECT DISTINCT
             f.id,
-            f.filing_id,
             f.company_id,
+            f.filing_id,
             f.form_type,
             f.concept,
             f.label,
@@ -607,103 +607,35 @@ def upgrade() -> None:
         """
     )
 
+    # Create unique index on normalized_financial_facts to detect duplicates and enable concurrent refresh
     op.execute(
         """
-        CREATE VIEW abstract_normalization_overrides AS
-
-        WITH RECURSIVE abstract_normalization_overrides_cte AS (
-            SELECT
-                statement,
-                concept,
-                is_abstract,
-                ARRAY[normalized_label] AS path,
-                ARRAY[concept] AS concept_path
-            FROM concept_normalization_overrides
-            -- start from a top level abstracts and work down
-            WHERE
-                is_abstract = TRUE
-                AND abstract_concept IS NULL
-
-            UNION ALL
-
-            SELECT
-                cno.statement,
-                cno.concept,
-                cno.is_abstract,
-                CASE
-                    WHEN cno.is_abstract THEN ano.path || cno.normalized_label
-                    ELSE ano.path
-                END AS path,
-                CASE
-                    WHEN cno.is_abstract THEN ano.concept_path || cno.concept
-                    ELSE ano.concept_path
-                END AS concept_path
-            FROM concept_normalization_overrides cno
-            JOIN abstract_normalization_overrides_cte ano
-            ON
-                cno.abstract_concept = ano.concept
-                AND cno.statement = ano.statement
-        )
-        SELECT * FROM abstract_normalization_overrides_cte
-        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_id
+        ON normalized_financial_facts (id);
+    """
     )
 
     op.execute(
         """
-        CREATE VIEW abstract_normalization AS
-
-        WITH RECURSIVE abstract_normalization_cte AS (
-            SELECT
-                ff.id,
-                ff.filing_id,
-                ff.statement,
-                COALESCE(ano.path, ARRAY[ff.label]) AS path,
-                COALESCE(ano.concept_path, ARRAY[ff.concept]) AS concept_path
-            FROM financial_facts ff
-            LEFT JOIN abstract_normalization_overrides ano
-            ON
-                ff.concept = ano.concept
-                AND ff.statement = ano.statement
-            -- start from a top level abstracts and work down
-            WHERE
-                ff.is_abstract = TRUE
-                AND ff.abstract_id IS NULL
-
-            UNION ALL
-
-            SELECT
-                ff.id,
-                ff.filing_id,
-                ff.statement,
-                CASE
-                    WHEN ano.path IS NULL THEN a.path || ARRAY[ff.label]
-                    ELSE ano.path
-                END AS path,
-                CASE
-                    WHEN ano.concept_path IS NULL THEN a.concept_path || ARRAY[ff.concept]
-                    ELSE ano.concept_path
-                END AS concept_path
-            FROM financial_facts ff
-            LEFT JOIN abstract_normalization_overrides ano
-            ON
-                ff.concept = ano.concept
-                AND ff.statement = ano.statement
-            JOIN abstract_normalization_cte a
-            ON
-                a.id = ff.abstract_id
-                AND a.filing_id = ff.filing_id
-            WHERE
-                ff.is_abstract = TRUE
-        )
-        SELECT * FROM abstract_normalization_cte
-        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_composite
+        ON normalized_financial_facts (
+            company_id,
+            filing_id,
+            statement,
+            concept,
+            normalized_label,
+            axis,
+            member
+        );
+    """
     )
 
 
 def downgrade() -> None:
+    # Drop the unique index
+    op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_composite")
+    op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_id")
     # Drop the views
-    op.execute("DROP VIEW IF EXISTS abstract_normalization")
-    op.execute("DROP VIEW IF EXISTS abstract_normalization_overrides")
     op.execute("DROP VIEW IF EXISTS normalized_financial_facts")
     op.execute("DROP VIEW IF EXISTS parent_normalization_expansion")
     op.execute("DROP VIEW IF EXISTS concept_normalization")

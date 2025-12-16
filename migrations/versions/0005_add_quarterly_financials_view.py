@@ -31,7 +31,7 @@ def upgrade() -> None:
                 ff.id,
                 ff.parent_id,
                 ff.label,
-                COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
+                ff.normalized_label,
                 CASE
                     -- opposite weights means we have to flip the value
                     WHEN ff.weight * FIRST_VALUE(ff.weight) OVER w < 0 THEN -1 * ff.value
@@ -46,41 +46,22 @@ def upgrade() -> None:
                 ff.parsed_member,
                 ff.period_end,
                 ff.period,
+                ff.is_abstract,
+                ff.is_synthetic,
                 ff.form_type as source_type,
                 f.fiscal_year,
                 f.fiscal_quarter,
-                -- Get the latest abstracts, position, and weight for this metric
-                FIRST_VALUE(COALESCE(ano.path, an.path)) OVER w AS latest_abstracts,
-                FIRST_VALUE(COALESCE(ano.concept_path, an.concept_path)) OVER w AS latest_abstract_concepts,
+                -- Get the latest abstract, position, and weight for this metric
+                FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
-            FROM financial_facts ff
+            FROM normalized_financial_facts ff
             JOIN filings f
             ON
-                ff.filing_id = f.id
-            LEFT JOIN abstract_normalization_overrides ano
-            ON
-                ff.statement = ano.statement
-                AND ff.concept = ano.concept
-            LEFT JOIN abstract_normalization an
-            ON
-                ff.filing_id = an.filing_id
-                AND ff.abstract_id = an.id
-            LEFT JOIN concept_normalization_overrides cno
-            ON
-                ff.statement = cno.statement
-                AND ff.concept = cno.concept
-            LEFT JOIN concept_normalization cn
-            ON
-                ff.company_id = cn.company_id
-                AND ff.statement = cn.statement
-                AND ff.concept = cn.concept
-                AND ff.label = cn.label
-            WHERE
-                ff.is_abstract = FALSE
-                -- AND ff.form_type IN ('10-Q', '10-K')
+                ff.company_id = f.company_id
+                AND ff.filing_id = f.id
             WINDOW w AS (
-                PARTITION BY ff.company_id, ff.statement, COALESCE(cno.normalized_label, cn.normalized_label, ff.label), ff.axis, ff.member
+                PARTITION BY ff.company_id, ff.filing_id, ff.statement, ff.normalized_label, ff.axis, ff.member
                 ORDER BY ff.period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
@@ -104,12 +85,13 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
-                latest_abstracts as abstracts,
-                latest_abstract_concepts as abstract_concepts,
+                latest_abstract_id as abstract_id,
                 latest_weight as weight,
                 latest_position as position,
                 period_end,
                 period,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM all_filings_data
             WHERE source_type = '10-Q'
@@ -125,7 +107,7 @@ def upgrade() -> None:
                 END AS prev_value
             FROM quarterly_filings_raw q
             WINDOW w AS (
-                PARTITION BY company_id, statement, normalized_label, axis, member
+                PARTITION BY company_id, filing_id, statement, normalized_label, axis, member
                 ORDER BY period_end
             )
         ),
@@ -155,10 +137,11 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
-                abstracts,
-                abstract_concepts,
+                abstract_id,
                 period_end,
                 position,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM quarterly_filings_with_prev
         ),
@@ -181,11 +164,12 @@ def upgrade() -> None:
                 member,
                 parsed_axis,
                 parsed_member,
-                latest_abstracts as abstracts,
-                latest_abstract_concepts as abstract_concepts,
+                latest_abstract_id as abstract_id,
                 period_end,
                 normalized_label,
                 latest_position as position,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM all_filings_data
             WHERE source_type = '10-K'
@@ -207,14 +191,15 @@ def upgrade() -> None:
                 a.parsed_axis as k_parsed_axis,
                 a.parsed_member as k_parsed_member,
                 a.statement as k_statement,
-                a.abstracts as k_abstracts,
-                a.abstract_concepts as k_abstract_concepts,
+                a.abstract_id as k_abstract_id,
                 a.period_end as k_period_end,
                 a.label as k_label,
                 a.normalized_label as k_normalized_label,
                 a.position as k_position,
+                a.is_abstract as k_is_abstract,
+                a.is_synthetic as k_is_synthetic,
                 ROW_NUMBER() OVER (
-                    PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
+                    PARTITION BY q.company_id, q.filing_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
                     ORDER BY q.period_end DESC
                 ) as rn
             FROM quarterly_filings q
@@ -242,27 +227,28 @@ def upgrade() -> None:
                 k_parsed_axis as parsed_axis,
                 k_parsed_member as parsed_member,
                 k_statement as statement,
-                k_abstracts as abstracts,
-                K_abstract_concepts as abstract_concepts,
+                k_abstract_id as abstract_id,
                 k_period_end as period_end,
                 k_normalized_label as normalized_label,
                 k_position as position,
+                k_is_abstract as is_abstract,
+                k_is_synthetic as is_synthetic,
                 'calculated' as source_type
             FROM quarterly_with_ranks
             -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
             WHERE
                 k_statement != 'Balance Sheet'
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_filing_id, k_id, k_parent_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstracts, k_abstract_concepts, k_position
+            GROUP BY k_company_id, k_filing_id, k_id, k_parent_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstract_id, k_is_abstract, k_is_synthetic, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
         ),
         normalized_concepts AS (
             -- Combine all quarterly data
             SELECT
-                company_id,
-                filing_id,
                 id,
                 parent_id,
+                company_id,
+                filing_id,
                 concept,
                 label,
                 normalized_label,
@@ -272,12 +258,13 @@ def upgrade() -> None:
                 parsed_axis as axis,
                 parsed_member as member,
                 statement,
-                abstracts,
-                abstract_concepts,
+                abstract_id,
                 period_end,
                 fiscal_year,
                 fiscal_quarter,
                 position,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM quarterly_filings
 
@@ -285,10 +272,10 @@ def upgrade() -> None:
 
             -- Balance Sheet data is point in time accumulation
             SELECT
-                company_id,
-                filing_id,
                 id,
                 parent_id,
+                company_id,
+                filing_id,
                 concept,
                 label,
                 normalized_label,
@@ -298,12 +285,13 @@ def upgrade() -> None:
                 parsed_axis as axis,
                 parsed_member as member,
                 statement,
-                abstracts,
-                abstract_concepts,
+                abstract_id,
                 period_end,
                 fiscal_year,
                 fiscal_quarter,
                 position,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM annual_filings
             WHERE
@@ -313,10 +301,10 @@ def upgrade() -> None:
             UNION ALL
 
             SELECT
-                company_id,
-                filing_id,
                 id,
                 parent_id,
+                company_id,
+                filing_id,
                 concept,
                 label,
                 normalized_label,
@@ -326,12 +314,13 @@ def upgrade() -> None:
                 parsed_axis as axis,
                 parsed_member as member,
                 statement,
-                abstracts,
-                abstract_concepts,
+                abstract_id,
                 period_end,
                 fiscal_year,
                 fiscal_quarter,
                 position,
+                is_abstract,
+                is_synthetic,
                 source_type
             FROM missing_quarters
             WHERE value IS NOT NULL AND value != 0
@@ -342,10 +331,16 @@ def upgrade() -> None:
     )
 
     # Create unique index on quarterly_financials for concurrent refresh
-    # Using a functional index to handle NULL values in axis and member columns
     op.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_quarterly_financials_unique
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_quarterly_financials_unique_id
+        ON quarterly_financials (id);
+        """
+    )
+
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_quarterly_financials_unique_composite
         ON quarterly_financials (
             company_id,
             statement,
@@ -361,6 +356,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop the unique index
-    op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique;")
+    op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique_composite;")
+    op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique_id;")
     # Drop the quarterly financials view
     op.execute("DROP VIEW IF EXISTS quarterly_financials;")

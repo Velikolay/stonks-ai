@@ -30,11 +30,11 @@ def upgrade() -> None:
         sa.Column("statement", sa.String(), nullable=False),
         sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
-        sa.Column("abstract_concept", sa.String(), nullable=True),
-        sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
+        sa.Column("parent_concept", sa.String(), nullable=True),
+        sa.Column("abstract_concept", sa.String(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -107,11 +107,11 @@ def upgrade() -> None:
                         "statement": row["statement"],
                         "normalized_label": row["normalized_label"],
                         "is_abstract": is_abstract,
-                        "abstract_concept": abstract_concept,
-                        "parent_concept": parent_concept,
                         "description": description,
                         "unit": unit,
                         "weight": weight,
+                        "parent_concept": parent_concept,
+                        "abstract_concept": abstract_concept,
                     }
                 )
             except Exception as e:
