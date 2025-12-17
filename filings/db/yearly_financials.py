@@ -59,12 +59,18 @@ class YearlyFinancialsOperations:
                         )
                     if label_conditions:
                         conditions.append(or_(*label_conditions))
+                        conditions.append(
+                            self.yearly_financials_view.c.is_abstract.is_(False)
+                        )
 
                 if filter_params.normalized_labels is not None:
                     conditions.append(
                         self.yearly_financials_view.c.normalized_label.in_(
                             filter_params.normalized_labels
                         )
+                    )
+                    conditions.append(
+                        self.yearly_financials_view.c.is_abstract.is_(False)
                     )
 
                 if filter_params.statement is not None:
@@ -91,6 +97,7 @@ class YearlyFinancialsOperations:
                 financials = []
                 for row in rows:
                     financial = YearlyFinancial(
+                        id=row.id,
                         company_id=row.company_id,
                         filing_id=row.filing_id,
                         label=row.label,
@@ -101,12 +108,12 @@ class YearlyFinancialsOperations:
                         statement=row.statement if row.statement else None,
                         axis=row.axis if row.axis else None,
                         member=row.member if row.member else None,
-                        abstracts=row.abstracts,
+                        abstract_id=row.abstract_id,
+                        is_abstract=row.is_abstract,
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
-                        abstract_concepts=getattr(row, "abstract_concepts", None),
                     )
                     financials.append(financial)
 
@@ -166,7 +173,9 @@ class YearlyFinancialsOperations:
             with self.engine.connect() as conn:
                 stmt = (
                     select(self.yearly_financials_view)
-                    .where(self.yearly_financials_view.c.company_id == company_id)
+                    .where(
+                        self.yearly_financials_view.c.company_id == company_id,
+                    )
                     .order_by(
                         self.yearly_financials_view.c.period_end.desc(),
                         self.yearly_financials_view.c.label,
@@ -180,6 +189,7 @@ class YearlyFinancialsOperations:
                 metrics = []
                 for row in rows:
                     metric = YearlyFinancial(
+                        id=row.id,
                         company_id=row.company_id,
                         filing_id=row.filing_id,
                         fiscal_year=row.fiscal_year,
@@ -190,6 +200,8 @@ class YearlyFinancialsOperations:
                         unit=row.unit,
                         statement=row.statement if row.statement else None,
                         period_end=row.period_end,
+                        abstract_id=row.abstract_id,
+                        is_abstract=row.is_abstract,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

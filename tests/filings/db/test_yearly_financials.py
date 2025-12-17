@@ -36,6 +36,7 @@ class TestYearlyFinancialsOperations:
                 # Create test data for company filter
                 company_test_data = [
                     YearlyFinancial(
+                        id=1,
                         company_id=1,
                         filing_id=1,
                         fiscal_year=2023,
@@ -45,9 +46,12 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
+                        abstract_id=None,
+                        is_abstract=False,
                         source_type="10-K",
                     ),
                     YearlyFinancial(
+                        id=2,
                         company_id=1,
                         filing_id=2,
                         fiscal_year=2024,
@@ -57,6 +61,8 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
+                        abstract_id=None,
+                        is_abstract=False,
                         source_type="10-K",
                     ),
                 ]
@@ -64,6 +70,7 @@ class TestYearlyFinancialsOperations:
                 # Create test data for year range filter
                 year_test_data = [
                     YearlyFinancial(
+                        id=1,
                         company_id=1,
                         filing_id=1,
                         fiscal_year=2023,
@@ -73,6 +80,8 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
+                        abstract_id=None,
+                        is_abstract=False,
                         source_type="10-K",
                     )
                 ]
@@ -80,6 +89,7 @@ class TestYearlyFinancialsOperations:
                 # Create test data for statement filter
                 statement_test_data = [
                     YearlyFinancial(
+                        id=1,
                         company_id=1,
                         filing_id=1,
                         fiscal_year=2023,
@@ -89,6 +99,8 @@ class TestYearlyFinancialsOperations:
                         unit="USD",
                         statement="IncomeStatement",
                         period_end=None,
+                        abstract_id=None,
+                        is_abstract=False,
                         source_type="10-K",
                     )
                 ]

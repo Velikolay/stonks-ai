@@ -72,12 +72,18 @@ class QuarterlyFinancialsOperations:
                         )
                     if label_conditions:
                         conditions.append(or_(*label_conditions))
+                        conditions.append(
+                            self.quarterly_financials_view.c.is_abstract.is_(False)
+                        )
 
                 if filter_params.normalized_labels is not None:
                     conditions.append(
                         self.quarterly_financials_view.c.normalized_label.in_(
                             filter_params.normalized_labels
                         )
+                    )
+                    conditions.append(
+                        self.quarterly_financials_view.c.is_abstract.is_(False)
                     )
 
                 if filter_params.statement is not None:
@@ -103,6 +109,7 @@ class QuarterlyFinancialsOperations:
                 financials = []
                 for row in rows:
                     financial = QuarterlyFinancial(
+                        id=row.id,
                         company_id=row.company_id,
                         filing_id=row.filing_id,
                         fiscal_year=row.fiscal_year,
@@ -115,11 +122,11 @@ class QuarterlyFinancialsOperations:
                         statement=row.statement if row.statement else None,
                         axis=row.axis if row.axis else None,
                         member=row.member if row.member else None,
-                        abstracts=row.abstracts,
+                        abstract_id=row.abstract_id,
+                        is_abstract=row.is_abstract,
                         period_end=row.period_end,
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
-                        abstract_concepts=getattr(row, "abstract_concepts", None),
                     )
                     financials.append(financial)
 
@@ -187,7 +194,9 @@ class QuarterlyFinancialsOperations:
             with self.engine.connect() as conn:
                 stmt = (
                     select(self.quarterly_financials_view)
-                    .where(self.quarterly_financials_view.c.company_id == company_id)
+                    .where(
+                        self.quarterly_financials_view.c.company_id == company_id,
+                    )
                     .order_by(
                         self.quarterly_financials_view.c.period_end.desc(),
                         self.quarterly_financials_view.c.label,
@@ -201,6 +210,7 @@ class QuarterlyFinancialsOperations:
                 metrics = []
                 for row in rows:
                     metric = QuarterlyFinancial(
+                        id=row.id,
                         company_id=row.company_id,
                         filing_id=row.filing_id,
                         fiscal_year=row.fiscal_year,
@@ -213,7 +223,8 @@ class QuarterlyFinancialsOperations:
                         statement=row.statement if row.statement else None,
                         axis=row.axis if row.axis else None,
                         member=row.member if row.member else None,
-                        abstracts=row.abstracts,
+                        abstract_id=row.abstract_id,
+                        is_abstract=row.is_abstract,
                         period_end=row.period_end,
                         source_type=row.source_type,
                     )

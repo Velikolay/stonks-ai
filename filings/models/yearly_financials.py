@@ -10,23 +10,24 @@ from pydantic import BaseModel, ConfigDict
 class YearlyFinancial(BaseModel):
     """Model for yearly financial metrics from the view."""
 
+    id: int
     company_id: int
     filing_id: int
     label: str
     normalized_label: str
-    value: Decimal
+    value: Optional[Decimal] = None
     weight: Optional[Decimal] = None
     unit: Optional[str] = None
     statement: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
-    abstracts: Optional[List[str]] = None
+    abstract_id: Optional[int] = None
+    is_abstract: bool
     period_end: Optional[date] = None
     fiscal_year: int
     # Debug fields
     source_type: str  # '10-K'
     concept: Optional[str] = None
-    abstract_concepts: Optional[List[str]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

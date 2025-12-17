@@ -38,6 +38,7 @@ class TestQuarterlyFinancialsOperations:
             with patch.object(operations, "get_quarterly_financials") as mock_get:
                 # Create test data
                 test_financial1 = QuarterlyFinancial(
+                    id=1,
                     company_id=1,
                     filing_id=1,
                     fiscal_year=2024,
@@ -47,10 +48,13 @@ class TestQuarterlyFinancialsOperations:
                     value=Decimal("1000000.00"),
                     unit="USD",
                     statement="Income Statement",
+                    abstract_id=None,
+                    is_abstract=False,
                     period_end=None,
                     source_type="10-Q",
                 )
                 test_financial2 = QuarterlyFinancial(
+                    id=2,
                     company_id=1,
                     filing_id=2,
                     fiscal_year=2024,
@@ -60,6 +64,8 @@ class TestQuarterlyFinancialsOperations:
                     value=Decimal("1100000.00"),
                     unit="USD",
                     statement="Income Statement",
+                    abstract_id=None,
+                    is_abstract=False,
                     period_end=None,
                     source_type="10-Q",
                 )

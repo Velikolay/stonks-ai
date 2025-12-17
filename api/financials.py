@@ -2,7 +2,7 @@
 
 import logging
 from decimal import Decimal
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -24,6 +24,78 @@ def set_filings_db(db: FilingsDatabase) -> None:
     """Set the global filings database instance."""
     global filings_db
     filings_db = db
+
+
+def _resolve_abstract_hierarchies(
+    *,
+    all_rows: Sequence[object],
+    metric_rows: Sequence[object],
+    max_hops: int = 50,
+) -> Tuple[Dict[int, List[str]], Dict[int, List[str]]]:
+    """Reconstruct legacy abstract fields from in-memory abstract_id chains.
+
+    Returns:
+        (abstracts_by_metric_id, abstract_concepts_by_metric_id)
+
+    Notes:
+        - Labels use normalized_label if present, else label.
+        - Only nodes with is_abstract=true are included in the output lists.
+        - Ordering is outermost -> innermost.
+    """
+    id_to_row: Dict[int, object] = {}
+    for r in all_rows:
+        row_id = getattr(r, "id", None)
+        if row_id is None:
+            continue
+        id_to_row[int(row_id)] = r
+
+    abstracts_by_metric_id: Dict[int, List[str]] = {}
+    abstract_concepts_by_metric_id: Dict[int, List[str]] = {}
+
+    for m in metric_rows:
+        metric_id_raw = getattr(m, "id", None)
+        if metric_id_raw is None:
+            continue
+        metric_id = int(metric_id_raw)
+        labels: List[str] = []
+        concepts: List[str] = []
+
+        current_id = getattr(m, "abstract_id", None)
+        seen: Set[int] = set()
+        hops = 0
+        while current_id is not None and hops < max_hops:
+            current_int = int(current_id)
+            if current_int in seen:
+                logger.warning(
+                    "Detected cycle in abstract_id chain for metric id=%s",
+                    metric_id,
+                )
+                break
+            seen.add(current_int)
+
+            node = id_to_row.get(current_int)
+            if node is None:
+                break
+
+            if bool(getattr(node, "is_abstract", False)):
+                label = getattr(node, "normalized_label", None) or getattr(
+                    node, "label", None
+                )
+                if label is not None:
+                    labels.append(str(label))
+                concept = getattr(node, "concept", None)
+                if concept is not None:
+                    concepts.append(str(concept))
+
+            current_id = getattr(node, "abstract_id", None)
+            hops += 1
+
+        labels.reverse()
+        concepts.reverse()
+        abstracts_by_metric_id[metric_id] = labels
+        abstract_concepts_by_metric_id[metric_id] = concepts
+
+    return abstracts_by_metric_id, abstract_concepts_by_metric_id
 
 
 class FinancialMetricValue(BaseModel):
@@ -168,16 +240,27 @@ async def get_financials(
         # Get financial data based on granularity
         if granularity == "quarterly":
             filter_params = QuarterlyFinancialsFilter(**filter_kwargs)
-            metrics = filings_db.quarterly_financials.get_quarterly_financials(
+            rows = filings_db.quarterly_financials.get_quarterly_financials(
                 filter_params
             )
         else:  # yearly
             filter_params = YearlyFinancialsFilter(**filter_kwargs)
-            metrics = filings_db.yearly_financials.get_yearly_financials(filter_params)
+            rows = filings_db.yearly_financials.get_yearly_financials(filter_params)
+
+        metric_rows = [
+            r
+            for r in rows
+            if not bool(getattr(r, "is_abstract", False))
+            and getattr(r, "value", None) is not None
+        ]
+        abstracts_map, abstract_concepts_map = _resolve_abstract_hierarchies(
+            all_rows=rows,
+            metric_rows=metric_rows,
+        )
 
         # Group metrics by label, statement, etc. to reduce payload size
         metric_groups = {}
-        for metric in metrics:
+        for metric in metric_rows:
             # Create a key for grouping
             key = (
                 metric.normalized_label,
@@ -187,16 +270,18 @@ async def get_financials(
             )
 
             if key not in metric_groups:
+                abstracts = abstracts_map.get(metric.id, [])
                 group_data = {
                     "values": [],
                     "weight": metric.weight,
                     "unit": metric.unit,
-                    "abstracts": metric.abstracts,
+                    "abstracts": abstracts if abstracts else None,
                 }
                 if debug:
                     group_data["concept"] = getattr(metric, "concept", None)
-                    group_data["abstract_concepts"] = getattr(
-                        metric, "abstract_concepts", None
+                    abstract_concepts = abstract_concepts_map.get(metric.id, [])
+                    group_data["abstract_concepts"] = (
+                        abstract_concepts if abstract_concepts else None
                     )
                 metric_groups[key] = group_data
 
