@@ -15,7 +15,7 @@ sqlalchemy==2.0.42
 alembic==1.13.1
 
 # EDGAR XBRL dependencies
-edgartools==5.3.1
+edgartools==5.3.2
 # sec-edgar-downloader==5.0.3
 # python-xbrl==1.1.1
 yfinance==0.2.66

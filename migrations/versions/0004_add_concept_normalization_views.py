@@ -523,7 +523,7 @@ def upgrade() -> None:
                     f.period_end,
                     f.comparative_period_end,
                     f.period,
-                    1000 AS position,
+                    99 AS position,
                     NULL AS parent_id,
                     NULL AS abstract_id,
                     TRUE AS is_synthetic

@@ -136,9 +136,6 @@ class SECXBRLParser:
                 period_columns, latest_period_col
             )
 
-            # Track the hierarchy of abstracts
-            hierarchy = []
-
             # Track global fact position (only for facts, not abstracts)
             position = 0
 
@@ -150,34 +147,18 @@ class SECXBRLParser:
 
             # Iterate through each row in the statement
             for _, row in statement_df.iterrows():
-                level = row.get("level", 1)
-
-                # Update hierarchy based on level
-                while len(hierarchy) > 0 and hierarchy[-1].level >= level:
-                    hierarchy.pop()
-
                 # Create financial fact with hierarchy context
                 fact = self._create_financial_fact_with_hierarchy(
                     row,
                     statement_type,
                     latest_period_col,
                     comparative_period_col,
-                    hierarchy,
                     position,
                 )
 
                 if fact:
                     facts.append(fact)
                     position += 1
-
-                # Add current abstract to hierarchy if it's an abstract
-                if fact and fact.is_abstract:
-                    hierarchy.append(
-                        HierarchyEntry(
-                            level=level,
-                            key=fact.key,
-                        )
-                    )
 
         except Exception:
             logger.exception(f"Error parsing {statement_type}")
@@ -560,7 +541,6 @@ class SECXBRLParser:
         statement_type: str,
         period_col: str,
         comparative_period_col: Optional[str],
-        hierarchy: list[HierarchyEntry],
         position: int,
     ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact from a statement row with hierarchical abstracts.
@@ -570,7 +550,6 @@ class SECXBRLParser:
             statement_type: Type of financial statement
             period_col: The period column name (e.g., "2025-06-28 (Q2)")
             comparative_period_col: The comparative period (past year) column name (e.g., "2024-06-28 (Q2)")
-            hierarchy: List of parent abstracts in hierarchy
             position: Global position of this fact in the statement
 
         Returns:
@@ -582,6 +561,11 @@ class SECXBRLParser:
             parent_concept = (
                 self._to_sec_concept(row.get("parent_concept"))
                 if row.get("parent_concept")
+                else None
+            )
+            abstract_concept = (
+                self._to_sec_concept(row.get("parent_abstract_concept"))
+                if row.get("parent_abstract_concept")
                 else None
             )
             label = row.get("label", concept)
@@ -668,11 +652,20 @@ class SECXBRLParser:
                     )
                 )
 
+            abstract_key = None
+            if abstract_concept:
+                abstract_key = str(
+                    uuid.uuid5(
+                        uuid.NAMESPACE_OID,
+                        f"{abstract_concept}|{statement_type}|{period_end_str}",
+                    )
+                )
+
             # Create the financial fact
             fact = FinancialFactCreate(
                 key=fact_key,
                 parent_key=parent_key,
-                abstract_key=hierarchy[-1].key if hierarchy else None,
+                abstract_key=abstract_key,
                 company_id=0,
                 filing_id=0,
                 form_type="",
