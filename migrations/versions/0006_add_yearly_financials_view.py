@@ -57,7 +57,7 @@ def upgrade() -> None:
             WHERE
                 ff.form_type = '10-K'
             WINDOW w AS (
-                PARTITION BY ff.company_id, ff.filing_id, ff.statement, ff.normalized_label, ff.axis, ff.member
+                PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
                 ORDER BY ff.period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )

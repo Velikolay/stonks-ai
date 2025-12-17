@@ -61,7 +61,7 @@ def upgrade() -> None:
                 ff.company_id = f.company_id
                 AND ff.filing_id = f.id
             WINDOW w AS (
-                PARTITION BY ff.company_id, ff.filing_id, ff.statement, ff.normalized_label, ff.axis, ff.member
+                PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
                 ORDER BY ff.period_end DESC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
@@ -107,7 +107,7 @@ def upgrade() -> None:
                 END AS prev_value
             FROM quarterly_filings_raw q
             WINDOW w AS (
-                PARTITION BY company_id, filing_id, statement, normalized_label, axis, member
+                PARTITION BY company_id, statement, normalized_label, axis, member
                 ORDER BY period_end
             )
         ),
@@ -199,7 +199,7 @@ def upgrade() -> None:
                 a.is_abstract as k_is_abstract,
                 a.is_synthetic as k_is_synthetic,
                 ROW_NUMBER() OVER (
-                    PARTITION BY q.company_id, q.filing_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
+                    PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
                     ORDER BY q.period_end DESC
                 ) as rn
             FROM quarterly_filings q
