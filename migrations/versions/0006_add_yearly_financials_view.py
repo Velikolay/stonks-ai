@@ -109,11 +109,25 @@ def upgrade() -> None:
             axis,
             member
         );
-    """
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_yearly_financials_order
+        ON yearly_financials (
+            company_id,
+            statement,
+            position,
+            period_end DESC
+        );
+        """
     )
 
 
 def downgrade() -> None:
+    # Drop the sort index
+    op.execute("DROP INDEX IF EXISTS idx_yearly_financials_order;")
     # Drop the unique index
     op.execute("DROP INDEX IF EXISTS idx_yearly_financials_unique_composite;")
     op.execute("DROP INDEX IF EXISTS idx_yearly_financials_unique_id;")

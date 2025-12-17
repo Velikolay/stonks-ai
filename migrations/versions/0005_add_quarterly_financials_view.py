@@ -241,92 +241,89 @@ def upgrade() -> None:
                 AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
             GROUP BY k_company_id, k_filing_id, k_id, k_parent_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstract_id, k_is_abstract, k_is_synthetic, k_position
             HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
-        ),
-        normalized_concepts AS (
-            -- Combine all quarterly data
-            SELECT
-                id,
-                parent_id,
-                company_id,
-                filing_id,
-                concept,
-                label,
-                normalized_label,
-                value,
-                weight,
-                unit,
-                parsed_axis as axis,
-                parsed_member as member,
-                statement,
-                abstract_id,
-                period_end,
-                fiscal_year,
-                fiscal_quarter,
-                position,
-                is_abstract,
-                is_synthetic,
-                source_type
-            FROM quarterly_filings
-
-            UNION ALL
-
-            -- Balance Sheet data is point in time accumulation
-            SELECT
-                id,
-                parent_id,
-                company_id,
-                filing_id,
-                concept,
-                label,
-                normalized_label,
-                value,
-                weight,
-                unit,
-                parsed_axis as axis,
-                parsed_member as member,
-                statement,
-                abstract_id,
-                period_end,
-                fiscal_year,
-                fiscal_quarter,
-                position,
-                is_abstract,
-                is_synthetic,
-                source_type
-            FROM annual_filings
-            WHERE
-                statement = 'Balance Sheet'
-                OR normalized_label ILIKE 'Shares Outstanding%'
-
-            UNION ALL
-
-            SELECT
-                id,
-                parent_id,
-                company_id,
-                filing_id,
-                concept,
-                label,
-                normalized_label,
-                value,
-                weight,
-                unit,
-                parsed_axis as axis,
-                parsed_member as member,
-                statement,
-                abstract_id,
-                period_end,
-                fiscal_year,
-                fiscal_quarter,
-                position,
-                is_abstract,
-                is_synthetic,
-                source_type
-            FROM missing_quarters
-            WHERE value IS NOT NULL AND value != 0
         )
-        SELECT * FROM normalized_concepts
-        ORDER BY company_id, statement, position, period_end DESC;
+
+        -- Combine all quarterly data
+        SELECT
+            id,
+            parent_id,
+            company_id,
+            filing_id,
+            concept,
+            label,
+            normalized_label,
+            value,
+            weight,
+            unit,
+            parsed_axis as axis,
+            parsed_member as member,
+            statement,
+            abstract_id,
+            period_end,
+            fiscal_year,
+            fiscal_quarter,
+            position,
+            is_abstract,
+            is_synthetic,
+            source_type
+        FROM quarterly_filings
+
+        UNION ALL
+
+        -- Balance Sheet data is point in time accumulation
+        SELECT
+            id,
+            parent_id,
+            company_id,
+            filing_id,
+            concept,
+            label,
+            normalized_label,
+            value,
+            weight,
+            unit,
+            parsed_axis as axis,
+            parsed_member as member,
+            statement,
+            abstract_id,
+            period_end,
+            fiscal_year,
+            fiscal_quarter,
+            position,
+            is_abstract,
+            is_synthetic,
+            source_type
+        FROM annual_filings
+        WHERE
+            statement = 'Balance Sheet'
+            OR normalized_label ILIKE 'Shares Outstanding%'
+
+        UNION ALL
+
+        SELECT
+            id,
+            parent_id,
+            company_id,
+            filing_id,
+            concept,
+            label,
+            normalized_label,
+            value,
+            weight,
+            unit,
+            parsed_axis as axis,
+            parsed_member as member,
+            statement,
+            abstract_id,
+            period_end,
+            fiscal_year,
+            fiscal_quarter,
+            position,
+            is_abstract,
+            is_synthetic,
+            source_type
+        FROM missing_quarters
+        WHERE value IS NOT NULL AND value != 0
     """
     )
 
@@ -350,11 +347,25 @@ def upgrade() -> None:
             axis,
             member
         );
-    """
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_quarterly_financials_order
+        ON quarterly_financials (
+            company_id,
+            statement,
+            position,
+            period_end DESC
+        );
+        """
     )
 
 
 def downgrade() -> None:
+    # Drop the sort index
+    op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_order;")
     # Drop the unique index
     op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique_composite;")
     op.execute("DROP INDEX IF EXISTS idx_quarterly_financials_unique_id;")
