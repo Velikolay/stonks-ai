@@ -323,7 +323,7 @@ def upgrade() -> None:
             is_synthetic,
             source_type
         FROM missing_quarters
-        WHERE value IS NOT NULL AND value != 0
+        WHERE value IS NOT NULL AND value != 0;
     """
     )
 

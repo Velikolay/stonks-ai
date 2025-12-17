@@ -101,7 +101,12 @@ class QuarterlyFinancialsOperations:
                     # If axis filter is not provided, only return records where axis is empty
                     conditions.append(self.quarterly_financials_view.c.axis == "")
 
-                stmt = stmt.where(and_(*conditions))
+                stmt = stmt.where(and_(*conditions)).order_by(
+                    self.quarterly_financials_view.c.company_id,
+                    self.quarterly_financials_view.c.statement,
+                    self.quarterly_financials_view.c.position,
+                    self.quarterly_financials_view.c.period_end.desc(),
+                )
 
                 result = conn.execute(stmt)
                 rows = result.fetchall()

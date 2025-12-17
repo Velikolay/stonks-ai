@@ -248,10 +248,7 @@ async def get_financials(
             rows = filings_db.yearly_financials.get_yearly_financials(filter_params)
 
         metric_rows = [
-            r
-            for r in rows
-            if not bool(getattr(r, "is_abstract", False))
-            and getattr(r, "value", None) is not None
+            fact for fact in rows if not fact.is_abstract and fact.value is not None
         ]
         abstracts_map, abstract_concepts_map = _resolve_abstract_hierarchies(
             all_rows=rows,

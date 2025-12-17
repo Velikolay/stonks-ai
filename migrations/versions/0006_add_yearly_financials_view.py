@@ -84,8 +84,7 @@ def upgrade() -> None:
             is_abstract,
             is_synthetic,
             '10-K' as source_type
-        FROM all_filings_data
-        ORDER BY company_id, statement, position, period_end DESC;
+        FROM all_filings_data;
     """
     )
 
