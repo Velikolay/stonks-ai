@@ -450,7 +450,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE MATERIALIZED VIEW normalized_financial_facts AS
+        CREATE VIEW normalized_financial_facts AS
 
         WITH RECURSIVE facts AS (
             /* -------------------------------------------------
@@ -608,33 +608,34 @@ def upgrade() -> None:
     )
 
     # Create unique index on normalized_financial_facts to detect duplicates and enable concurrent refresh
-    op.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_id
-        ON normalized_financial_facts (id);
-    """
-    )
+    # op.execute(
+    #     """
+    #     CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_id
+    #     ON normalized_financial_facts (id);
+    # """
+    # )
 
-    op.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_composite
-        ON normalized_financial_facts (
-            company_id,
-            filing_id,
-            statement,
-            concept,
-            normalized_label,
-            axis,
-            member
-        );
-    """
-    )
+    # op.execute(
+    #     """
+    #     CREATE UNIQUE INDEX IF NOT EXISTS idx_normalized_financial_facts_unique_composite
+    #     ON normalized_financial_facts (
+    #         company_id,
+    #         filing_id,
+    #         statement,
+    #         concept,
+    #         normalized_label,
+    #         axis,
+    #         member
+    #     );
+    # """
+    # )
 
 
 def downgrade() -> None:
     # Drop the unique index
-    op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_composite")
-    op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_id")
+    # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_composite")
+    # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_id")
+
     # Drop the views
     op.execute("DROP VIEW IF EXISTS normalized_financial_facts")
     op.execute("DROP VIEW IF EXISTS parent_normalization_expansion")
