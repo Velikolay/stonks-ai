@@ -107,6 +107,7 @@ class FinancialMetricValue(BaseModel):
     fiscal_year: Optional[int] = None
     fiscal_quarter: Optional[int] = None
     source_type: Optional[str] = None
+    is_synthetic: Optional[bool] = None
 
 
 class FinancialMetricResponse(BaseModel):
@@ -294,6 +295,7 @@ async def get_financials(
                 ),
                 period_end=period_end_str,
                 source_type=getattr(metric, "source_type", None) if debug else None,
+                is_synthetic=getattr(metric, "is_synthetic", None) if debug else None,
             )
             metric_groups[key]["values"].append(value_obj)
 

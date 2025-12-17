@@ -115,6 +115,7 @@ class YearlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstract_id=row.abstract_id,
                         is_abstract=row.is_abstract,
+                        is_synthetic=row.is_synthetic,
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
                         source_type=row.source_type,
@@ -207,6 +208,7 @@ class YearlyFinancialsOperations:
                         period_end=row.period_end,
                         abstract_id=row.abstract_id,
                         is_abstract=row.is_abstract,
+                        is_synthetic=row.is_synthetic,
                         source_type=row.source_type,
                     )
                     metrics.append(metric)

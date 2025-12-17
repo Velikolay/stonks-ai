@@ -129,6 +129,7 @@ class QuarterlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstract_id=row.abstract_id,
                         is_abstract=row.is_abstract,
+                        is_synthetic=row.is_synthetic,
                         period_end=row.period_end,
                         source_type=row.source_type,
                         concept=getattr(row, "concept", None),
@@ -230,6 +231,7 @@ class QuarterlyFinancialsOperations:
                         member=row.member if row.member else None,
                         abstract_id=row.abstract_id,
                         is_abstract=row.is_abstract,
+                        is_synthetic=row.is_synthetic,
                         period_end=row.period_end,
                         source_type=row.source_type,
                     )

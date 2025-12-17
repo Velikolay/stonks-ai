@@ -25,6 +25,7 @@ class QuarterlyFinancial(BaseModel):
     member: Optional[str] = None
     abstract_id: Optional[int] = None
     is_abstract: bool
+    is_synthetic: bool
     period_end: Optional[date] = None
     # Debug fields
     source_type: str  # '10-Q', or 'calculated'

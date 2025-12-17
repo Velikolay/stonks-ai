@@ -23,6 +23,7 @@ class YearlyFinancial(BaseModel):
     member: Optional[str] = None
     abstract_id: Optional[int] = None
     is_abstract: bool
+    is_synthetic: bool
     period_end: Optional[date] = None
     fiscal_year: int
     # Debug fields
