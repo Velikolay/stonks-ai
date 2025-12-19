@@ -1,6 +1,5 @@
 """Tests for SEC 10-Q parser."""
 
-import uuid
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -8,7 +7,7 @@ import pandas as pd
 
 from filings.parsers.geography import GeographyParser
 from filings.parsers.product import ProductParser
-from filings.parsers.sec_xbrl import HierarchyEntry, SECXBRLParser
+from filings.parsers.sec_xbrl import SECXBRLParser
 
 
 class TestSECXBRLParser:
@@ -244,17 +243,11 @@ class TestSECXBRLParser:
             "abstract": False,
         }
 
-        # Mock abstract hierarchy
-        hierarchy = [
-            HierarchyEntry(level=1, key=str(uuid.uuid4())),
-        ]
-
         fact = parser._create_financial_fact_with_hierarchy(
             row=row,
             statement_type="Income Statement",
             period_col="2024-03-31 (Q1)",
             comparative_period_col="2023-03-31 (Q1)",
-            hierarchy=hierarchy,
             position=0,
         )
 

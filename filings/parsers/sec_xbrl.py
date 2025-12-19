@@ -3,7 +3,6 @@
 import logging
 import math
 import uuid
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -16,12 +15,6 @@ from .geography import GeographyParser
 from .product import ProductParser
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class HierarchyEntry:
-    key: str
-    level: int
 
 
 class SECXBRLParser:

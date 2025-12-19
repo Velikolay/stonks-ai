@@ -18,6 +18,7 @@ def sample_override() -> ConceptNormalizationOverrideCreate:
         is_abstract=False,
         abstract_concept=None,
         description="Test description",
+        unit="USD",
     )
 
 
@@ -31,6 +32,7 @@ def sample_override_with_parent() -> ConceptNormalizationOverrideCreate:
         is_abstract=False,
         abstract_concept="us-gaap:ParentConcept",
         description="Child description",
+        unit="USD",
     )
 
 
@@ -83,6 +85,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 1",
             is_abstract=False,
+            unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
             concept="us-gaap:Concept2",
@@ -95,6 +98,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 3",
             is_abstract=False,
+            unit="USD",
         )
 
         db.concept_normalization_overrides.create(override1)
@@ -117,18 +121,21 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 1",
             is_abstract=False,
+            unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
             concept="us-gaap:Concept2",
             statement="Balance Sheet",
             normalized_label="Label 2",
             is_abstract=False,
+            unit="USD",
         )
         override3 = ConceptNormalizationOverrideCreate(
             concept="us-gaap:Concept3",
             statement="Income Statement",
             normalized_label="Label 3",
             is_abstract=False,
+            unit="USD",
         )
 
         db.concept_normalization_overrides.create(override1)
@@ -268,6 +275,7 @@ class TestConceptNormalizationOverridesOperations:
             normalized_label="Child Label",
             is_abstract=False,
             abstract_concept="us-gaap:NonExistentParent",
+            unit="USD",
         )
 
         with pytest.raises(ValueError, match="invalid abstract_concept"):
@@ -280,6 +288,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Concrete",
             is_abstract=False,
+            unit="USD",
         )
 
         override_true = ConceptNormalizationOverrideCreate(

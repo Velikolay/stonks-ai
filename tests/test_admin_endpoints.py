@@ -218,14 +218,20 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "parent_concept" in response.json()["detail"].lower()
-        assert "abstract" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "parent_concept" in detail_lower
+        assert "abstract" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_create_override_parent_concept_without_weight_fails(
         self, mock_filings_db, client
     ):
         """Test creating override with parent_concept but no weight fails."""
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Records with parent_concept must have a weight specified"
+        )
+
         override_data = {
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
@@ -241,14 +247,20 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "parent_concept" in response.json()["detail"].lower()
-        assert "weight" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "parent_concept" in detail_lower
+        assert "weight" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_create_override_non_abstract_without_unit_fails(
         self, mock_filings_db, client
     ):
         """Test creating non-abstract override without unit fails."""
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Non-abstract records (is_abstract=False) must have a unit specified"
+        )
+
         override_data = {
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
@@ -264,11 +276,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "unit" in response.json()["detail"].lower()
-        assert (
-            "non-abstract" in response.json()["detail"].lower()
-            or "is_abstract=false" in response.json()["detail"].lower()
-        )
+        detail_lower = response.json().get("detail", "").lower()
+        assert "unit" in detail_lower
+        assert "non-abstract" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_create_override_abstract_with_parent_concept_fails(
@@ -290,12 +300,18 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "parent_concept" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "parent_concept" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_create_override_abstract_with_weight_fails(self, mock_filings_db, client):
         """Test creating abstract override with weight fails."""
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Abstract records (is_abstract=True) cannot have a weight"
+        )
+
         override_data = {
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
@@ -311,8 +327,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "weight" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "weight" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_create_override_abstract_with_unit_fails(self, mock_filings_db, client):
@@ -332,8 +349,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "unit" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "unit" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_delete_override_success(self, mock_filings_db, client):
@@ -368,8 +386,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "parent_concept" in response.json()["detail"].lower()
-        assert "abstract" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "parent_concept" in detail_lower
+        assert "abstract" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_update_override_parent_concept_without_weight_fails(
@@ -384,6 +403,10 @@ class TestAdminEndpoints:
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
             mock_override
         )
+        # Configure mock to raise ValueError when update is called
+        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
+            "Records with parent_concept must have a weight specified"
+        )
 
         update_data = {"parent_concept": "us-gaap:ParentConcept"}
 
@@ -393,8 +416,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "parent_concept" in response.json()["detail"].lower()
-        assert "weight" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "parent_concept" in detail_lower
+        assert "weight" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_update_override_non_abstract_without_unit_fails(
@@ -418,7 +442,8 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "unit" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "unit" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_update_override_abstract_with_parent_concept_fails(
@@ -442,8 +467,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "parent_concept" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "parent_concept" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_update_override_abstract_with_weight_fails(
@@ -458,6 +484,10 @@ class TestAdminEndpoints:
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
             mock_override
         )
+        # Configure mock to raise ValueError when update is called
+        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
+            "Abstract records (is_abstract=True) cannot have a weight"
+        )
 
         update_data = {"weight": 1.0}
 
@@ -467,8 +497,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "weight" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "weight" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_update_override_abstract_with_unit_fails(
@@ -492,8 +523,9 @@ class TestAdminEndpoints:
         )
 
         assert response.status_code == 400
-        assert "abstract" in response.json()["detail"].lower()
-        assert "unit" in response.json()["detail"].lower()
+        detail_lower = response.json().get("detail", "").lower()
+        assert "abstract" in detail_lower
+        assert "unit" in detail_lower
 
     @patch("api.admin.filings_db")
     def test_delete_override_not_found(self, mock_filings_db, client):
@@ -792,6 +824,10 @@ class TestAdminEndpoints:
     ):
         """Test importing CSV with non-abstract record without unit fails."""
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Non-abstract records (is_abstract=False) must have a unit specified"
+        )
 
         csv_content = io.StringIO()
         writer = csv.DictWriter(
@@ -843,6 +879,10 @@ class TestAdminEndpoints:
     def test_import_from_csv_abstract_with_unit_fails(self, mock_filings_db, client):
         """Test importing CSV with abstract record with unit fails."""
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Abstract records (is_abstract=True) cannot have a unit"
+        )
 
         csv_content = io.StringIO()
         writer = csv.DictWriter(
@@ -896,6 +936,10 @@ class TestAdminEndpoints:
     ):
         """Test importing CSV with parent_concept but no weight fails."""
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        # Configure mock to raise ValueError when create is called
+        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
+            "Records with parent_concept must have a weight specified"
+        )
 
         csv_content = io.StringIO()
         writer = csv.DictWriter(
@@ -955,6 +999,10 @@ class TestAdminEndpoints:
         mock_override.parent_concept = None
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
             mock_override
+        )
+        # Configure mock to raise ValueError when update is called
+        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
+            "Abstract records (is_abstract=True) cannot have a unit"
         )
 
         # CSV tries to update to abstract but keep unit (should fail)

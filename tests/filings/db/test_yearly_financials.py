@@ -48,6 +48,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         abstract_id=None,
                         is_abstract=False,
+                        is_synthetic=False,
                         source_type="10-K",
                     ),
                     YearlyFinancial(
@@ -63,6 +64,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         abstract_id=None,
                         is_abstract=False,
+                        is_synthetic=False,
                         source_type="10-K",
                     ),
                 ]
@@ -82,6 +84,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         abstract_id=None,
                         is_abstract=False,
+                        is_synthetic=False,
                         source_type="10-K",
                     )
                 ]
@@ -101,6 +104,7 @@ class TestYearlyFinancialsOperations:
                         period_end=None,
                         abstract_id=None,
                         is_abstract=False,
+                        is_synthetic=False,
                         source_type="10-K",
                     )
                 ]
