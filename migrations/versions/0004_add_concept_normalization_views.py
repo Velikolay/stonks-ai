@@ -146,6 +146,7 @@ def upgrade() -> None:
           r.root_label as normalized_label,
           r.root_period as current_period,
           r.root_period as root_period,
+          -- md5(r.company_id || '|' || r.statement || '|' || r.root_concept) AS group_id
           gen_random_uuid() AS group_id
         FROM roots r
 
@@ -195,6 +196,7 @@ def upgrade() -> None:
             statement,
             concept,
             (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
+            -- md5(company_id || '|' || statement || '|' || concept) AS group_id,
             gen_random_uuid() AS group_id,
             MAX(period_end) AS group_max_period_end
           FROM financial_facts
@@ -390,7 +392,10 @@ def upgrade() -> None:
         """
         CREATE VIEW parent_normalization_expansion AS
 
-        WITH concept_expansion AS (
+        WITH concept_normalization_stable AS (
+          SELECT * FROM concept_normalization_combined
+        ),
+        concept_expansion AS (
             SELECT
                 cne.company_id,
                 cne.statement,
@@ -398,11 +403,11 @@ def upgrade() -> None:
                 cno.parent_concept,
                 cne.concept as concept_expand
             FROM concept_normalization_overrides cno
-            JOIN concept_normalization cn
+            JOIN concept_normalization_stable cn
             ON
                 cno.statement = cn.statement
                 AND cno.concept = cn.concept
-            JOIN concept_normalization cne
+            JOIN concept_normalization_stable cne
             ON
                 cn.group_id = cne.group_id
             WHERE
@@ -416,11 +421,11 @@ def upgrade() -> None:
                 cno.parent_concept,
                 cne.concept as parent_concept_expand
             FROM concept_normalization_overrides cno
-            JOIN concept_normalization cn
+            JOIN concept_normalization_stable cn
             ON
                 cno.statement = cn.statement
                 AND cno.parent_concept = cn.concept
-            JOIN concept_normalization cne
+            JOIN concept_normalization_stable cne
             ON
                 cn.group_id = cne.group_id
             WHERE
