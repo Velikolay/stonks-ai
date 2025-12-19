@@ -498,112 +498,206 @@ def upgrade() -> None:
             /* -------------------------------
             * Add missing parent / abstract concept
             * ------------------------------- */
-                SELECT
-                    abs(hashtextextended(
-                        f.statement || '|' || cnop.concept || '|' ||
-                        f.filing_id::text || '|' || f.company_id::text,
-                        0
-                    )) AS id,
-                    f.company_id,
-                    f.filing_id,
-                    f.form_type,
-                    cnop.concept,
-                    cnop.normalized_label AS label,
-                    cnop.normalized_label AS normalized_label,
-                    cnop.is_abstract,
-                    NULL AS value,
-                    NULL AS comparative_value,
-                    cnop.weight,
-                    cnop.unit,
-                    NULL AS axis,
-                    NULL AS member,
-                    NULL AS parsed_axis,
-                    NULL AS parsed_member,
-                    cnop.statement,
-                    f.period_end,
-                    f.comparative_period_end,
-                    f.period,
-                    99 AS position,
-                    NULL AS parent_id,
-                    NULL AS abstract_id,
-                    TRUE AS is_synthetic
-                FROM facts f
-                JOIN concept_normalization_overrides cno
-                    ON cno.statement = f.statement
-                    AND cno.concept  = f.concept
+            SELECT
+                abs(hashtextextended(
+                    f.statement || '|' || cnop.concept || '|' ||
+                    f.filing_id::text || '|' || f.company_id::text,
+                    0
+                )) AS id,
+                f.company_id,
+                f.filing_id,
+                f.form_type,
+                cnop.concept,
+                cnop.normalized_label AS label,
+                cnop.normalized_label AS normalized_label,
+                cnop.is_abstract,
+                NULL AS value,
+                NULL AS comparative_value,
+                cnop.weight,
+                cnop.unit,
+                '' AS axis,
+                '' AS member,
+                '' AS parsed_axis,
+                '' AS parsed_member,
+                cnop.statement,
+                f.period_end,
+                f.comparative_period_end,
+                f.period,
+                99 AS position,
+                NULL AS parent_id,
+                NULL AS abstract_id,
+                TRUE AS is_synthetic
+            FROM facts f
+            JOIN concept_normalization_overrides cno
+                ON cno.statement = f.statement
+                AND cno.concept  = f.concept
 
-                /* -------------------------------
-                * Normalize edges into rows
-                * ------------------------------- */
-                JOIN LATERAL (
-                    VALUES
-                        (cno.parent_concept,   f.parent_id),
-                        (cno.abstract_concept, f.abstract_id)
-                ) AS e(target_concept, existing_id)
-                    ON e.target_concept IS NOT NULL
+            /* -------------------------------
+            * Normalize edges into rows
+            * ------------------------------- */
+            JOIN LATERAL (
+                VALUES
+                    (cno.parent_concept,   f.parent_id),
+                    (cno.abstract_concept, f.abstract_id)
+            ) AS e(target_concept, existing_id)
+                ON e.target_concept IS NOT NULL
 
-                JOIN concept_normalization_overrides cnop
-                    ON cnop.statement = cno.statement
-                    AND cnop.concept  = e.target_concept
+            JOIN concept_normalization_overrides cnop
+                ON cnop.statement = cno.statement
+                AND cnop.concept  = e.target_concept
 
-                LEFT JOIN financial_facts ff
-                    ON ff.company_id = f.company_id
-                    AND ff.filing_id  = f.filing_id
-                    AND ff.statement   = f.statement
-                    AND ff.concept    = e.target_concept
+            LEFT JOIN financial_facts ff
+                ON ff.company_id = f.company_id
+                AND ff.filing_id  = f.filing_id
+                AND ff.statement   = f.statement
+                AND ff.concept    = e.target_concept
 
-                WHERE
-                    ff.id IS NULL
-                    OR (e.existing_id <> ff.id AND f.is_synthetic IS FALSE)
+            WHERE
+                ff.id IS NULL
+                OR (e.existing_id <> ff.id AND f.is_synthetic IS FALSE)
+        ),
+        normalized_facts AS (
+            SELECT DISTINCT
+                f.id,
+                f.company_id,
+                f.filing_id,
+                f.form_type,
+                f.concept,
+                f.label,
+                f.normalized_label,
+                f.is_abstract,
+                f.value,
+                f.comparative_value,
+                f.weight,
+                f.unit,
+                f.axis,
+                f.member,
+                f.parsed_axis,
+                f.parsed_member,
+                f.statement,
+                f.period_end,
+                f.comparative_period_end,
+                f.period,
+                f.position,
+
+                /* parent wiring */
+                COALESCE(fp.id, f.parent_id)   AS parent_id,
+
+                /* abstract wiring */
+                COALESCE(fa.id, f.abstract_id) AS abstract_id,
+
+                f.is_synthetic
+            FROM facts f
+
+            LEFT JOIN concept_normalization_overrides cno
+                ON cno.statement = f.statement
+                AND cno.concept  = f.concept
+
+            LEFT JOIN facts fp
+                ON fp.statement   = f.statement
+                AND fp.filing_id  = f.filing_id
+                AND fp.company_id = f.company_id
+                AND fp.concept    = cno.parent_concept
+
+            LEFT JOIN facts fa
+                ON fa.statement   = f.statement
+                AND fa.filing_id  = f.filing_id
+                AND fa.company_id = f.company_id
+                AND fa.concept    = cno.abstract_concept
+        ),
+        synthetic_rollup AS (
+            /* ---------------------------------------
+            * 1. Base: real nodes contribute their value
+            * --------------------------------------- */
+            SELECT
+                nf.id,
+                nf.parent_id,
+                nf.value * nf.weight AS contrib_value,
+                nf.comparative_value * nf.weight AS contrib_comparative_value
+            FROM normalized_facts nf
+            WHERE
+                NOT nf.is_abstract
+                AND NOT nf.is_synthetic
+
+            UNION ALL
+
+            /* ---------------------------------------
+            * 2. Push values upward
+            * --------------------------------------- */
+            SELECT
+                nf.id,
+                nf.parent_id,
+                sr.contrib_value * nf.weight AS contrib_value,
+                sr.contrib_comparative_value * nf.weight AS contrib_comparative_value
+            FROM synthetic_rollup sr
+            JOIN normalized_facts nf
+                ON nf.id = sr.parent_id
+            WHERE
+                NOT nf.is_abstract
+                AND nf.is_synthetic
         )
 
-        SELECT DISTINCT
-            f.id,
-            f.company_id,
-            f.filing_id,
-            f.form_type,
-            f.concept,
-            f.label,
-            f.normalized_label,
-            f.is_abstract,
-            f.value,
-            f.comparative_value,
-            f.weight,
-            f.unit,
-            f.axis,
-            f.member,
-            f.parsed_axis,
-            f.parsed_member,
-            f.statement,
-            f.period_end,
-            f.comparative_period_end,
-            f.period,
-            f.position,
-
-            /* parent wiring */
-            COALESCE(fp.id, f.parent_id)   AS parent_id,
-
-            /* abstract wiring */
-            COALESCE(fa.id, f.abstract_id) AS abstract_id,
-
-            f.is_synthetic
-        FROM facts f
-
-        LEFT JOIN concept_normalization_overrides cno
-            ON cno.statement = f.statement
-            AND cno.concept  = f.concept
-
-        LEFT JOIN facts fp
-            ON fp.statement   = f.statement
-            AND fp.filing_id  = f.filing_id
-            AND fp.company_id = f.company_id
-            AND fp.concept    = cno.parent_concept
-
-        LEFT JOIN facts fa
-            ON fa.statement   = f.statement
-            AND fa.filing_id  = f.filing_id
-            AND fa.company_id = f.company_id
-            AND fa.concept    = cno.abstract_concept;
+        SELECT
+            nf.id,
+            nf.company_id,
+            nf.filing_id,
+            nf.form_type,
+            nf.concept,
+            nf.label,
+            nf.normalized_label,
+            nf.is_abstract,
+            CASE
+                WHEN nf.is_synthetic THEN
+                    SUM(sr.contrib_value)
+                ELSE nf.value
+            END AS value,
+            CASE
+                WHEN nf.is_synthetic THEN
+                    SUM(sr.contrib_comparative_value)
+                ELSE nf.comparative_value
+            END AS comparative_value,
+            nf.weight,
+            nf.unit,
+            nf.axis,
+            nf.member,
+            nf.parsed_axis,
+            nf.parsed_member,
+            nf.statement,
+            nf.period_end,
+            nf.comparative_period_end,
+            nf.period,
+            nf.position,
+            nf.parent_id,
+            nf.abstract_id,
+            nf.is_synthetic
+        FROM normalized_facts nf
+        LEFT JOIN synthetic_rollup sr
+            ON sr.id = nf.id
+        GROUP BY
+            nf.id,
+            nf.company_id,
+            nf.filing_id,
+            nf.form_type,
+            nf.concept,
+            nf.label,
+            nf.normalized_label,
+            nf.is_abstract,
+            nf.value,
+            nf.comparative_value,
+            nf.weight,
+            nf.unit,
+            nf.axis,
+            nf.member,
+            nf.parsed_axis,
+            nf.parsed_member,
+            nf.statement,
+            nf.period_end,
+            nf.comparative_period_end,
+            nf.period,
+            nf.position,
+            nf.parent_id,
+            nf.abstract_id,
+            nf.is_synthetic
         """
     )
 
