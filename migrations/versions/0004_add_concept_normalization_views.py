@@ -465,8 +465,16 @@ def upgrade() -> None:
                 ff.label,
                 COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
                 ff.is_abstract,
-                ff.value,
-                ff.comparative_value,
+                CASE
+                    WHEN ff.weight * COALESCE(cno.weight, cn.weight, ff.weight) < 0
+                    THEN -ff.value
+                    ELSE ff.value
+                END as value,
+                CASE
+                    WHEN ff.weight * COALESCE(cno.weight, cn.weight, ff.weight) < 0
+                    THEN -ff.comparative_value
+                    ELSE ff.comparative_value
+                END as comparative_value,
                 COALESCE(cno.weight, cn.weight, ff.weight) as weight,
                 COALESCE(cno.unit, cn.unit, ff.unit) as unit,
                 ff.axis,
@@ -530,27 +538,27 @@ def upgrade() -> None:
             FROM facts f
             JOIN concept_normalization_overrides cno
                 ON cno.statement = f.statement
-                AND cno.concept  = f.concept
+                AND cno.concept = f.concept
 
             /* -------------------------------
             * Normalize edges into rows
             * ------------------------------- */
             JOIN LATERAL (
                 VALUES
-                    (cno.parent_concept,   f.parent_id),
+                    (cno.parent_concept, f.parent_id),
                     (cno.abstract_concept, f.abstract_id)
             ) AS e(target_concept, existing_id)
                 ON e.target_concept IS NOT NULL
 
             JOIN concept_normalization_overrides cnop
                 ON cnop.statement = cno.statement
-                AND cnop.concept  = e.target_concept
+                AND cnop.concept = e.target_concept
 
             LEFT JOIN financial_facts ff
                 ON ff.company_id = f.company_id
-                AND ff.filing_id  = f.filing_id
-                AND ff.statement   = f.statement
-                AND ff.concept    = e.target_concept
+                AND ff.filing_id = f.filing_id
+                AND ff.statement = f.statement
+                AND ff.concept = e.target_concept
 
             WHERE
                 ff.id IS NULL
