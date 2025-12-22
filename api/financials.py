@@ -120,9 +120,9 @@ class FinancialMetricResponse(BaseModel):
     statement: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
-    abstracts: Optional[List[str]] = None
     values: List[FinancialMetricValue]
     concept: Optional[str] = None
+    abstracts: Optional[List[str]] = None
     abstract_concepts: Optional[List[str]] = None
 
 

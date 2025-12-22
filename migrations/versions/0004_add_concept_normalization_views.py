@@ -606,17 +606,36 @@ def upgrade() -> None:
                 ON cno.statement = f.statement
                 AND cno.concept  = f.concept
 
-            LEFT JOIN facts fp
-                ON fp.statement   = f.statement
-                AND fp.filing_id  = f.filing_id
-                AND fp.company_id = f.company_id
-                AND fp.concept    = cno.parent_concept
+            LEFT JOIN LATERAL (
+                SELECT parent_concept
+                FROM parent_normalization_expansion pne
+                WHERE
+                    pne.company_id = f.company_id
+                    AND pne.statement  = f.statement
+                    AND pne.concept    = f.concept
+                LIMIT 1
+            ) pne ON true
 
+            LEFT JOIN LATERAL (
+                SELECT parent_concept
+                FROM (
+                    VALUES
+                        (cno.parent_concept),
+                        (pne.parent_concept)
+                ) v(parent_concept)
+                WHERE parent_concept IS NOT NULL
+            ) pc ON true
+
+            LEFT JOIN facts fp
+                ON fp.company_id = f.company_id
+                AND fp.filing_id = f.filing_id
+                AND fp.statement = f.statement
+                AND fp.concept = pc.parent_concept
             LEFT JOIN facts fa
-                ON fa.statement   = f.statement
-                AND fa.filing_id  = f.filing_id
-                AND fa.company_id = f.company_id
-                AND fa.concept    = cno.abstract_concept
+                ON fa.company_id = f.company_id
+                AND fa.filing_id = f.filing_id
+                AND fa.statement = f.statement
+                AND fa.concept = cno.abstract_concept
         ),
         synthetic_rollup AS (
             /* ---------------------------------------
