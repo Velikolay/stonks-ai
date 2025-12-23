@@ -30,15 +30,15 @@ def upgrade() -> None:
         ),
 
         candidate_matches AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON (f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end)
             f1.company_id,
             f1.statement,
-            f1.label as label1,
-            f2.label as label2,
             f1.concept as concept1,
             f2.concept as concept2,
             f1.period_end as period_end1,
-            f2.period_end as period_end2
+            f2.period_end as period_end2,
+            f1.label as label1,
+            f2.label as label2
           FROM facts f1
           JOIN facts f2
           ON
@@ -48,50 +48,49 @@ def upgrade() -> None:
             AND f1.normalized_comparative_value = f2.normalized_value
             AND f1.comparative_period_end = f2.period_end
           WHERE
-            (f1.concept <> f2.concept OR f1.label <> f2.label)
+            f1.concept <> f2.concept
             AND f1.period_end > f2.period_end
+          ORDER BY f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end
         ),
 
         overlapping_matches AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON (a.company_id, a.statement, a.concept1, a.concept2)
             a.company_id,
             a.statement,
-            a.label1,
-            a.label2,
             a.concept1,
-            a.concept2
+            a.concept2,
+            a.label1,
+            a.label2
           FROM candidate_matches a
           JOIN candidate_matches b
             ON a.company_id = b.company_id
             AND a.statement = b.statement
-            AND a.label1 = b.label1
-            AND a.label2 = b.label2
             AND a.concept1 = b.concept1
             AND a.concept2 = b.concept2
             AND (
               a.period_end1 = b.period_end2
               OR a.period_end2 = b.period_end1
             )
+          ORDER BY a.company_id, a.statement, a.concept1, a.concept2
         ),
 
         mirror_matches AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON (a.company_id, a.statement, a.concept1, a.concept2)
             a.company_id,
             a.statement,
-            a.label1,
-            a.label2,
             a.concept1,
-            a.concept2
+            a.concept2,
+            a.label1,
+            a.label2
           FROM candidate_matches a
           JOIN candidate_matches b
             ON a.company_id = b.company_id
             AND a.statement = b.statement
-            AND a.label1 = b.label2
-            AND a.label2 = b.label1
             AND a.concept1 = b.concept2
             AND a.concept2 = b.concept1
             AND a.period_end1 = b.period_end1
             AND a.period_end2 = b.period_end2
+          ORDER BY a.company_id, a.statement, a.concept1, a.concept2
         ),
 
         false_matches AS (
@@ -118,8 +117,6 @@ def upgrade() -> None:
               WHERE
               cm.company_id = fm.company_id
               AND cm.statement = fm.statement
-              AND cm.label1 = fm.label1
-              AND cm.label2 = fm.label2
               AND cm.concept1 = fm.concept1
               AND cm.concept2 = fm.concept2
             )
@@ -142,7 +139,6 @@ def upgrade() -> None:
           r.company_id,
           r.statement,
           r.root_concept as concept,
-          r.root_label as label,
           r.root_label as normalized_label,
           r.root_period as current_period,
           r.root_period as root_period,
@@ -157,7 +153,6 @@ def upgrade() -> None:
           c.company_id,
           c.statement,
           m.concept2 as concept,
-          m.label2 as label,
           c.normalized_label,
           m.period_end2 as current_period,
           c.root_period as root_period,
@@ -167,21 +162,19 @@ def upgrade() -> None:
           ON m.company_id = c.company_id
           AND m.statement = c.statement
           AND m.concept1 = c.concept
-          AND m.label1 = c.label
           AND m.period_end1 <= c.current_period
         )
 
         -- 4. Collapse duplicates (same concept can appear in multiple roots, take the latest one)
-        SELECT DISTINCT ON (company_id, statement, concept, label)
+        SELECT DISTINCT ON (company_id, statement, concept)
           company_id,
           statement,
           concept,
-          label,
           normalized_label,
           group_id,
           root_period as group_max_period_end
         FROM chain
-        ORDER BY company_id, statement, concept, label, root_period DESC
+        ORDER BY company_id, statement, concept, root_period DESC
         """
     )
 
@@ -190,8 +183,7 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization_grouping AS
 
-        WITH normalized_labels AS (
-          SELECT
+        SELECT
             company_id,
             statement,
             concept,
@@ -199,28 +191,12 @@ def upgrade() -> None:
             -- md5(company_id || '|' || statement || '|' || concept) AS group_id,
             gen_random_uuid() AS group_id,
             MAX(period_end) AS group_max_period_end
-          FROM financial_facts
-          GROUP BY
+        FROM financial_facts
+        GROUP BY
             company_id,
             statement,
             concept
-          HAVING COUNT(DISTINCT label) > 1
-        )
-
-        SELECT DISTINCT
-          nl.company_id,
-          nl.statement,
-          nl.concept,
-          f.label,
-          nl.normalized_label,
-          nl.group_id,
-          nl.group_max_period_end
-        FROM normalized_labels nl
-        JOIN financial_facts f
-        ON
-          nl.company_id = f.company_id
-          AND nl.statement = f.statement
-          AND nl.concept = f.concept
+        HAVING COUNT(DISTINCT label) > 1
         """
     )
 
@@ -230,106 +206,104 @@ def upgrade() -> None:
         CREATE VIEW concept_normalization_combined AS
 
         WITH RECURSIVE combined AS (
-        -- Combine both views with source tracking
-        SELECT
-            company_id,
-            statement,
-            concept,
-            label,
-            normalized_label,
-            group_id,
-            group_max_period_end
-        FROM concept_normalization_chaining
+            -- Combine both views with source tracking
+            SELECT
+                company_id,
+                statement,
+                concept,
+                normalized_label,
+                group_id,
+                group_max_period_end
+            FROM concept_normalization_chaining
 
-        UNION ALL
+            UNION ALL
 
-        SELECT
-            company_id,
-            statement,
-            concept,
-            label,
-            normalized_label,
-            group_id,
-            group_max_period_end
-        FROM concept_normalization_grouping
+            SELECT
+                company_id,
+                statement,
+                concept,
+                normalized_label,
+                group_id,
+                group_max_period_end
+            FROM concept_normalization_grouping
         ),
 
         -- Identify group merges: groups that share at least one concept
         group_links AS (
-        SELECT DISTINCT
-            c1.company_id,
-            c1.statement,
-            c1.concept,
-            c1.group_id as group_id_1,
-            c2.group_id as group_id_2,
-            CASE
-                WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.group_id
-                WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.group_id
-                ELSE c2.group_id
-            END as group_id,
-            CASE
-                WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.normalized_label
-                WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.normalized_label
-                ELSE c2.normalized_label
-            END as normalized_label,
-            GREATEST(c1.group_max_period_end, c2.group_max_period_end) as group_max_period_end
-        FROM combined c1
-        JOIN combined c2
-            ON c1.company_id = c2.company_id
-            AND c1.statement = c2.statement
-            AND c1.concept = c2.concept
-            AND c1.group_id <> c2.group_id
+            SELECT DISTINCT
+                c1.company_id,
+                c1.statement,
+                c1.concept,
+                c1.group_id as group_id_1,
+                c2.group_id as group_id_2,
+                CASE
+                    WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.group_id
+                    WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.group_id
+                    ELSE c2.group_id
+                END as group_id,
+                CASE
+                    WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.normalized_label
+                    WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.normalized_label
+                    ELSE c2.normalized_label
+                END as normalized_label,
+                GREATEST(c1.group_max_period_end, c2.group_max_period_end) as group_max_period_end
+            FROM combined c1
+            JOIN combined c2
+                ON c1.company_id = c2.company_id
+                AND c1.statement = c2.statement
+                AND c1.concept = c2.concept
+                AND c1.group_id <> c2.group_id
         ),
 
         transitive_merges AS (
-        SELECT
-            company_id,
-            statement,
-            group_id_1,
-            group_id_2,
-            group_id,
-            group_max_period_end,
-            normalized_label
-        FROM group_links
+            SELECT
+                company_id,
+                statement,
+                group_id_1,
+                group_id_2,
+                group_id,
+                group_max_period_end,
+                normalized_label
+            FROM group_links
 
-        UNION
+            UNION
 
-        SELECT
-            tm.company_id,
-            tm.statement,
-            tm.group_id_1,
-            gl.group_id_2,
-            CASE
-                WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.group_id
-                WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.group_id
-                ELSE gl.group_id
-            END as group_id,
-            GREATEST(tm.group_max_period_end, gl.group_max_period_end) as group_max_period_end,
-            CASE
-                WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.normalized_label
-                WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.normalized_label
-                ELSE gl.normalized_label
-            END as normalized_label
-        FROM transitive_merges tm
-        JOIN group_links gl
-        ON
-            tm.company_id = gl.company_id
-            AND tm.statement = gl.statement
-            AND tm.group_id_2 = gl.group_id_1
-        WHERE tm.group_id_1 <> gl.group_id_2
+            SELECT
+                tm.company_id,
+                tm.statement,
+                tm.group_id_1,
+                gl.group_id_2,
+                CASE
+                    WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.group_id
+                    WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.group_id
+                    ELSE gl.group_id
+                END as group_id,
+                GREATEST(tm.group_max_period_end, gl.group_max_period_end) as group_max_period_end,
+                CASE
+                    WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.normalized_label
+                    WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.normalized_label
+                    ELSE gl.normalized_label
+                END as normalized_label
+            FROM transitive_merges tm
+            JOIN group_links gl
+            ON
+                tm.company_id = gl.company_id
+                AND tm.statement = gl.statement
+                AND tm.group_id_2 = gl.group_id_1
+            WHERE tm.group_id_1 <> gl.group_id_2
         ),
 
         canonical_groups AS (
-        SELECT DISTINCT ON (company_id, statement, group_id_1)
-            company_id,
-            statement,
-            group_id_1 as original_group_id,
-            group_id as final_group_id,
-            group_max_period_end,
-            normalized_label
-        FROM
-            transitive_merges
-        ORDER BY company_id, statement, group_id_1, group_max_period_end DESC
+            SELECT DISTINCT ON (company_id, statement, group_id_1)
+                company_id,
+                statement,
+                group_id_1 as original_group_id,
+                group_id as final_group_id,
+                group_max_period_end,
+                normalized_label
+            FROM
+                transitive_merges
+            ORDER BY company_id, statement, group_id_1, group_max_period_end DESC
         )
 
         -- Final output with all concepts
@@ -337,7 +311,6 @@ def upgrade() -> None:
             c.company_id,
             c.statement,
             c.concept,
-            c.label,
             COALESCE(cg.normalized_label, c.normalized_label) as normalized_label,
             COALESCE(cg.final_group_id, c.group_id) as group_id,
             COALESCE(cg.group_max_period_end, c.group_max_period_end) as group_max_period_end
@@ -352,7 +325,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE VIEW concept_normalization AS
+        CREATE MATERIALIZED VIEW concept_normalization AS
 
         WITH concept_normalization_stable AS (
           SELECT * FROM concept_normalization_combined
@@ -374,7 +347,6 @@ def upgrade() -> None:
           cn.company_id,
           cn.statement,
           cn.concept,
-          cn.label,
           COALESCE(go.normalized_label, cn.normalized_label) as normalized_label,
           -- COALESCE(go.weight, cn.weight) as weight,
           go.weight as weight,
@@ -390,24 +362,42 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE VIEW parent_normalization_expansion AS
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_concept_normalization_unique_composite
+        ON concept_normalization (company_id, statement, concept);
+    """
+    )
 
-        WITH concept_normalization_stable AS (
-          SELECT * FROM concept_normalization_combined
+    op.execute(
+        """
+        CREATE MATERIALIZED VIEW parent_normalization_expansion AS
+
+        WITH concept_normalization_by_filing AS (
+          SELECT
+            cn.company_id,
+            ff.filing_id,
+            cn.statement,
+            cn.concept,
+            cn.group_id
+          FROM concept_normalization cn
+          JOIN financial_facts ff
+            ON cn.company_id = ff.company_id
+            AND cn.statement = ff.statement
+            AND cn.concept = ff.concept
         ),
         concept_expansion AS (
             SELECT
                 cne.company_id,
+                cne.filing_id,
                 cne.statement,
                 cno.concept,
                 cno.parent_concept,
                 cne.concept as concept_expand
             FROM concept_normalization_overrides cno
-            JOIN concept_normalization_stable cn
+            JOIN concept_normalization_by_filing cn
             ON
                 cno.statement = cn.statement
                 AND cno.concept = cn.concept
-            JOIN concept_normalization_stable cne
+            JOIN concept_normalization_by_filing cne
             ON
                 cn.group_id = cne.group_id
             WHERE
@@ -416,16 +406,17 @@ def upgrade() -> None:
         parent_concept_expansion AS (
             SELECT
                 cne.company_id,
+                cne.filing_id,
                 cne.statement,
                 cno.concept,
                 cno.parent_concept,
                 cne.concept as parent_concept_expand
             FROM concept_normalization_overrides cno
-            JOIN concept_normalization_stable cn
+            JOIN concept_normalization_by_filing cn
             ON
                 cno.statement = cn.statement
                 AND cno.parent_concept = cn.concept
-            JOIN concept_normalization_stable cne
+            JOIN concept_normalization_by_filing cne
             ON
                 cn.group_id = cne.group_id
             WHERE
@@ -434,6 +425,7 @@ def upgrade() -> None:
         transitive_expansion AS (
             SELECT
                 ce.company_id,
+                ce.filing_id,
                 ce.statement,
                 ce.concept_expand as concept,
                 pce.parent_concept_expand as parent_concept
@@ -441,16 +433,24 @@ def upgrade() -> None:
             JOIN parent_concept_expansion pce
             ON
                 ce.company_id = pce.company_id
+                AND ce.filing_id = pce.filing_id
                 AND ce.statement = pce.statement
                 AND ce.concept = pce.concept
         )
 
-        SELECT company_id, statement, concept_expand as concept, parent_concept FROM concept_expansion
+        SELECT company_id, filing_id, statement, concept_expand as concept, parent_concept FROM concept_expansion
         UNION
-        SELECT company_id, statement, concept, parent_concept_expand as parent_concept FROM parent_concept_expansion
+        SELECT company_id, filing_id, statement, concept, parent_concept_expand as parent_concept FROM parent_concept_expansion
         UNION
-        SELECT company_id, statement, concept, parent_concept FROM transitive_expansion
+        SELECT company_id, filing_id, statement, concept, parent_concept FROM transitive_expansion
         """
+    )
+
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_normalization_expansion_unique_composite
+        ON parent_normalization_expansion (company_id, filing_id, statement, concept);
+    """
     )
 
     op.execute(
@@ -504,7 +504,6 @@ def upgrade() -> None:
                 ff.company_id = cn.company_id
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
-                AND ff.label = cn.label
 
             UNION ALL
 
@@ -545,12 +544,18 @@ def upgrade() -> None:
                 ON cno.statement = f.statement
                 AND cno.concept = f.concept
 
+            LEFT JOIN parent_normalization_expansion pne
+                ON pne.company_id = f.company_id
+                AND pne.filing_id  = f.filing_id
+                AND pne.statement  = f.statement
+                AND pne.concept    = f.concept
+
             /* -------------------------------
             * Normalize edges into rows
             * ------------------------------- */
             JOIN LATERAL (
                 VALUES
-                    (cno.parent_concept, f.parent_id),
+                    (COALESCE(cno.parent_concept, pne.parent_concept), f.parent_id),
                     (cno.abstract_concept, f.abstract_id)
             ) AS e(target_concept, existing_id)
                 ON e.target_concept IS NOT NULL
@@ -594,48 +599,36 @@ def upgrade() -> None:
                 f.position,
 
                 /* parent wiring */
-                COALESCE(fp.id, f.parent_id)   AS parent_id,
+                COALESCE(fp.id, f.parent_id) AS parent_id,
 
                 /* abstract wiring */
                 COALESCE(fa.id, f.abstract_id) AS abstract_id,
 
                 f.is_synthetic
+
             FROM facts f
 
             LEFT JOIN concept_normalization_overrides cno
-                ON cno.statement = f.statement
-                AND cno.concept  = f.concept
+            ON cno.statement = f.statement
+            AND cno.concept  = f.concept
 
-            LEFT JOIN LATERAL (
-                SELECT parent_concept
-                FROM parent_normalization_expansion pne
-                WHERE
-                    pne.company_id = f.company_id
-                    AND pne.statement  = f.statement
-                    AND pne.concept    = f.concept
-                LIMIT 1
-            ) pne ON true
-
-            LEFT JOIN LATERAL (
-                SELECT parent_concept
-                FROM (
-                    VALUES
-                        (cno.parent_concept),
-                        (pne.parent_concept)
-                ) v(parent_concept)
-                WHERE parent_concept IS NOT NULL
-            ) pc ON true
+            LEFT JOIN parent_normalization_expansion pne
+            ON pne.company_id = f.company_id
+            AND pne.filing_id  = f.filing_id
+            AND pne.statement  = f.statement
+            AND pne.concept    = f.concept
 
             LEFT JOIN facts fp
-                ON fp.company_id = f.company_id
-                AND fp.filing_id = f.filing_id
-                AND fp.statement = f.statement
-                AND fp.concept = pc.parent_concept
+            ON fp.company_id = f.company_id
+            AND fp.filing_id  = f.filing_id
+            AND fp.statement  = f.statement
+            AND fp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
+
             LEFT JOIN facts fa
-                ON fa.company_id = f.company_id
-                AND fa.filing_id = f.filing_id
-                AND fa.statement = f.statement
-                AND fa.concept = cno.abstract_concept
+            ON fa.company_id = f.company_id
+            AND fa.filing_id  = f.filing_id
+            AND fa.statement  = f.statement
+            AND fa.concept    = cno.abstract_concept
         ),
         synthetic_rollup AS (
             /* ---------------------------------------
@@ -759,6 +752,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop the unique index
+    op.execute("DROP INDEX IF EXISTS idx_concept_normalization_unique_composite")
+    op.execute(
+        "DROP INDEX IF EXISTS idx_parent_normalization_expansion_unique_composite"
+    )
     # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_composite")
     # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_id")
 

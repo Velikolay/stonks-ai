@@ -66,6 +66,19 @@ def upgrade() -> None:
         ),
     )
 
+    # Create indexes for parent_concept and abstract_concept
+    op.execute(
+        """
+        CREATE INDEX idx_concept_normalization_overrides_parent_concept_statement ON concept_normalization_overrides (parent_concept, statement);
+    """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX idx_concept_normalization_overrides_abstract_concept_statement ON concept_normalization_overrides (abstract_concept, statement);
+    """
+    )
+
     # Create trigger to update updated_at timestamp
     op.execute(
         """
@@ -126,6 +139,14 @@ def downgrade() -> None:
     # Drop triggers
     op.execute(
         "DROP TRIGGER IF EXISTS update_concept_normalization_overrides_updated_at ON concept_normalization_overrides"
+    )
+
+    # Drop indexes for parent_concept and abstract_concept
+    op.execute(
+        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_parent_concept_statement"
+    )
+    op.execute(
+        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_abstract_concept_statement"
     )
 
     # Drop concept_normalization_overrides table
