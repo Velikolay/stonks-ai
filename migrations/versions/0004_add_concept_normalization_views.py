@@ -457,7 +457,7 @@ def upgrade() -> None:
         """
         CREATE VIEW normalized_financial_facts AS
 
-        WITH RECURSIVE facts AS (
+        WITH RECURSIVE normalized_facts AS (
             /* -------------------------------------------------
             * Anchor: existing fact rows (preserve identity)
             * ------------------------------------------------- */
@@ -491,144 +491,176 @@ def upgrade() -> None:
                 ff.comparative_period_end,
                 ff.period,
                 ff.position,
-                ff.parent_id,
-                ff.abstract_id,
+
+                CASE
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
+                        ffp.id
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                        abs(hashtextextended(
+                            ff.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept) || '|' ||
+                            ff.filing_id::text || '|' || ff.company_id::text,
+                            0
+                        ))
+                    ELSE
+                        ff.parent_id
+                END as parent_id,
+                CASE
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    COALESCE(cno.parent_concept, pne.parent_concept)
+                ELSE
+                    NULL
+                END as parent_concept,
+
+                CASE
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
+                        ffa.id
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        abs(hashtextextended(
+                            ff.statement || '|' || cno.abstract_concept || '|' ||
+                            ff.filing_id::text || '|' || ff.company_id::text,
+                            0
+                        ))
+                    ELSE
+                        ff.abstract_id
+                END as abstract_id,
+                CASE
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        cno.abstract_concept
+                    ELSE
+                        NULL
+                END as abstract_concept,
+
                 FALSE as is_synthetic
             FROM financial_facts ff
             LEFT JOIN concept_normalization_overrides cno
             ON
                 ff.statement = cno.statement
                 AND ff.concept = cno.concept
+
+            LEFT JOIN parent_normalization_expansion pne
+            ON
+                pne.company_id = ff.company_id
+                AND pne.filing_id  = ff.filing_id
+                AND pne.statement  = ff.statement
+                AND pne.concept    = ff.concept
+
+            LEFT JOIN financial_facts ffp
+            ON
+                ffp.company_id = ff.company_id
+                AND ffp.filing_id  = ff.filing_id
+                AND ffp.statement  = ff.statement
+                AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
+
+            LEFT JOIN financial_facts ffa
+            ON
+                ffa.company_id = ff.company_id
+                AND ffa.filing_id  = ff.filing_id
+                AND ffa.statement  = ff.statement
+                AND ffa.concept    = cno.abstract_concept
+
             LEFT JOIN concept_normalization cn
             ON
                 ff.company_id = cn.company_id
                 AND ff.statement = cn.statement
                 AND ff.concept = cn.concept
 
-            UNION ALL
+            UNION
 
             /* -------------------------------
             * Add missing parent / abstract concept
             * ------------------------------- */
             SELECT
-                abs(hashtextextended(
-                    f.statement || '|' || cnop.concept || '|' ||
-                    f.filing_id::text || '|' || f.company_id::text,
-                    0
-                )) AS id,
+                new.id AS id,
                 f.company_id,
                 f.filing_id,
                 f.form_type,
-                cnop.concept,
-                cnop.normalized_label AS label,
-                cnop.normalized_label AS normalized_label,
-                cnop.is_abstract,
-                NULL AS value,
-                NULL AS comparative_value,
-                cnop.weight,
-                cnop.unit,
+                cno.concept,
+                cno.normalized_label AS label,
+                cno.normalized_label AS normalized_label,
+                cno.is_abstract,
+                0 AS value,
+                0 AS comparative_value,
+                cno.weight,
+                cno.unit,
                 '' AS axis,
                 '' AS member,
                 '' AS parsed_axis,
                 '' AS parsed_member,
-                cnop.statement,
+                cno.statement,
                 f.period_end,
                 f.comparative_period_end,
                 f.period,
                 99 AS position,
-                NULL AS parent_id,
-                NULL AS abstract_id,
+
+                CASE
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
+                        ffp.id
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                        abs(hashtextextended(
+                            f.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept) || '|' ||
+                            f.filing_id::text || '|' || f.company_id::text,
+                            0
+                        ))
+                    ELSE
+                        NULL
+                END as parent_id,
+                CASE
+                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    COALESCE(cno.parent_concept, pne.parent_concept)
+                ELSE
+                    NULL
+                END as parent_concept,
+
+                CASE
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
+                        ffa.id
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        abs(hashtextextended(
+                            f.statement || '|' || cno.abstract_concept || '|' ||
+                            f.filing_id::text || '|' || f.company_id::text,
+                            0
+                        ))
+                    ELSE
+                        NULL
+                END as abstract_id,
+                CASE
+                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        cno.abstract_concept
+                    ELSE
+                        NULL
+                END as abstract_concept,
+
                 TRUE AS is_synthetic
-            FROM facts f
+            FROM normalized_facts f
+
+            JOIN LATERAL (
+                VALUES
+                    (f.parent_concept, f.parent_id),
+                    (f.abstract_concept, f.abstract_id)
+            ) AS new(concept, id)
+                ON new.concept IS NOT NULL
+
             JOIN concept_normalization_overrides cno
                 ON cno.statement = f.statement
-                AND cno.concept = f.concept
+                AND cno.concept = new.concept
 
             LEFT JOIN parent_normalization_expansion pne
                 ON pne.company_id = f.company_id
                 AND pne.filing_id  = f.filing_id
                 AND pne.statement  = f.statement
-                AND pne.concept    = f.concept
+                AND pne.concept    = new.concept
 
-            /* -------------------------------
-            * Normalize edges into rows
-            * ------------------------------- */
-            JOIN LATERAL (
-                VALUES
-                    (COALESCE(cno.parent_concept, pne.parent_concept), f.parent_id),
-                    (cno.abstract_concept, f.abstract_id)
-            ) AS e(target_concept, existing_id)
-                ON e.target_concept IS NOT NULL
+            LEFT JOIN financial_facts ffp
+                ON ffp.company_id = f.company_id
+                AND ffp.filing_id  = f.filing_id
+                AND ffp.statement  = f.statement
+                AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
 
-            JOIN concept_normalization_overrides cnop
-                ON cnop.statement = cno.statement
-                AND cnop.concept = e.target_concept
-
-            LEFT JOIN financial_facts ff
-                ON ff.company_id = f.company_id
-                AND ff.filing_id = f.filing_id
-                AND ff.statement = f.statement
-                AND ff.concept = e.target_concept
-
-            WHERE
-                ff.id IS NULL
-                OR (e.existing_id <> ff.id AND f.is_synthetic IS FALSE)
-        ),
-        normalized_facts AS (
-            SELECT DISTINCT
-                f.id,
-                f.company_id,
-                f.filing_id,
-                f.form_type,
-                f.concept,
-                f.label,
-                f.normalized_label,
-                f.is_abstract,
-                f.value,
-                f.comparative_value,
-                f.weight,
-                f.unit,
-                f.axis,
-                f.member,
-                f.parsed_axis,
-                f.parsed_member,
-                f.statement,
-                f.period_end,
-                f.comparative_period_end,
-                f.period,
-                f.position,
-
-                /* parent wiring */
-                COALESCE(fp.id, f.parent_id) AS parent_id,
-
-                /* abstract wiring */
-                COALESCE(fa.id, f.abstract_id) AS abstract_id,
-
-                f.is_synthetic
-
-            FROM facts f
-
-            LEFT JOIN concept_normalization_overrides cno
-            ON cno.statement = f.statement
-            AND cno.concept  = f.concept
-
-            LEFT JOIN parent_normalization_expansion pne
-            ON pne.company_id = f.company_id
-            AND pne.filing_id  = f.filing_id
-            AND pne.statement  = f.statement
-            AND pne.concept    = f.concept
-
-            LEFT JOIN facts fp
-            ON fp.company_id = f.company_id
-            AND fp.filing_id  = f.filing_id
-            AND fp.statement  = f.statement
-            AND fp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
-
-            LEFT JOIN facts fa
-            ON fa.company_id = f.company_id
-            AND fa.filing_id  = f.filing_id
-            AND fa.statement  = f.statement
-            AND fa.concept    = cno.abstract_concept
+            LEFT JOIN financial_facts ffa
+                ON ffa.company_id = f.company_id
+                AND ffa.filing_id  = f.filing_id
+                AND ffa.statement  = f.statement
+                AND ffa.concept    = cno.abstract_concept
         ),
         synthetic_rollup AS (
             /* ---------------------------------------
