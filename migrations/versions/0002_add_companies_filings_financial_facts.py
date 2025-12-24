@@ -105,17 +105,20 @@ def upgrade() -> None:
         ["form_type"],
     )
     op.create_index(
-        "ix_financial_facts_company_id",
+        "ix_financial_facts_company_id_statement_concept_filing_id",
         "financial_facts",
-        ["company_id"],
+        ["company_id", "statement", "concept", "filing_id"],
     )
 
 
 def downgrade() -> None:
     # Drop financial_facts table
+    op.drop_index(
+        "ix_financial_facts_company_id_statement_concept_filing_id",
+        table_name="financial_facts",
+    )
     op.drop_index("ix_financial_facts_statement_concept", table_name="financial_facts")
     op.drop_index("ix_financial_facts_form_type", table_name="financial_facts")
-    op.drop_index("ix_financial_facts_company_id", table_name="financial_facts")
     op.drop_table("financial_facts")
 
     # Drop the enum type

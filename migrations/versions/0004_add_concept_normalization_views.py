@@ -325,7 +325,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE MATERIALIZED VIEW concept_normalization AS
+        CREATE VIEW concept_normalization AS
 
         WITH concept_normalization_stable AS (
           SELECT * FROM concept_normalization_combined
@@ -362,14 +362,7 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_concept_normalization_unique_composite
-        ON concept_normalization (company_id, statement, concept);
-    """
-    )
-
-    op.execute(
-        """
-        CREATE MATERIALIZED VIEW parent_normalization_expansion AS
+        CREATE VIEW parent_normalization_expansion AS
 
         WITH concept_normalization_by_filing AS (
           SELECT
@@ -444,13 +437,6 @@ def upgrade() -> None:
         UNION
         SELECT company_id, filing_id, statement, concept, parent_concept FROM transitive_expansion
         """
-    )
-
-    op.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_normalization_expansion_unique_composite
-        ON parent_normalization_expansion (company_id, filing_id, statement, concept);
-    """
     )
 
     op.execute(
@@ -784,10 +770,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop the unique index
-    op.execute("DROP INDEX IF EXISTS idx_concept_normalization_unique_composite")
-    op.execute(
-        "DROP INDEX IF EXISTS idx_parent_normalization_expansion_unique_composite"
-    )
     # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_composite")
     # op.execute("DROP INDEX IF EXISTS idx_normalized_financial_facts_unique_id")
 
