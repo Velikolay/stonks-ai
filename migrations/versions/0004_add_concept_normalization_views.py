@@ -142,8 +142,7 @@ def upgrade() -> None:
           r.root_label as normalized_label,
           r.root_period as current_period,
           r.root_period as root_period,
-          -- md5(r.company_id || '|' || r.statement || '|' || r.root_concept) AS group_id
-          gen_random_uuid() AS group_id
+          md5(r.company_id || '|' || r.statement || '|' || r.root_concept) AS group_id
         FROM roots r
 
         UNION ALL
@@ -188,8 +187,7 @@ def upgrade() -> None:
             statement,
             concept,
             (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
-            -- md5(company_id || '|' || statement || '|' || concept) AS group_id,
-            gen_random_uuid() AS group_id,
+            md5(company_id || '|' || statement || '|' || concept) AS group_id,
             MAX(period_end) AS group_max_period_end
         FROM financial_facts
         GROUP BY
@@ -327,16 +325,13 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization AS
 
-        WITH concept_normalization_stable AS (
-          SELECT * FROM concept_normalization_combined
-        ),
-        group_overrides AS (
+        WITH group_overrides AS (
           SELECT
             cn.group_id,
             MAX(cno.normalized_label) as normalized_label,
             MAX(cno.weight) as weight,
             MAX(cno.unit) as unit
-          FROM concept_normalization_stable cn
+          FROM concept_normalization_combined cn
           JOIN concept_normalization_overrides cno
           ON cn.statement = cno.statement
           AND cn.concept = cno.concept
@@ -354,7 +349,7 @@ def upgrade() -> None:
           go.unit as unit,
           cn.group_id,
           go.normalized_label IS NOT NULL as overridden
-        FROM concept_normalization_stable cn
+        FROM concept_normalization_combined cn
         LEFT JOIN group_overrides go
         ON cn.group_id = go.group_id
         """
@@ -443,7 +438,10 @@ def upgrade() -> None:
         """
         CREATE VIEW normalized_financial_facts AS
 
-        WITH RECURSIVE normalized_facts AS (
+        WITH RECURSIVE parent_normalization_expansion_cte AS (
+            SELECT * FROM parent_normalization_expansion
+        ),
+        normalized_facts AS (
             /* -------------------------------------------------
             * Anchor: existing fact rows (preserve identity)
             * ------------------------------------------------- */
@@ -523,7 +521,7 @@ def upgrade() -> None:
                 ff.statement = cno.statement
                 AND ff.concept = cno.concept
 
-            LEFT JOIN parent_normalization_expansion pne
+            LEFT JOIN parent_normalization_expansion_cte pne
             ON
                 pne.company_id = ff.company_id
                 AND pne.filing_id  = ff.filing_id
@@ -630,7 +628,7 @@ def upgrade() -> None:
                 ON cno.statement = f.statement
                 AND cno.concept = new.concept
 
-            LEFT JOIN parent_normalization_expansion pne
+            LEFT JOIN parent_normalization_expansion_cte pne
                 ON pne.company_id = f.company_id
                 AND pne.filing_id  = f.filing_id
                 AND pne.statement  = f.statement
