@@ -23,7 +23,43 @@ def upgrade() -> None:
         """
         CREATE MATERIALIZED VIEW quarterly_financials AS
 
-        WITH all_filings_data AS (
+        WITH ordered_filings AS (
+            SELECT
+                f.*,
+                ROW_NUMBER() OVER (
+                    ORDER BY company_id, fiscal_period_end
+                ) AS rn
+            FROM filings f
+        ),
+        windows AS (
+            SELECT
+                o.*,
+                MAX(CASE WHEN form_type = '10-K' THEN id END)
+                    OVER (ORDER BY rn ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING)
+                    AS k_id,
+                COUNT(*) FILTER (WHERE form_type = '10-Q')
+                    OVER (ORDER BY rn ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING)
+                    AS prev_q_count
+            FROM ordered_filings o
+        ),
+        filings_cte AS (
+            SELECT
+                id,
+                company_id,
+                fiscal_year,
+                fiscal_quarter,
+                CASE
+                    WHEN form_type = '10-K'
+                        AND prev_q_count = 3
+                    THEN id
+                    WHEN form_type = '10-Q'
+                        AND k_id IS NOT NULL
+                    THEN k_id
+                    ELSE NULL
+                END AS fiscal_tag
+            FROM windows
+        ),
+        all_filings_data AS (
             -- Get all filing data with proper quarter assignment based on fiscal_period_end
             SELECT
                 ff.company_id,
@@ -51,12 +87,13 @@ def upgrade() -> None:
                 ff.form_type as source_type,
                 f.fiscal_year,
                 f.fiscal_quarter,
+                f.fiscal_tag,
                 -- Get the latest abstract, position, and weight for this metric
                 FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
             FROM normalized_financial_facts ff
-            JOIN filings f
+            JOIN filings_cte f
             ON
                 ff.company_id = f.company_id
                 AND ff.filing_id = f.id
@@ -75,6 +112,7 @@ def upgrade() -> None:
                 parent_id,
                 fiscal_year,
                 fiscal_quarter,
+                fiscal_tag,
                 label,
                 normalized_label,
                 value,
@@ -120,6 +158,7 @@ def upgrade() -> None:
                 parent_id,
                 fiscal_year,
                 fiscal_quarter,
+                fiscal_tag,
                 label,
                 normalized_label,
                 CASE
@@ -154,6 +193,7 @@ def upgrade() -> None:
                 parent_id,
                 fiscal_year,
                 fiscal_quarter,
+                fiscal_tag,
                 label,
                 value,
                 latest_weight as weight,
@@ -174,73 +214,59 @@ def upgrade() -> None:
             FROM all_filings_data
             WHERE source_type = '10-K'
         ),
-        quarterly_with_ranks AS (
-            -- Rank quarterly filings for each annual filing
+        quarterly_aggregation AS (
             SELECT
-                q.*,
-                a.company_id as k_company_id,
-                a.filing_id as k_filing_id,
-                a.id as k_id,
-                a.parent_id as k_parent_id,
-                a.fiscal_year as k_fiscal_year,
-                a.fiscal_quarter as k_fiscal_quarter,
-                a.concept as k_concept,
-                a.value as k_value,
-                a.weight as k_weight,
-                a.unit as k_unit,
-                a.parsed_axis as k_parsed_axis,
-                a.parsed_member as k_parsed_member,
-                a.statement as k_statement,
-                a.abstract_id as k_abstract_id,
-                a.period_end as k_period_end,
-                a.label as k_label,
-                a.normalized_label as k_normalized_label,
-                a.position as k_position,
-                a.is_abstract as k_is_abstract,
-                a.is_synthetic as k_is_synthetic,
-                ROW_NUMBER() OVER (
-                    PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, a.period_end
-                    ORDER BY q.period_end DESC
-                ) as rn
-            FROM quarterly_filings q
-            JOIN annual_filings a ON
+                company_id,
+                statement,
+                normalized_label,
+                axis,
+                member,
+                fiscal_tag,
+                SUM(value) AS value
+            FROM quarterly_filings
+            GROUP BY
+                company_id,
+                statement,
+                normalized_label,
+                axis,
+                member,
+                fiscal_tag
+        ),
+        missing_quarters AS (
+            SELECT
+                a.company_id,
+                a.filing_id,
+                a.id,
+                a.parent_id,
+                a.fiscal_year,
+                a.fiscal_quarter,
+                a.concept,
+                a.label,
+                a.value - q.value AS value,
+                a.unit,
+                a.weight,
+                a.parsed_axis,
+                a.parsed_member,
+                a.statement,
+                a.abstract_id,
+                a.period_end,
+                a.normalized_label,
+                a.position,
+                a.is_abstract,
+                a.is_synthetic,
+                'calculated' AS source_type
+            FROM annual_filings a
+            JOIN quarterly_aggregation q
+            ON
                 q.company_id = a.company_id
                 AND q.statement = a.statement
                 AND q.normalized_label = a.normalized_label
                 AND q.axis = a.axis
                 AND q.member = a.member
-                AND q.period_end < a.period_end
-        ),
-        missing_quarters AS (
-            SELECT
-                k_company_id as company_id,
-                k_filing_id as filing_id,
-                k_id as id,
-                k_parent_id as parent_id,
-                k_fiscal_year as fiscal_year,
-                k_fiscal_quarter as fiscal_quarter,
-                k_concept as concept,
-                k_label as label,
-                k_value - COALESCE(SUM(value) FILTER (WHERE rn <= 3), 0) as value,
-                k_unit as unit,
-                k_weight as weight,
-                k_parsed_axis as parsed_axis,
-                k_parsed_member as parsed_member,
-                k_statement as statement,
-                k_abstract_id as abstract_id,
-                k_period_end as period_end,
-                k_normalized_label as normalized_label,
-                k_position as position,
-                k_is_abstract as is_abstract,
-                k_is_synthetic as is_synthetic,
-                'calculated' as source_type
-            FROM quarterly_with_ranks
-            -- Balance Sheet data is snapshot in time accumulation so we don't need to calculate it quarterly
+                AND q.fiscal_tag = a.fiscal_tag
             WHERE
-                k_statement != 'Balance Sheet'
-                AND k_normalized_label NOT ILIKE 'Shares Outstanding%'
-            GROUP BY k_company_id, k_filing_id, k_id, k_parent_id, k_fiscal_year, k_fiscal_quarter, k_concept, k_label, k_normalized_label, k_value, k_unit, k_weight, k_parsed_axis, k_parsed_member, k_statement, k_period_end, k_abstract_id, k_is_abstract, k_is_synthetic, k_position
-            HAVING COUNT(*) FILTER (WHERE rn <= 3) = 3
+                a.statement != 'Balance Sheet'
+                AND a.normalized_label NOT ILIKE 'Shares Outstanding%'
         )
 
         -- Combine all quarterly data
@@ -322,8 +348,7 @@ def upgrade() -> None:
             is_abstract,
             is_synthetic,
             source_type
-        FROM missing_quarters
-        WHERE value IS NOT NULL AND value != 0;
+        FROM missing_quarters;
     """
     )
 
