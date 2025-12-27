@@ -416,7 +416,9 @@ def upgrade() -> None:
                 ce.filing_id,
                 ce.statement,
                 ce.concept_expand as concept,
-                pce.parent_concept_expand as parent_concept
+                pce.parent_concept_expand as parent_concept,
+                ce.concept as concept_source,
+                ce.parent_concept as parent_concept_source
             FROM concept_expansion ce
             JOIN parent_concept_expansion pce
             ON
@@ -426,11 +428,11 @@ def upgrade() -> None:
                 AND ce.concept = pce.concept
         )
 
-        SELECT company_id, filing_id, statement, concept_expand as concept, parent_concept FROM concept_expansion
+        SELECT company_id, filing_id, statement, concept_expand as concept, parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM concept_expansion
         UNION
-        SELECT company_id, filing_id, statement, concept, parent_concept_expand as parent_concept FROM parent_concept_expansion
+        SELECT company_id, filing_id, statement, concept, parent_concept_expand as parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM parent_concept_expansion
         UNION
-        SELECT company_id, filing_id, statement, concept, parent_concept FROM transitive_expansion
+        SELECT company_id, filing_id, statement, concept, parent_concept, concept_source, parent_concept_source FROM transitive_expansion
         """
     )
 
@@ -481,7 +483,7 @@ def upgrade() -> None:
                         ffp.id
                     WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
                         abs(hashtextextended(
-                            ff.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept) || '|' ||
+                            ff.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept_source) || '|' ||
                             ff.filing_id::text || '|' || ff.company_id::text,
                             0
                         ))
@@ -490,7 +492,7 @@ def upgrade() -> None:
                 END as parent_id,
                 CASE
                     WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
-                    COALESCE(cno.parent_concept, pne.parent_concept)
+                    COALESCE(cno.parent_concept, pne.parent_concept_source)
                 ELSE
                     NULL
                 END as parent_concept,
@@ -581,7 +583,7 @@ def upgrade() -> None:
                         ffp.id
                     WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
                         abs(hashtextextended(
-                            f.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept) || '|' ||
+                            f.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept_source) || '|' ||
                             f.filing_id::text || '|' || f.company_id::text,
                             0
                         ))
@@ -590,7 +592,7 @@ def upgrade() -> None:
                 END as parent_id,
                 CASE
                     WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
-                    COALESCE(cno.parent_concept, pne.parent_concept)
+                    COALESCE(cno.parent_concept, pne.parent_concept_source)
                 ELSE
                     NULL
                 END as parent_concept,
