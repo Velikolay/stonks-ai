@@ -1,68 +1,71 @@
-concept,statement,normalized_label,is_abstract,weight,unit,parent_concept,abstract_concept,description
-us-gaap:Revenues,Income Statement,Revenue,False,1.0,usd,,,
-us-gaap:SalesRevenueNet,Income Statement,Revenue,False,1.0,usd,,,
-us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,1.0,usd,,,
-us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax,Income Statement,Revenue,False,1.0,usd,,,
-us-gaap:OperatingRevenues,Income Statement,Revenue,False,1.0,usd,,,
-us-gaap:CostOfGoodsAndServicesSold,Income Statement,Cost of Revenue,False,-1.0,usd,,,
-us-gaap:CostOfRevenue,Income Statement,Cost of Revenue,False,-1.0,usd,,,
-us-gaap:CostOfGoodsSold,Income Statement,Cost of Revenue,False,-1.0,usd,,,
-us-gaap:GrossProfit,Income Statement,Gross Profit,False,1.0,usd,,,
-us-gaap:GrossProfitLoss,Income Statement,Gross Profit,False,1.0,usd,,,
-us-gaap:OperatingIncomeLoss,Income Statement,Operating Income,False,1.0,usd,,,
-us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxes,Income Statement,Operating Income,False,1.0,usd,,,
-us-gaap:NetIncomeLoss,Income Statement,Net Income,False,1.0,usd,,,
-us-gaap:ProfitLoss,Income Statement,Net Income,False,1.0,usd,,,
-us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes,Income Statement,Net Income,False,1.0,usd,,,
-us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest,Income Statement,Income Before Tax from Continuing Operations,False,1.0,usd,,,
-us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments,Income Statement,Income Before Tax from Continuing Operations,False,1.0,usd,,,
-us-gaap:CashAndCashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,1.0,usd,,,
-us-gaap:Cash,Balance Sheet,Cash and Cash Equivalents,False,1.0,usd,,,
-us-gaap:CashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,1.0,usd,,,
-us-gaap:Assets,Balance Sheet,Total Assets,False,,usd,,,
-us-gaap:AssetsTotal,Balance Sheet,Total Assets,False,,usd,,,
-us-gaap:Liabilities,Balance Sheet,Total Liabilities,False,1.0,usd,,,
-us-gaap:LiabilitiesTotal,Balance Sheet,Total Liabilities,False,1.0,usd,,,
-us-gaap:AccruedLiabilities,Balance Sheet,Accrued Liabilities,False,1.0,usd,,,
-us-gaap:AccruedLiabilitiesCurrent,Balance Sheet,Accrued Liabilities,False,1.0,usd,,,
-us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest,Balance Sheet,Total Equity,False,1.0,usd,,,
-us-gaap:Equity,Balance Sheet,Total Equity,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInOperatingActivities,Cash Flow Statement,Operating Cash Flow,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations,Cash Flow Statement,Operating Cash Flow,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInInvestingActivities,Cash Flow Statement,Investing Cash Flow,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInInvestingActivitiesContinuingOperations,Cash Flow Statement,Investing Cash Flow,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInFinancingActivities,Cash Flow Statement,Financing Cash Flow,False,1.0,usd,,,
-us-gaap:NetCashProvidedByUsedInFinancingActivitiesContinuingOperations,Cash Flow Statement,Financing Cash Flow,False,1.0,usd,,,
-us-gaap:FreeCashFlow,Cash Flow Statement,Free Cash Flow,False,1.0,usd,,,
-us-gaap:EarningsPerShareBasic,Income Statement,Basic EPS,False,,usdPerShare,,,
-us-gaap:EarningsPerShareDiluted,Income Statement,Diluted EPS,False,,usdPerShare,,,
-us-gaap:CommonStockDividendsPerShareDeclared,Income Statement,Cash Dividends Per Share,False,,usdPerShare,,,
-us-gaap:LongTermDebt,Balance Sheet,Long-term Debt,False,1.0,usd,,,
-us-gaap:LongTermDebtNoncurrent,Balance Sheet,Long-term Debt,False,1.0,usd,,,
-us-gaap:ShortTermBorrowings,Balance Sheet,Short-term Debt,False,1.0,usd,,,
-us-gaap:ShortTermDebt,Balance Sheet,Short-term Debt,False,1.0,usd,,,
-us-gaap:MarketableSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,1.0,usd,,,
-us-gaap:AvailableForSaleSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,1.0,usd,,,
-us-gaap:MarketableSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,1.0,usd,,,
-us-gaap:AvailableForSaleSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,1.0,usd,,,
-us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,1.0,usd,,,
-us-gaap:DeferredRevenueCurrent,Balance Sheet,Deferred Revenue,False,1.0,usd,,,
-us-gaap:ContractWithCustomerLiabilityCurrent,Balance Sheet,Deferred Revenue,False,1.0,usd,,,
-us-gaap:DeferredRevenueNoncurrent,Balance Sheet,Deferred Revenue Non-current,False,1.0,usd,,,
-us-gaap:ProceedsFromPaymentsForOtherFinancingActivities,Cash Flow Statement,Other Financing Activities,False,1.0,usd,,,
-us-gaap:PaymentsForProceedsFromOtherInvestingActivities,Cash Flow Statement,Other Investing Activities,False,-1.0,usd,,,
-us-gaap:OtherNoncashIncomeExpense,Cash Flow Statement,Other Income Expenses,False,-1.0,usd,,,
+concept,statement,normalized_label,is_abstract,abstract_concept,parent_concept,description,unit,weight
+us-gaap:Revenues,Income Statement,Revenue,False,,,,usd,1.0
+us-gaap:SalesRevenueNet,Income Statement,Revenue,False,,,,usd,1.0
+us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,,,,usd,1.0
+us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax,Income Statement,Revenue,False,,,,usd,1.0
+us-gaap:OperatingRevenues,Income Statement,Revenue,False,,,,usd,1.0
+us-gaap:CostOfGoodsAndServicesSold,Income Statement,Cost of Revenue,False,,,,usd,-1.0
+us-gaap:CostOfRevenue,Income Statement,Cost of Revenue,False,,,,usd,-1.0
+us-gaap:CostOfGoodsSold,Income Statement,Cost of Revenue,False,,,,usd,-1.0
+us-gaap:GrossProfit,Income Statement,Gross Profit,False,,,,usd,1.0
+us-gaap:GrossProfitLoss,Income Statement,Gross Profit,False,,,,usd,1.0
+us-gaap:OperatingIncomeLoss,Income Statement,Operating Income,False,,,,usd,1.0
+us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxes,Income Statement,Operating Income,False,,,,usd,1.0
+us-gaap:NetIncomeLoss,Income Statement,Net Income,False,,,,usd,1.0
+us-gaap:ProfitLoss,Income Statement,Net Income,False,,,,usd,1.0
+us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes,Income Statement,Net Income,False,,,,usd,1.0
+us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest,Income Statement,Income Before Tax from Continuing Operations,False,,,,usd,1.0
+us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments,Income Statement,Income Before Tax from Continuing Operations,False,,,,usd,1.0
+us-gaap:CashAndCashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,,,,usd,1.0
+us-gaap:Cash,Balance Sheet,Cash and Cash Equivalents,False,,,,usd,1.0
+us-gaap:CashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,,,,usd,1.0
+us-gaap:Assets,Balance Sheet,Total Assets,False,,,,usd,
+us-gaap:AssetsTotal,Balance Sheet,Total Assets,False,,,,usd,
+us-gaap:Liabilities,Balance Sheet,Total Liabilities,False,,,,usd,1.0
+us-gaap:LiabilitiesTotal,Balance Sheet,Total Liabilities,False,,,,usd,1.0
+us-gaap:AccruedLiabilities,Balance Sheet,Accrued Liabilities,False,,,,usd,1.0
+us-gaap:AccruedLiabilitiesCurrent,Balance Sheet,Accrued Liabilities,False,,,,usd,1.0
+us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest,Balance Sheet,Total Equity,False,,,,usd,1.0
+us-gaap:Equity,Balance Sheet,Total Equity,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInOperatingActivities,Cash Flow Statement,Operating Cash Flow,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations,Cash Flow Statement,Operating Cash Flow,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInInvestingActivities,Cash Flow Statement,Investing Cash Flow,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInInvestingActivitiesContinuingOperations,Cash Flow Statement,Investing Cash Flow,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInFinancingActivities,Cash Flow Statement,Financing Cash Flow,False,,,,usd,1.0
+us-gaap:NetCashProvidedByUsedInFinancingActivitiesContinuingOperations,Cash Flow Statement,Financing Cash Flow,False,,,,usd,1.0
+us-gaap:FreeCashFlow,Cash Flow Statement,Free Cash Flow,False,,,,usd,1.0
+us-gaap:EarningsPerShareBasic,Income Statement,Basic EPS,False,,,,usdPerShare,
+us-gaap:EarningsPerShareDiluted,Income Statement,Diluted EPS,False,,,,usdPerShare,
+us-gaap:CommonStockDividendsPerShareDeclared,Income Statement,Cash Dividends Per Share,False,,,,usdPerShare,
+us-gaap:LongTermDebt,Balance Sheet,Long-term Debt,False,,,,usd,1.0
+us-gaap:ShortTermBorrowings,Balance Sheet,Short-term Debt,False,,,,usd,1.0
+us-gaap:ShortTermDebt,Balance Sheet,Short-term Debt,False,,,,usd,1.0
+us-gaap:MarketableSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,,,,usd,1.0
+us-gaap:AvailableForSaleSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,,,,usd,1.0
+us-gaap:AvailableForSaleSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,,,,usd,1.0
+us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,,,,usd,1.0
+us-gaap:DeferredRevenueCurrent,Balance Sheet,Deferred Revenue,False,,,,usd,1.0
+us-gaap:ContractWithCustomerLiabilityCurrent,Balance Sheet,Deferred Revenue,False,,,,usd,1.0
+us-gaap:ProceedsFromPaymentsForOtherFinancingActivities,Cash Flow Statement,Other Financing Activities,False,,,,usd,1.0
+us-gaap:PaymentsForProceedsFromOtherInvestingActivities,Cash Flow Statement,Other Investing Activities,False,,,,usd,-1.0
+us-gaap:OtherNoncashIncomeExpense,Cash Flow Statement,Other Income Expenses,False,,,,usd,-1.0
 us-gaap:AssetsAbstract,Balance Sheet,Assets,True,,,,,
-us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,,,,us-gaap:AssetsAbstract,
-us-gaap:Goodwill,Balance Sheet,Goodwill,False,1.0,usd,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract,
-us-gaap:IntangibleAssetsNetExcludingGoodwill,Balance Sheet,Intangible Assets Excluding Goodwill,False,1.0,usd,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract,
+us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,us-gaap:AssetsAbstract,,,,
+us-gaap:Goodwill,Balance Sheet,Goodwill,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
+us-gaap:IntangibleAssetsNetExcludingGoodwill,Balance Sheet,Intangible Assets Excluding Goodwill,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
+us-gaap:LongTermDebtNoncurrent,Balance Sheet,Long-term Debt,False,,us-gaap:LiabilitiesNoncurrent,,usd,1
+us-gaap:DeferredRevenueNoncurrent,Balance Sheet,Deferred Revenue Non-current,False,,us-gaap:LiabilitiesNoncurrent,,usd,1
 us-gaap:LiabilitiesAndStockholdersEquityAbstract,Balance Sheet,Liabilities and Shareholders' Equity,True,,,,,
-us-gaap:LiabilitiesCurrentAbstract,Balance Sheet,Current liabilities,True,,,,us-gaap:LiabilitiesAndStockholdersEquityAbstract,
-us-gaap:AccountsPayable,Balance Sheet,Accounts Payable,False,1.0,usd,us-gaap:LiabilitiesCurrent,us-gaap:LiabilitiesCurrentAbstract,
-us-gaap:AccountsPayableCurrent,Balance Sheet,Accounts Payable,False,1.0,usd,us-gaap:LiabilitiesCurrent,us-gaap:LiabilitiesCurrentAbstract,
-us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,1.0,usd,,,
-us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,1.0,usd,,us-gaap:AssetsNoncurrentAbstract,
-us-gaap:LiabilitiesCurrent,Balance Sheet,Total Current Liabilities,False,1.0,usd,,us-gaap:LiabilitiesCurrentAbstract,
-us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,1.0,usd,,,
-us-gaap:OperatingExpenses,Income Statement,Operating Expenses,False,-1.0,usd,,,
-us-gaap:StockholdersEquity,Balance Sheet,Total Equity,False,1.0,usd,,,
+us-gaap:LiabilitiesCurrentAbstract,Balance Sheet,Current liabilities,True,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,,,
+us-gaap:AccountsPayable,Balance Sheet,Accounts Payable,False,us-gaap:LiabilitiesCurrentAbstract,us-gaap:LiabilitiesCurrent,,usd,1.0
+us-gaap:AccountsPayableCurrent,Balance Sheet,Accounts Payable,False,us-gaap:LiabilitiesCurrentAbstract,us-gaap:LiabilitiesCurrent,,usd,1.0
+us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,,,,usd,1.0
+us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,us-gaap:AssetsNoncurrentAbstract,,,usd,1.0
+us-gaap:LiabilitiesCurrent,Balance Sheet,Total Current Liabilities,False,us-gaap:LiabilitiesCurrentAbstract,,,usd,1.0
+us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,,,,usd,1.0
+us-gaap:OperatingExpenses,Income Statement,Operating Expenses,False,,,,usd,-1.0
+us-gaap:StockholdersEquity,Balance Sheet,Total Equity,False,,,,usd,1.0
+us-gaap:MarketableSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
+us-gaap:PropertyPlantAndEquipmentNet,Balance Sheet,"Property, Plant and Equipment",False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
+us-gaap:OtherAssetsNoncurrent,Balance Sheet,Other Non Current Assets,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
+us-gaap:OtherLiabilitiesNoncurrent,Balance Sheet,Other Non Current Liabilities,False,,us-gaap:LiabilitiesNoncurrent,,usd,1
