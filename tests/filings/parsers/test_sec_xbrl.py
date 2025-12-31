@@ -86,7 +86,7 @@ class TestSECXBRLParser:
                 "numeric_value": [5000000, 3000000],
                 "period_start": ["2024-01-01", "2024-01-01"],
                 "period_end": ["2024-03-31", "2024-03-31"],
-                "dim_srt_StatementGeographicAxis": ["Americas", "Europe"],
+                "dim_srt_StatementGeographicalAxis": ["Americas", "Europe"],
             }
         )
 
@@ -104,7 +104,7 @@ class TestSECXBRLParser:
         mock_query.by_dimension.side_effect = lambda dimension: mock_query
         mock_query.to_dataframe.side_effect = lambda: (
             empty_df
-            if "StatementGeographicAxis" not in str(mock_query.by_dimension.call_args)
+            if "StatementGeographicalAxis" not in str(mock_query.by_dimension.call_args)
             else mock_revenue_df
         )
 
@@ -114,7 +114,7 @@ class TestSECXBRLParser:
         assert facts[0].concept == "Revenue"
         assert facts[0].member == "Americas"
         assert facts[0].value == Decimal("5000000")
-        assert facts[0].axis == "srt:StatementGeographicAxis"
+        assert facts[0].axis == "srt:StatementGeographicalAxis"
         assert facts[0].parsed_axis == "Geographic"
         assert facts[0].statement == "Income Statement"
 

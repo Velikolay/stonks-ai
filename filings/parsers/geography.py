@@ -30,63 +30,57 @@ class GeographyParser:
     def __init__(self):
         # Define geography patterns with their variations
         self.geography_patterns = {
-            # Americas
             "Americas": [
                 r"americas(?:excludingunitedstates)?",
-                r"northamerica",
-                r"southamerica",
-                r"latinamerica",
             ],
-            # Europe
-            "Europe": [
-                r"europe",
-                r"emea",  # Europe, Middle East, and Africa
-                r"european",
-            ],
-            # Asia Pacific
             "AsiaPacific": [
-                r"asiapacific",
-                r"apac",
-                r"asia",
-                r"restofasiapacific",
+                r"(?i)asiapacific",
+                r"(?i)apac",
+                r"(?i)asia",
+                r"(?i)restofasiapacific",
             ],
-            # China
             "China": [
-                r"china",
-                r"greaterchina",
-                r"mainlandchina",
+                r"(?i)china",
+                r"(?i)greaterchina",
+                r"CN",
             ],
-            # Japan
             "Japan": [
-                r"japan",
-                r"japanese",
+                r"(?i)japan",
+                r"JP",
             ],
-            # United States
             "UnitedStates": [
-                r"unitedstates",
-                r"usa",
-                r"america",
+                r"(?i)unitedstates",
+                r"(?i)usa",
+                r"(?i)america",
+                r"US",
             ],
-            # Non-US
             "NonUS": [
-                r"nonus",
-                r"nonunitedstates",
+                r"(?i)nonus",
             ],
-            # Other regions
+            "EMEA": [
+                r"(?i)emea",
+            ],
+            "Europe": [
+                r"(?i)europe",
+                r"EU",
+            ],
             "MiddleEast": [
-                r"middleeast",
+                r"(?i)middleeast",
             ],
             "Africa": [
-                r"africa",
-                r"african",
+                r"(?i)africa",
             ],
             "India": [
-                r"india",
-                r"indian",
+                r"(?i)india",
+                r"IN",
             ],
             "Korea": [
-                r"korea",
-                r"southkorea",
+                r"(?i)korea",
+                r"(?i)southkorea",
+                r"KR",
+            ],
+            "OtherCountries": [
+                r"(?i)other",
             ],
         }
 
@@ -94,7 +88,7 @@ class GeographyParser:
         self.compiled_patterns = {}
         for geography, patterns in self.geography_patterns.items():
             self.compiled_patterns[geography] = [
-                re.compile(pattern, re.IGNORECASE) for pattern in patterns
+                re.compile(pattern) for pattern in patterns
             ]
 
     def parse_geography(self, text: str) -> Optional[GeographyInfo]:
@@ -111,7 +105,7 @@ class GeographyParser:
             return None
 
         # Clean the text (remove extra whitespace, convert to lowercase)
-        cleaned_text = text.strip().lower()
+        cleaned_text = text.strip()
 
         best_match = None
         longest_match_length = 0

@@ -79,6 +79,10 @@ class SECXBRLParser:
             )
             facts.extend(disaggregated_operating_income_facts)
 
+            # Parse disaggregated COGS
+            disaggregated_cogs_facts = self._parse_disaggregated_cogs(xbrl)
+            facts.extend(disaggregated_cogs_facts)
+
             logger.info(
                 f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
             )
@@ -213,7 +217,7 @@ class SECXBRLParser:
             geographic_df = (
                 xbrl.query()
                 .by_concept(metric)
-                .by_dimension("StatementGeographicAxis")
+                .by_dimension("StatementGeographicalAxis")
                 .to_dataframe()
             )
 
@@ -221,18 +225,28 @@ class SECXBRLParser:
                 # Get the latest period for each geographic region
                 geographic_metrics = geographic_df.loc[
                     geographic_df.groupby(
-                        self._to_df_dim("srt:StatementGeographicAxis")
+                        self._to_df_dim("srt:StatementGeographicalAxis")
                     )["period_start"].idxmax()
                 ]
 
                 for _, row in geographic_metrics.iterrows():
                     position += 1
+                    segment_member = row.get(
+                        self._to_df_dim("srt:StatementGeographicalAxis"), ""
+                    )
+                    geography_info = self.geography_parser.parse_geography(
+                        segment_member
+                    )
                     fact = self._create_disaggregated_metric_fact(
                         row,
                         metric=metric,
-                        dimension="srt:StatementGeographicAxis",
+                        dimension="srt:StatementGeographicalAxis",
                         dimension_parsed="Geographic",
-                        dimension_value_parsed=None,
+                        dimension_value_parsed=(
+                            geography_info.geography
+                            if geography_info
+                            else segment_member
+                        ),
                         position=position,
                     )
                     if fact:
@@ -268,7 +282,8 @@ class SECXBRLParser:
                             dimension_parsed="Geographic",
                             dimension_value_parsed=self.geography_parser.parse_geography(
                                 segment_member
-                            ).geography,
+                            ).geography
+                            or segment_member,
                             position=position,
                         )
                         if fact:
@@ -279,7 +294,8 @@ class SECXBRLParser:
         except Exception as e:
             logger.error(f"Error parsing disaggregated {metric}: {e}")
 
-        return facts
+        # Dedup facts by concept, axis, member, and value
+        return self._dedup_disaggregated_facts(facts)
 
     def _parse_disaggregated_revenues(self, xbrl) -> list[FinancialFactCreate]:
         """Parse disaggregated revenues using XBRL queries.
@@ -302,6 +318,17 @@ class SECXBRLParser:
             List of FinancialFact objects for disaggregated operating income
         """
         return self._parse_disaggregated_metrics(xbrl, "OperatingIncome")
+
+    def _parse_disaggregated_cogs(self, xbrl) -> list[FinancialFactCreate]:
+        """Parse disaggregated cost of goods sold using XBRL queries.
+
+        Args:
+            xbrl: XBRL object from edgartools
+
+        Returns:
+            List of FinancialFact objects for disaggregated cost of goods sold
+        """
+        return self._parse_disaggregated_metrics(xbrl, "CostOfGoods")
 
     def _create_disaggregated_metric_fact(
         self,
@@ -398,6 +425,37 @@ class SECXBRLParser:
         except Exception:
             logger.exception(f"Error creating disaggregated {metric}, {dimension} fact")
             return None
+
+    def _dedup_disaggregated_facts(
+        self, facts: list[FinancialFactCreate]
+    ) -> list[FinancialFactCreate]:
+        """Deduplicate disaggregated facts by concept, axis, member, and value.
+
+        Args:
+            facts: List of FinancialFactCreate objects to deduplicate
+
+        Returns:
+            Deduplicated list of FinancialFactCreate objects, keeping the first occurrence
+            of each unique combination of concept, axis, member, and value.
+        """
+        seen = set()
+        deduplicated = []
+
+        for fact in facts:
+            # Create a unique key from concept, axis, member, and value
+            # Use None for optional fields to handle missing values consistently
+            key = (
+                fact.concept,
+                fact.parsed_axis or None,
+                fact.parsed_member or None,
+                fact.value,
+            )
+
+            if key not in seen:
+                seen.add(key)
+                deduplicated.append(fact)
+
+        return deduplicated
 
     def _determine_period_type(
         self, period_start: Optional[date], period_end: Optional[date]
