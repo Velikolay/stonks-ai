@@ -79,7 +79,7 @@ class SECXBRLParser:
             # Parse statement of shareholders equity
             equity_facts = self._parse_statement(
                 xbrl.statements.statement_of_equity().to_dataframe(include_unit=True),
-                "Statement of Shareholders Equity",
+                "Statement of Equity",
             )
             facts.extend(equity_facts)
 
