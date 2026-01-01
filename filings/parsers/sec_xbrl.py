@@ -705,7 +705,7 @@ class SECXBRLParser:
 
             # Convert value to Decimal
             value_decimal = None
-            if value and not math.isnan(value):
+            if not is_abstract and value and not math.isnan(value):
                 try:
                     value_decimal = Decimal(str(value))
                 except (ValueError, TypeError):
@@ -714,7 +714,11 @@ class SECXBRLParser:
 
             # Convert comparative value to Decimal
             comparative_value_decimal = None
-            if comparative_value and not math.isnan(comparative_value):
+            if (
+                not is_abstract
+                and comparative_value
+                and not math.isnan(comparative_value)
+            ):
                 try:
                     comparative_value_decimal = Decimal(str(comparative_value))
                 except (ValueError, TypeError):
@@ -723,7 +727,7 @@ class SECXBRLParser:
                     )
 
             weight_decimal = None
-            if weight and not math.isnan(weight):
+            if not is_abstract and weight and not math.isnan(weight):
                 try:
                     weight_decimal = Decimal(str(weight))
                 except (ValueError, TypeError):
