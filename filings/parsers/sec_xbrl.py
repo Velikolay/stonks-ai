@@ -69,6 +69,20 @@ class SECXBRLParser:
             )
             facts.extend(cashflow_facts)
 
+            # Parse comprehensive income
+            comprehensive_income_facts = self._parse_statement(
+                xbrl.statements.comprehensive_income().to_dataframe(include_unit=True),
+                "Comprehensive Income",
+            )
+            facts.extend(comprehensive_income_facts)
+
+            # Parse statement of shareholders equity
+            equity_facts = self._parse_statement(
+                xbrl.statements.statement_of_equity().to_dataframe(include_unit=True),
+                "Statement of Shareholders Equity",
+            )
+            facts.extend(equity_facts)
+
             # Parse disaggregated revenues
             disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
             facts.extend(disaggregated_revenue_facts)
@@ -187,23 +201,26 @@ class SECXBRLParser:
             )
 
             if product_df is not None and not product_df.empty:
+                # Find the column containing ProductOrServiceAxis
+                product_axis_col = self._find_axis_column(
+                    product_df, "ProductOrServiceAxis"
+                )
                 # Get the latest period for each product/service
                 product_metrics = product_df.loc[
-                    product_df.groupby(self._to_df_dim("srt:ProductOrServiceAxis"))[
-                        "period_start"
-                    ].idxmax()
+                    product_df.groupby(product_axis_col)["period_start"].idxmax()
                 ]
 
                 for _, row in product_metrics.iterrows():
                     position += 1
-                    segment_member = row.get(
-                        self._to_df_dim("srt:ProductOrServiceAxis"), ""
-                    )
+                    segment_member = row.get(product_axis_col, "")
+
+                    # Extract the dimension name from the column
+                    dimension = self._dim_from_column(product_axis_col)
 
                     fact = self._create_disaggregated_metric_fact(
                         row,
                         metric=metric,
-                        dimension="srt:ProductOrServiceAxis",
+                        dimension=dimension,
                         dimension_parsed="Product",
                         dimension_value_parsed=self.product_parser.parse_product(
                             segment_member
@@ -222,25 +239,29 @@ class SECXBRLParser:
             )
 
             if geographic_df is not None and not geographic_df.empty:
+                # Find the column containing StatementGeographicalAxis
+                geographic_axis_col = self._find_axis_column(
+                    geographic_df, "StatementGeographicalAxis"
+                )
                 # Get the latest period for each geographic region
                 geographic_metrics = geographic_df.loc[
-                    geographic_df.groupby(
-                        self._to_df_dim("srt:StatementGeographicalAxis")
-                    )["period_start"].idxmax()
+                    geographic_df.groupby(geographic_axis_col)["period_start"].idxmax()
                 ]
 
                 for _, row in geographic_metrics.iterrows():
                     position += 1
-                    segment_member = row.get(
-                        self._to_df_dim("srt:StatementGeographicalAxis"), ""
-                    )
+                    segment_member = row.get(geographic_axis_col, "")
                     geography_info = self.geography_parser.parse_geography(
                         segment_member
                     )
+
+                    # Extract the dimension name from the column
+                    dimension = self._dim_from_column(geographic_axis_col)
+
                     fact = self._create_disaggregated_metric_fact(
                         row,
                         metric=metric,
-                        dimension="srt:StatementGeographicalAxis",
+                        dimension=dimension,
                         dimension_parsed="Geographic",
                         dimension_value_parsed=(
                             geography_info.geography
@@ -261,29 +282,34 @@ class SECXBRLParser:
             )
 
             if business_segments_df is not None and not business_segments_df.empty:
+                # Find the column containing StatementBusinessSegmentsAxis
+                business_segments_axis_col = self._find_axis_column(
+                    business_segments_df, "StatementBusinessSegmentsAxis"
+                )
                 # Get the latest period for each business segment
                 business_segments_metrics = business_segments_df.loc[
-                    business_segments_df.groupby(
-                        self._to_df_dim("us-gaap:StatementBusinessSegmentsAxis")
-                    )["period_start"].idxmax()
+                    business_segments_df.groupby(business_segments_axis_col)[
+                        "period_start"
+                    ].idxmax()
                 ]
 
                 for _, row in business_segments_metrics.iterrows():
                     # Check if this business segment contains geographic region information
-                    segment_member = row.get(
-                        self._to_df_dim("us-gaap:StatementBusinessSegmentsAxis"), ""
-                    )
+                    segment_member = row.get(business_segments_axis_col, "")
                     if self.geography_parser.is_geography_text(segment_member):
                         position += 1
+
+                        # Extract the dimension name from the column
+                        dimension = self._dim_from_column(business_segments_axis_col)
+
                         fact = self._create_disaggregated_metric_fact(
                             row,
                             metric=metric,
-                            dimension="us-gaap:StatementBusinessSegmentsAxis",
+                            dimension=dimension,
                             dimension_parsed="Geographic",
                             dimension_value_parsed=self.geography_parser.parse_geography(
                                 segment_member
-                            ).geography
-                            or segment_member,
+                            ).geography,
                             position=position,
                         )
                         if fact:
@@ -291,8 +317,15 @@ class SECXBRLParser:
 
             logger.info(f"Extracted {len(facts)} disaggregated {metric} facts")
 
-        except Exception as e:
-            logger.error(f"Error parsing disaggregated {metric}: {e}")
+        except Exception:
+            logger.error(
+                xbrl.query()
+                .by_concept(metric)
+                .by_dimension("ProductOrServiceAxis")
+                .to_dataframe()
+                .to_string()
+            )
+            logger.exception(f"Error parsing disaggregated {metric}")
 
         # Dedup facts by concept, axis, member, and value
         return self._dedup_disaggregated_facts(facts)
@@ -582,6 +615,35 @@ class SECXBRLParser:
     def _to_df_dim(self, sec_dim: str) -> str:
         dim = sec_dim.replace(":", "_", 1)
         return f"dim_{dim}"
+
+    def _find_axis_column(self, df: pd.DataFrame, axis_name: str) -> Optional[str]:
+        """Find the column name that contains the given axis name.
+
+        Args:
+            df: DataFrame to search in
+            axis_name: The axis name to search for (e.g., "ProductOrServiceAxis")
+
+        Returns:
+            Column name that contains the axis name, or None if not found
+        """
+        if df is None or df.empty:
+            return None
+
+        for col in df.columns:
+            if axis_name in col:
+                return col
+        return None
+
+    def _dim_from_column(self, column_name: str) -> str:
+        """Extract the dimension name from a DataFrame column name.
+
+        Args:
+            column_name: Column name (e.g., "dim_srt_ProductOrServiceAxis")
+
+        Returns:
+            Dimension name (e.g., "srt:ProductOrServiceAxis")
+        """
+        return column_name.replace("dim_", "").replace("_", ":", 1)
 
     def _to_sec_concept(self, concept: str) -> str:
         return concept.replace("_", ":", 1)

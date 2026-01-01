@@ -31,7 +31,7 @@ class GeographyParser:
         # Define geography patterns with their variations
         self.geography_patterns = {
             "Americas": [
-                r"americas(?:excludingunitedstates)?",
+                r"(?i)americas(?:excludingunitedstates)?",
             ],
             "AsiaPacific": [
                 r"(?i)asiapacific",
