@@ -142,7 +142,7 @@ def upgrade() -> None:
           r.root_label as normalized_label,
           r.root_period as current_period,
           r.root_period as root_period,
-          md5(r.company_id || '|' || r.statement || '|' || r.root_concept) AS group_id
+          md5(r.company_id || '|' || r.statement || '|' || r.root_concept || '|' || 'chaining') AS group_id
         FROM roots r
 
         UNION ALL
@@ -187,7 +187,7 @@ def upgrade() -> None:
             statement,
             concept,
             (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
-            md5(company_id || '|' || statement || '|' || concept) AS group_id,
+            md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
             MAX(period_end) AS group_max_period_end
         FROM financial_facts
         GROUP BY

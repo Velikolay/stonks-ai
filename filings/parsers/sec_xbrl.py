@@ -318,13 +318,6 @@ class SECXBRLParser:
             logger.info(f"Extracted {len(facts)} disaggregated {metric} facts")
 
         except Exception:
-            logger.error(
-                xbrl.query()
-                .by_concept(metric)
-                .by_dimension("ProductOrServiceAxis")
-                .to_dataframe()
-                .to_string()
-            )
             logger.exception(f"Error parsing disaggregated {metric}")
 
         # Dedup facts by concept, axis, member, and value
@@ -475,13 +468,12 @@ class SECXBRLParser:
         deduplicated = []
 
         for fact in facts:
-            # Create a unique key from concept, axis, member, and value
-            # Use None for optional fields to handle missing values consistently
             key = (
                 fact.concept,
+                fact.statement,
                 fact.parsed_axis or None,
                 fact.parsed_member or None,
-                fact.value,
+                fact.period_end,
             )
 
             if key not in seen:
