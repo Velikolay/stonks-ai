@@ -194,7 +194,7 @@ class SECXBRLParser:
         try:
             # Query disaggregated metrics by product/service
             product_df = (
-                xbrl.query()
+                xbrl.query(include_dimensions=True)
                 .by_concept(metric)
                 .by_dimension("ProductOrServiceAxis")
                 .to_dataframe()
@@ -232,7 +232,7 @@ class SECXBRLParser:
 
             # Query disaggregated metrics by geographic region
             geographic_df = (
-                xbrl.query()
+                xbrl.query(include_dimensions=True)
                 .by_concept(metric)
                 .by_dimension("StatementGeographicalAxis")
                 .to_dataframe()
@@ -275,7 +275,7 @@ class SECXBRLParser:
 
             # Query disaggregated metrics by business segments (geographic regions)
             business_segments_df = (
-                xbrl.query()
+                xbrl.query(include_dimensions=True)
                 .by_concept(metric)
                 .by_dimension("StatementBusinessSegmentsAxis")
                 .to_dataframe()
