@@ -253,6 +253,7 @@ class YearlyFinancialsOperations:
                     .where(
                         self.yearly_financials_view.c.normalized_label.is_not(None),
                         self.yearly_financials_view.c.company_id == company_id,
+                        self.yearly_financials_view.c.is_abstract.is_(False),
                     )
                     .group_by(
                         self.yearly_financials_view.c.normalized_label,

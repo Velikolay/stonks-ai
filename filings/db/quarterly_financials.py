@@ -266,6 +266,7 @@ class QuarterlyFinancialsOperations:
                     .where(
                         self.quarterly_financials_view.c.normalized_label.is_not(None),
                         self.quarterly_financials_view.c.company_id == company_id,
+                        self.quarterly_financials_view.c.is_abstract.is_(False),
                     )
                     .group_by(
                         self.quarterly_financials_view.c.normalized_label,
