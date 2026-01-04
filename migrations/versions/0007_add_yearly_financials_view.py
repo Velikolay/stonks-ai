@@ -9,8 +9,8 @@ Create Date: 2025-01-27 10:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0006"
-down_revision = "0005"
+revision = "0007"
+down_revision = "0006"
 branch_labels = None
 depends_on = None
 

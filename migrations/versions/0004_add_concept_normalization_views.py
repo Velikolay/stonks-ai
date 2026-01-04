@@ -27,6 +27,8 @@ def upgrade() -> None:
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
+          WHERE
+            ff.axis = ''
         ),
 
         candidate_matches AS (
@@ -190,6 +192,8 @@ def upgrade() -> None:
             md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
             MAX(period_end) AS group_max_period_end
         FROM financial_facts
+        WHERE
+            axis = ''
         GROUP BY
             company_id,
             statement,
