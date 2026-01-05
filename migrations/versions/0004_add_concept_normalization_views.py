@@ -16,6 +16,30 @@ depends_on = None
 
 
 def upgrade() -> None:
+
+    # Create view for grouping concept normalization
+    op.execute(
+        """
+        CREATE VIEW concept_normalization_grouping AS
+
+        SELECT
+            company_id,
+            statement,
+            concept,
+            (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
+            md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
+            MAX(period_end) AS group_max_period_end
+        FROM financial_facts ff
+        WHERE
+            axis = ''
+        GROUP BY
+            company_id,
+            statement,
+            concept
+        HAVING COUNT(DISTINCT label) > 1
+        """
+    )
+
     # Create view for chaining concept normalization
     op.execute(
         """
@@ -24,9 +48,17 @@ def upgrade() -> None:
         WITH RECURSIVE facts AS (
           SELECT
             ff.*,
+            -- apply the grouping normalization so it is part of the chaining algorithm
+            -- this avoids complex combining logic later on
+            COALESCE(cng.normalized_label, ff.label) as normalized_label,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
+          LEFT JOIN concept_normalization_grouping cng
+            ON ff.company_id = cng.company_id
+            AND ff.statement = cng.statement
+            AND ff.concept = cng.concept
+            AND ff.period_end <= cng.group_max_period_end
           WHERE
             ff.axis = ''
         ),
@@ -39,8 +71,8 @@ def upgrade() -> None:
             f2.concept as concept2,
             f1.period_end as period_end1,
             f2.period_end as period_end2,
-            f1.label as label1,
-            f2.label as label2
+            f1.normalized_label as label1,
+            f2.normalized_label as label2
           FROM facts f1
           JOIN facts f2
           ON
@@ -179,149 +211,32 @@ def upgrade() -> None:
         """
     )
 
-    # Create view for grouping concept normalization
-    op.execute(
-        """
-        CREATE VIEW concept_normalization_grouping AS
-
-        SELECT
-            company_id,
-            statement,
-            concept,
-            (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
-            md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
-            MAX(period_end) AS group_max_period_end
-        FROM financial_facts
-        WHERE
-            axis = ''
-        GROUP BY
-            company_id,
-            statement,
-            concept
-        HAVING COUNT(DISTINCT label) > 1
-        """
-    )
-
     # Create merged view
     op.execute(
         """
         CREATE VIEW concept_normalization_combined AS
 
-        WITH RECURSIVE combined AS (
-            -- Combine both views with source tracking
-            SELECT
-                company_id,
-                statement,
-                concept,
-                normalized_label,
-                group_id,
-                group_max_period_end
+        SELECT DISTINCT ON (company_id, statement, concept)
+            company_id,
+            statement,
+            concept,
+            normalized_label,
+            group_id,
+            group_max_period_end
+        FROM (
+            SELECT *, 1 AS src_priority
             FROM concept_normalization_chaining
 
             UNION ALL
 
-            SELECT
-                company_id,
-                statement,
-                concept,
-                normalized_label,
-                group_id,
-                group_max_period_end
+            SELECT *, 2 AS src_priority
             FROM concept_normalization_grouping
-        ),
-
-        -- Identify group merges: groups that share at least one concept
-        group_links AS (
-            SELECT DISTINCT
-                c1.company_id,
-                c1.statement,
-                c1.concept,
-                c1.group_id as group_id_1,
-                c2.group_id as group_id_2,
-                CASE
-                    WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.group_id
-                    WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.group_id
-                    ELSE c2.group_id
-                END as group_id,
-                CASE
-                    WHEN c1.group_max_period_end > c2.group_max_period_end THEN c1.normalized_label
-                    WHEN c1.group_max_period_end = c2.group_max_period_end AND c1.group_id >= c2.group_id THEN c1.normalized_label
-                    ELSE c2.normalized_label
-                END as normalized_label,
-                GREATEST(c1.group_max_period_end, c2.group_max_period_end) as group_max_period_end
-            FROM combined c1
-            JOIN combined c2
-                ON c1.company_id = c2.company_id
-                AND c1.statement = c2.statement
-                AND c1.concept = c2.concept
-                AND c1.group_id <> c2.group_id
-        ),
-
-        transitive_merges AS (
-            SELECT
-                company_id,
-                statement,
-                group_id_1,
-                group_id_2,
-                group_id,
-                group_max_period_end,
-                normalized_label
-            FROM group_links
-
-            UNION
-
-            SELECT
-                tm.company_id,
-                tm.statement,
-                tm.group_id_1,
-                gl.group_id_2,
-                CASE
-                    WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.group_id
-                    WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.group_id
-                    ELSE gl.group_id
-                END as group_id,
-                GREATEST(tm.group_max_period_end, gl.group_max_period_end) as group_max_period_end,
-                CASE
-                    WHEN tm.group_max_period_end > gl.group_max_period_end THEN tm.normalized_label
-                    WHEN tm.group_max_period_end = gl.group_max_period_end AND tm.group_id >= gl.group_id THEN tm.normalized_label
-                    ELSE gl.normalized_label
-                END as normalized_label
-            FROM transitive_merges tm
-            JOIN group_links gl
-            ON
-                tm.company_id = gl.company_id
-                AND tm.statement = gl.statement
-                AND tm.group_id_2 = gl.group_id_1
-            WHERE tm.group_id_1 <> gl.group_id_2
-        ),
-
-        canonical_groups AS (
-            SELECT DISTINCT ON (company_id, statement, group_id_1)
-                company_id,
-                statement,
-                group_id_1 as original_group_id,
-                group_id as final_group_id,
-                group_max_period_end,
-                normalized_label
-            FROM
-                transitive_merges
-            ORDER BY company_id, statement, group_id_1, group_max_period_end DESC
-        )
-
-        -- Final output with all concepts
-        SELECT DISTINCT
-            c.company_id,
-            c.statement,
-            c.concept,
-            COALESCE(cg.normalized_label, c.normalized_label) as normalized_label,
-            COALESCE(cg.final_group_id, c.group_id) as group_id,
-            COALESCE(cg.group_max_period_end, c.group_max_period_end) as group_max_period_end
-        FROM combined c
-        LEFT JOIN canonical_groups cg
-        ON
-            c.company_id = cg.company_id
-            AND c.statement = cg.statement
-            AND c.group_id = cg.original_group_id
+        ) t
+        ORDER BY
+            company_id,
+            statement,
+            concept,
+            src_priority
         """
     )
 
@@ -329,13 +244,16 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization AS
 
-        WITH group_overrides AS (
+        WITH combined AS (
+            SELECT * FROM concept_normalization_combined
+        ),
+        group_overrides AS (
           SELECT
             cn.group_id,
             MAX(cno.normalized_label) as normalized_label,
             MAX(cno.weight) as weight,
             MAX(cno.unit) as unit
-          FROM concept_normalization_combined cn
+          FROM combined cn
           JOIN concept_normalization_overrides cno
           ON cn.statement = cno.statement
           AND cn.concept = cno.concept
@@ -353,7 +271,7 @@ def upgrade() -> None:
           go.unit as unit,
           cn.group_id,
           go.normalized_label IS NOT NULL as overridden
-        FROM concept_normalization_combined cn
+        FROM combined cn
         LEFT JOIN group_overrides go
         ON cn.group_id = go.group_id
         """
