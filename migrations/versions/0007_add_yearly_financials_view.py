@@ -38,8 +38,8 @@ def upgrade() -> None:
                     ELSE ff.value
                 END as value,
                 ff.unit,
-                ff.parsed_axis as axis,
-                ff.parsed_member as member,
+                ff.axis,
+                ff.member,
                 ff.statement,
                 ff.period_end,
                 ff.is_abstract,

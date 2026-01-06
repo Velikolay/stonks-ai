@@ -25,14 +25,13 @@ class FinancialFactBase(BaseModel):
     label: str
     period_end: date
     is_abstract: bool
-    value: Optional[Decimal] = Field(None, decimal_places=4)
-    comparative_value: Optional[Decimal] = Field(None, decimal_places=4)
+    value: Optional[Decimal] = Field(None, decimal_places=5)
+    comparative_value: Optional[Decimal] = Field(None, decimal_places=5)
     weight: Optional[Decimal] = None
     unit: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
-    parsed_axis: Optional[str] = None
-    parsed_member: Optional[str] = None
+    member_label: Optional[str] = None
     statement: Optional[str] = None
     comparative_period_end: Optional[date] = None
     period: Optional[PeriodType] = None

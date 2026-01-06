@@ -45,13 +45,19 @@ class TestSECXBRLParser:
         # Mock the _create_disaggregated_metric_fact method to return expected facts
         with patch.object(parser, "_create_disaggregated_metric_fact") as mock_create:
             mock_facts = []
-            for i, product in enumerate(["iPhone", "Mac", "iPad"]):
+            for i, product in enumerate(
+                [
+                    ("aapl:IPhoneMember", "iPhone"),
+                    ("aapl:MacMember", "Mac"),
+                    ("aapl:IPadMember", "iPad"),
+                ]
+            ):
                 mock_fact = Mock()
                 mock_fact.concept = "Revenue"
-                mock_fact.member = product
+                mock_fact.member = product[0]
+                mock_fact.member_label = product[1]
                 mock_fact.value = Decimal(str(1000000 + i * 1000000))
                 mock_fact.axis = "srt:ProductOrServiceAxis"
-                mock_fact.parsed_axis = "Product"
                 mock_fact.statement = "Income Statement"
                 mock_fact.label = "Contract Revenue"
                 mock_facts.append(mock_fact)
@@ -62,10 +68,10 @@ class TestSECXBRLParser:
 
             assert len(facts) == 3
             assert facts[0].concept == "Revenue"
-            assert facts[0].member == "iPhone"
+            assert facts[0].member == "aapl:IPhoneMember"
             assert facts[0].value == Decimal("1000000")
             assert facts[0].axis == "srt:ProductOrServiceAxis"
-            assert facts[0].parsed_axis == "Product"
+            assert facts[0].member_label == "iPhone"
             assert facts[0].statement == "Income Statement"
             assert facts[0].label == "Contract Revenue"
 
@@ -112,10 +118,10 @@ class TestSECXBRLParser:
 
         assert len(facts) == 2
         assert facts[0].concept == "Revenue"
-        assert facts[0].member == "Americas"
+        assert facts[0].member == "aapl:AmericasMember"
+        assert facts[0].member_label == "Americas"
         assert facts[0].value == Decimal("5000000")
         assert facts[0].axis == "srt:StatementGeographicalAxis"
-        assert facts[0].parsed_axis == "Geographic"
         assert facts[0].statement == "Income Statement"
 
     def test_create_disaggregated_revenue_fact(self):
@@ -148,9 +154,9 @@ class TestSECXBRLParser:
 
         assert fact.concept == "Revenue"
         assert fact.value == Decimal("1000000")
-        assert fact.member == "iPhone"
+        assert fact.member == "aapl:IPhoneMember"
         assert fact.axis == "srt:ProductOrServiceAxis"
-        assert fact.parsed_axis == "Product"
+        assert fact.member_label == "iPhone"
         assert fact.statement == "Income Statement"
         assert fact.label == "Contract Revenue"
         # Regression test: ensure period field is set
@@ -492,7 +498,6 @@ class TestSECXBRLParser:
         for fact in facts:
             assert fact.concept == "Revenue"
             assert fact.axis == "us-gaap:StatementBusinessSegmentsAxis"
-            assert fact.parsed_axis == "Geographic"
             assert fact.statement == "Income Statement"
             assert isinstance(fact.value, Decimal)
             assert fact.value > 0

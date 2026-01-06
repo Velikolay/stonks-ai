@@ -46,11 +46,8 @@ class FinancialFactOperations:
                         unit=fact.unit,
                         axis=fact.axis if fact.axis is not None else "",
                         member=fact.member if fact.member is not None else "",
-                        parsed_axis=(
-                            fact.parsed_axis if fact.parsed_axis is not None else ""
-                        ),
-                        parsed_member=(
-                            fact.parsed_member if fact.parsed_member is not None else ""
+                        member_label=(
+                            fact.member_label if fact.member_label is not None else ""
                         ),
                         statement=fact.statement if fact.statement is not None else "",
                         period_end=fact.period_end,
@@ -95,12 +92,9 @@ class FinancialFactOperations:
                             unit=fact.unit,
                             axis=fact.axis if fact.axis is not None else "",
                             member=fact.member if fact.member is not None else "",
-                            parsed_axis=(
-                                fact.parsed_axis if fact.parsed_axis is not None else ""
-                            ),
-                            parsed_member=(
-                                fact.parsed_member
-                                if fact.parsed_member is not None
+                            member_label=(
+                                fact.member_label
+                                if fact.member_label is not None
                                 else ""
                             ),
                             statement=(
@@ -170,10 +164,7 @@ class FinancialFactOperations:
                             unit=row.unit,
                             axis=row.axis if row.axis else None,
                             member=row.member if row.member else None,
-                            parsed_axis=row.parsed_axis if row.parsed_axis else None,
-                            parsed_member=(
-                                row.parsed_member if row.parsed_member else None
-                            ),
+                            member_label=row.member_label if row.member_label else None,
                             statement=row.statement if row.statement else None,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
@@ -233,10 +224,7 @@ class FinancialFactOperations:
                             unit=row.unit,
                             axis=row.axis if row.axis else None,
                             member=row.member if row.member else None,
-                            parsed_axis=row.parsed_axis if row.parsed_axis else None,
-                            parsed_member=(
-                                row.parsed_member if row.parsed_member else None
-                            ),
+                            member_label=row.member_label if row.member_label else None,
                             statement=row.statement if row.statement else None,
                             period_end=row.period_end,
                             comparative_period_end=row.comparative_period_end,
@@ -282,8 +270,7 @@ class FinancialFactOperations:
                         unit=row.unit,
                         axis=row.axis if row.axis else None,
                         member=row.member if row.member else None,
-                        parsed_axis=row.parsed_axis if row.parsed_axis else None,
-                        parsed_member=row.parsed_member if row.parsed_member else None,
+                        member_label=row.member_label if row.member_label else None,
                         statement=row.statement if row.statement else None,
                         period_end=row.period_end,
                         comparative_period_end=row.comparative_period_end,

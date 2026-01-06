@@ -189,139 +189,32 @@ class SECXBRLParser:
             List of FinancialFact objects for disaggregated metrics
         """
         facts = []
-        position = 0
 
         try:
             # Query disaggregated metrics by product/service
-            product_df = (
-                xbrl.query(include_dimensions=True)
-                .by_concept(metric)
-                .by_dimension("ProductOrServiceAxis")
-                .to_dataframe()
+            product_facts = self._process_disaggregated_axis(
+                xbrl, metric, "ProductOrServiceAxis"
             )
-
-            if product_df is not None and not product_df.empty:
-                # Find the column containing ProductOrServiceAxis
-                product_axis_col = self._find_axis_column(
-                    product_df, "ProductOrServiceAxis"
-                )
-                # Get the latest period for each product/service
-                product_metrics = product_df.loc[
-                    product_df.groupby(product_axis_col)["period_start"].idxmax()
-                ]
-
-                for _, row in product_metrics.iterrows():
-                    position += 1
-                    segment_member = row.get(product_axis_col, "")
-
-                    # Extract the dimension name from the column
-                    dimension = self._dim_from_column(product_axis_col)
-
-                    fact = self._create_disaggregated_metric_fact(
-                        row,
-                        metric=metric,
-                        dimension=dimension,
-                        dimension_parsed="Product",
-                        dimension_value_parsed=self.product_parser.parse_product(
-                            segment_member
-                        ).product,
-                        position=position,
-                    )
-                    if fact:
-                        facts.append(fact)
+            facts.extend(product_facts)
 
             # Query disaggregated metrics by geographic region
-            geographic_df = (
-                xbrl.query(include_dimensions=True)
-                .by_concept(metric)
-                .by_dimension("StatementGeographicalAxis")
-                .to_dataframe()
+            geographic_facts = self._process_disaggregated_axis(
+                xbrl, metric, "StatementGeographicalAxis", base_position=len(facts)
             )
+            facts.extend(geographic_facts)
 
-            if geographic_df is not None and not geographic_df.empty:
-                # Find the column containing StatementGeographicalAxis
-                geographic_axis_col = self._find_axis_column(
-                    geographic_df, "StatementGeographicalAxis"
-                )
-                # Get the latest period for each geographic region
-                geographic_metrics = geographic_df.loc[
-                    geographic_df.groupby(geographic_axis_col)["period_start"].idxmax()
-                ]
-
-                for _, row in geographic_metrics.iterrows():
-                    position += 1
-                    segment_member = row.get(geographic_axis_col, "")
-                    geography_info = self.geography_parser.parse_geography(
-                        segment_member
-                    )
-
-                    # Extract the dimension name from the column
-                    dimension = self._dim_from_column(geographic_axis_col)
-
-                    fact = self._create_disaggregated_metric_fact(
-                        row,
-                        metric=metric,
-                        dimension=dimension,
-                        dimension_parsed="Geographic",
-                        dimension_value_parsed=(
-                            geography_info.geography
-                            if geography_info
-                            else segment_member
-                        ),
-                        position=position,
-                    )
-                    if fact:
-                        facts.append(fact)
-
-            # Query disaggregated metrics by business segments (geographic regions)
-            business_segments_df = (
-                xbrl.query(include_dimensions=True)
-                .by_concept(metric)
-                .by_dimension("StatementBusinessSegmentsAxis")
-                .to_dataframe()
+            # Query disaggregated metrics by business segments
+            business_segments_facts = self._process_disaggregated_axis(
+                xbrl, metric, "StatementBusinessSegmentsAxis", base_position=len(facts)
             )
-
-            if business_segments_df is not None and not business_segments_df.empty:
-                # Find the column containing StatementBusinessSegmentsAxis
-                business_segments_axis_col = self._find_axis_column(
-                    business_segments_df, "StatementBusinessSegmentsAxis"
-                )
-                # Get the latest period for each business segment
-                business_segments_metrics = business_segments_df.loc[
-                    business_segments_df.groupby(business_segments_axis_col)[
-                        "period_start"
-                    ].idxmax()
-                ]
-
-                for _, row in business_segments_metrics.iterrows():
-                    # Check if this business segment contains geographic region information
-                    segment_member = row.get(business_segments_axis_col, "")
-                    if self.geography_parser.is_geography_text(segment_member):
-                        position += 1
-
-                        # Extract the dimension name from the column
-                        dimension = self._dim_from_column(business_segments_axis_col)
-
-                        fact = self._create_disaggregated_metric_fact(
-                            row,
-                            metric=metric,
-                            dimension=dimension,
-                            dimension_parsed="Geographic",
-                            dimension_value_parsed=self.geography_parser.parse_geography(
-                                segment_member
-                            ).geography,
-                            position=position,
-                        )
-                        if fact:
-                            facts.append(fact)
+            facts.extend(business_segments_facts)
 
             logger.info(f"Extracted {len(facts)} disaggregated {metric} facts")
 
         except Exception:
             logger.exception(f"Error parsing disaggregated {metric}")
 
-        # Dedup facts by concept, axis, member, and value
-        return self._dedup_disaggregated_facts(facts)
+        return facts
 
     def _parse_disaggregated_revenues(self, xbrl) -> list[FinancialFactCreate]:
         """Parse disaggregated revenues using XBRL queries.
@@ -356,13 +249,79 @@ class SECXBRLParser:
         """
         return self._parse_disaggregated_metrics(xbrl, "CostOfGoods")
 
+    def _process_disaggregated_axis(
+        self,
+        xbrl,
+        metric: str,
+        axis_name: str,
+        base_position: int = 0,
+    ) -> list:
+        """Process disaggregated metrics for a given axis dimension.
+
+        Args:
+            xbrl: XBRL object from edgartools
+            metric: The metric being disaggregated
+            axis_name: Name of the axis dimension (e.g., "ProductOrServiceAxis")
+            base_position: Base position for facts in this axis (default: 0)
+
+        Returns:
+            List of facts for this axis
+        """
+        facts = []
+
+        # Query disaggregated metrics by axis
+        df = (
+            xbrl.query(include_dimensions=True)
+            .by_concept(metric)
+            .by_dimension(axis_name)
+            .to_dataframe()
+        )
+
+        if df is None or df.empty:
+            return facts
+
+        # Find the column containing the axis
+        axis_col = self._find_axis_column(df, axis_name)
+
+        # Get unique values from the axis column
+        members = df[axis_col].unique()
+
+        position = base_position
+
+        # Iterate over each unique value
+        for member in members:
+            # Get the first two rows matching this value, sorted by period_start desc
+            member_rows = (
+                df[df[axis_col] == member]
+                .sort_values("period_start", ascending=False)
+                .head(2)
+            )
+
+            # Derive position from base position and current facts list length
+            position += 1
+            # Extract the dimension name from the column
+            dimension = self._dim_from_column(axis_col)
+
+            fact = self._create_disaggregated_metric_fact(
+                row=member_rows.iloc[0],
+                comparative_row=(member_rows.iloc[1] if len(member_rows) > 1 else None),
+                metric=metric,
+                dimension=dimension,
+                form_type=xbrl.document_type,
+                position=position,
+            )
+            if fact:
+                facts.append(fact)
+
+        return facts
+
     def _create_disaggregated_metric_fact(
         self,
         row,
+        comparative_row,
         metric: str,
         dimension: str,
-        dimension_parsed: str,
-        dimension_value_parsed: Optional[str],
+        form_type: str,
         position: int,
     ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact for disaggregated metrics.
@@ -389,9 +348,8 @@ class SECXBRLParser:
             label = row.get("label", concept)
 
             axis = dimension
-            member = row.get(self._to_df_dim(dimension), "UnknownMember")
-            parsed_axis = dimension_parsed
-            parsed_member = dimension_value_parsed
+            member = row.get(self._to_df_dim(dimension), "")
+            member_label = row.get("dimension_label", "")
 
             # Skip if no value
             if not value or math.isnan(value):
@@ -418,7 +376,7 @@ class SECXBRLParser:
             period_end = self._parse_date(row.get("period_end"))
 
             # Determine period type based on dates
-            period = self._determine_period_type(period_start, period_end)
+            period = self._determine_period_type(period_start, period_end, form_type)
 
             # Create the financial fact
             fact = FinancialFactCreate(
@@ -437,8 +395,7 @@ class SECXBRLParser:
                 unit=unit,
                 axis=axis,
                 member=member,
-                parsed_axis=parsed_axis,
-                parsed_member=parsed_member,
+                member_label=member_label,
                 statement="Income Statement",
                 period_end=period_end,
                 comparative_period_end=None,
@@ -452,38 +409,8 @@ class SECXBRLParser:
             logger.exception(f"Error creating disaggregated {metric}, {dimension} fact")
             return None
 
-    def _dedup_disaggregated_facts(
-        self, facts: list[FinancialFactCreate]
-    ) -> list[FinancialFactCreate]:
-        """Deduplicate disaggregated facts by concept, axis, member, and value.
-
-        Args:
-            facts: List of FinancialFactCreate objects to deduplicate
-
-        Returns:
-            Deduplicated list of FinancialFactCreate objects, keeping the first occurrence
-            of each unique combination of concept, axis, member, and value.
-        """
-        seen = set()
-        deduplicated = []
-
-        for fact in facts:
-            key = (
-                fact.concept,
-                fact.statement,
-                fact.parsed_axis or None,
-                fact.parsed_member or None,
-                fact.period_end,
-            )
-
-            if key not in seen:
-                seen.add(key)
-                deduplicated.append(fact)
-
-        return deduplicated
-
     def _determine_period_type(
-        self, period_start: Optional[date], period_end: Optional[date]
+        self, period_start: Optional[date], period_end: Optional[date], form_type: str
     ) -> PeriodType:
         """Determine period type based on start and end dates.
 
@@ -494,6 +421,9 @@ class SECXBRLParser:
         Returns:
             PeriodType.YTD if it's year-to-date, PeriodType.Q if it's a quarter
         """
+        if form_type == "10-K" or form_type == "10-K/A":
+            return PeriodType.YTD
+
         if not period_start or not period_end:
             # Default to Q if we can't determine
             return PeriodType.Q
@@ -502,14 +432,11 @@ class SECXBRLParser:
         days_in_period = (period_end - period_start).days
 
         # If the period is approximately 3 months (90 days +/- 10 days), it's a quarter
-        if 80 <= days_in_period <= 100:
+        if days_in_period <= 100:
             return PeriodType.Q
         # If the period is longer (like 6-12 months), it's likely YTD
-        elif days_in_period > 100:
-            return PeriodType.YTD
-        # Default to Q for shorter periods
         else:
-            return PeriodType.Q
+            return PeriodType.YTD
 
     def _determine_period_type_from_column(
         self, period_col: str, statement_type: str
