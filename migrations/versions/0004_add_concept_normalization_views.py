@@ -22,6 +22,22 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization_grouping AS
 
+        WITH non_unique_concepts AS (
+            SELECT
+                company_id,
+                statement,
+                concept,
+                filing_id
+            FROM financial_facts
+            WHERE axis = ''
+            GROUP BY
+                company_id,
+                statement,
+                concept,
+                filing_id
+            HAVING COUNT(DISTINCT label) > 1
+        ),
+        concept
         SELECT
             company_id,
             statement,
@@ -30,13 +46,15 @@ def upgrade() -> None:
             md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
             MAX(period_end) AS group_max_period_end
         FROM financial_facts ff
-        WHERE
-            axis = ''
+        WHERE axis = ''
         GROUP BY
             company_id,
             statement,
             concept
-        HAVING COUNT(DISTINCT label) > 1
+        HAVING
+            COUNT(DISTINCT label) > 1
+            -- filters concepts that appear more than once in the same filing / statement
+            AND COUNT(DISTINCT (filing_id, label)) = COUNT(DISTINCT filing_id)
         """
     )
 
