@@ -16,8 +16,8 @@ from alembic import op
 logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
-revision = "0005"
-down_revision = "0004"
+revision = "0004"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 

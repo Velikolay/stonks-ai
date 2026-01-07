@@ -270,12 +270,7 @@ class SECXBRLParser:
         facts = []
 
         # Query disaggregated metrics by axis
-        df = (
-            xbrl.query(include_dimensions=True)
-            .by_concept(metric)
-            .by_dimension(axis_name)
-            .to_dataframe()
-        )
+        df = xbrl.query().by_concept(metric).by_dimension(axis_name).to_dataframe()
 
         if df is None or df.empty:
             return facts
