@@ -1,1 +1,13 @@
 axis,member,member_label,normalized_axis_label,normalized_member_label,tags
+srt:ProductOrServiceAxis,,,Product,,
+us-gaap:ProductOrServiceAxis,,,Product,,
+srt:StatementGeographicalAxis,,,Geographical,,
+us-gaap:StatementGeographicalAxis,,,Geographical,,
+us-gaap:StatementBusinessSegmentsAxis,,Greater China,Geographical,China,
+us-gaap:StatementBusinessSegmentsAxis,,China,Geographical,China,
+us-gaap:StatementBusinessSegmentsAxis,,Japan,Geographical,Japan,
+us-gaap:StatementBusinessSegmentsAxis,,Europe,Geographical,Europe,
+us-gaap:StatementBusinessSegmentsAxis,,Americas,Geographical,Americas,
+us-gaap:StatementBusinessSegmentsAxis,,Asia-Pacific,Geographical,Asia-Pacific,
+us-gaap:StatementBusinessSegmentsAxis,,Rest of Asia Pacific,Geographical,Asia-Pacific,
+us-gaap:StatementBusinessSegmentsAxis,,Other countries,Geographical,Other Countries,

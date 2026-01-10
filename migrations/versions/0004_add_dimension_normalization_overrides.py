@@ -1,7 +1,7 @@
 """Add dimension normalization overrides table
 
-Revision ID: 0005
-Revises: 0004
+Revision ID: 0004
+Revises: 0003
 Create Date: 2025-01-27 10:00:00.000000
 
 """
@@ -83,8 +83,10 @@ def upgrade() -> None:
                         "member": row["member"],
                         "member_label": row["member_label"],
                         "normalized_axis_label": row["normalized_axis_label"],
-                        "normalized_member_label": row.get(
-                            "normalized_member_label", None
+                        "normalized_member_label": (
+                            row["normalized_member_label"]
+                            if row["normalized_member_label"] != ""
+                            else None
                         ),
                         "tags": row.get("tags", None),
                     }
