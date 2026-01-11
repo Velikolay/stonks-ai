@@ -357,6 +357,21 @@ class SECXBRLParser:
                 logger.warning(f"Invalid value for disaggregated {metric}: {value}")
                 return None
 
+            # Convert comparative value to Decimal
+            comparative_value_decimal = None
+            comparative_value = (
+                comparative_row.get("numeric_value")
+                if comparative_row is not None
+                else None
+            )
+            if comparative_value and not math.isnan(comparative_value):
+                try:
+                    comparative_value_decimal = Decimal(str(comparative_value))
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid comparative value for disaggregated {metric}: {comparative_value}"
+                    )
+
             weight_decimal = None
             if weight and not math.isnan(weight):
                 try:
@@ -369,6 +384,12 @@ class SECXBRLParser:
             # Parse dates
             period_start = self._parse_date(row.get("period_start"))
             period_end = self._parse_date(row.get("period_end"))
+
+            comparative_period_end = (
+                self._parse_date(comparative_row.get("period_end"))
+                if comparative_row is not None
+                else None
+            )
 
             # Determine period type based on dates
             period = self._determine_period_type(period_start, period_end, form_type)
@@ -386,14 +407,14 @@ class SECXBRLParser:
                 is_abstract=False,
                 value=value_decimal,
                 weight=weight_decimal,
-                comparative_value=None,  # Temporarily unsupported
+                comparative_value=comparative_value_decimal,
                 unit=unit,
                 axis=axis,
                 member=member,
                 member_label=member_label,
                 statement="Income Statement",
                 period_end=period_end,
-                comparative_period_end=None,
+                comparative_period_end=comparative_period_end,
                 period=period,
                 position=position,
             )
