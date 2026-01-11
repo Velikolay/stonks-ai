@@ -66,7 +66,7 @@ def upgrade() -> None:
         ),
 
         candidate_matches AS (
-          SELECT DISTINCT ON (f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end)
+          SELECT DISTINCT ON (f1.company_id, f1.statement, f1.concept, f2.concept, f1.period_end, f2.period_end)
             f1.company_id,
             f1.statement,
             f1.concept as concept1,
@@ -86,7 +86,7 @@ def upgrade() -> None:
           WHERE
             f1.concept <> f2.concept
             AND f1.period_end > f2.period_end
-          ORDER BY f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end
+          ORDER BY f1.company_id, f1.statement, f1.concept, f2.concept, f1.period_end, f2.period_end
         ),
 
         overlapping_matches AS (

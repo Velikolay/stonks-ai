@@ -141,6 +141,8 @@ def upgrade() -> None:
             -- apply the grouping normalization so it is part of the chaining algorithm
             -- this avoids complex combining logic later on
             COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
+            COALESCE(dng.normalized_axis_label, ff.axis) as normalized_axis_label,
+            COALESCE(dng.normalized_member_label, ff.member_label) as normalized_member_label,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
           FROM financial_facts ff
@@ -156,9 +158,38 @@ def upgrade() -> None:
             AND ff.period_end <= dng.group_max_period_end
           WHERE
             ff.axis <> ''
+        ),
+
+        candidate_matches AS (
+          SELECT
+          -- DISTINCT ON (f1.company_id, f1.statement, f1.normalized_label, f2.normalized_label, f1.period_end, f2.period_end)
+            f1.company_id,
+            f1.statement,
+            f1.normalized_label as normalized_label1,
+            f2.normalized_label as normalized_label2,
+            f1.period_end as period_end1,
+            f2.period_end as period_end2,
+            f1.normalized_axis_label as axis_label1,
+            f2.normalized_axis_label as axis_label2,
+            f1.normalized_member_label as member_label1,
+            f2.normalized_member_label as member_label2
+          FROM facts f1
+          JOIN facts f2
+          ON
+            f1.company_id = f2.company_id
+            AND f1.form_type = f2.form_type
+            AND f1.statement = f2.statement
+            AND f1.normalized_label = f2.normalized_label
+            AND f1.normalized_comparative_value = f2.normalized_value
+            AND f1.comparative_period_end = f2.period_end
+          WHERE
+            f1.normalized_axis_label <> f2.normalized_axis_label
+            OR f1.normalized_member_label <> f2.normalized_member_label
+            AND f1.period_end > f2.period_end
+          -- ORDER BY f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end
         )
 
-        SELECT * FROM facts
+        SELECT * FROM candidate_matches
         """
     )
 
