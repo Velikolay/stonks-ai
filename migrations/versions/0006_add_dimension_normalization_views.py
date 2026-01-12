@@ -38,7 +38,8 @@ def upgrade() -> None:
                 dno.normalized_axis_label,
                 dno.normalized_member_label,
                 ff.period_end,
-                md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dno.normalized_axis_label, '') || '|' || COALESCE(dno.normalized_member_label, '')) as id
+                (dno.normalized_axis_label IS NOT NULL) AS overridden,
+                md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dno.normalized_axis_label, '') || '|' || COALESCE(dno.normalized_member_label, '') || '|' || 'grouping') as id
             FROM financial_facts ff
             LEFT JOIN dimension_normalization_overrides as dno
             ON
@@ -98,7 +99,8 @@ def upgrade() -> None:
                 g.group_id,
                 COALESCE(b.normalized_member_label, b.member_label) AS normalized_member_label,
                 COALESCE(b.normalized_axis_label, b.axis) AS normalized_axis_label,
-                b.period_end AS group_max_period_end
+                b.period_end AS group_max_period_end,
+                b.overridden
             FROM groups_by_id g
             JOIN dimension_normalized_base b USING (id)
             ORDER BY
@@ -123,7 +125,8 @@ def upgrade() -> None:
             c.normalized_axis_label,
             c.normalized_member_label,
             g.group_id,
-            c.group_max_period_end
+            c.group_max_period_end,
+            c.overridden
         FROM dimension_normalized_base b
         JOIN groups_by_id g USING (id)
         JOIN canonical c USING (group_id)
@@ -144,7 +147,8 @@ def upgrade() -> None:
             COALESCE(dng.normalized_axis_label, ff.axis) as normalized_axis_label,
             COALESCE(dng.normalized_member_label, ff.member_label) as normalized_member_label,
             ff.value * ff.weight as normalized_value,
-            ff.comparative_value * ff.weight as normalized_comparative_value
+            ff.comparative_value * ff.weight as normalized_comparative_value,
+            COALESCE(dng.overridden, FALSE) as overridden
           FROM financial_facts ff
           LEFT JOIN concept_normalization cn
             USING (company_id, statement, concept)
@@ -160,19 +164,28 @@ def upgrade() -> None:
             ff.axis <> ''
         ),
 
-        candidate_matches AS (
+        matches AS (
           SELECT
-          -- DISTINCT ON (f1.company_id, f1.statement, f1.normalized_label, f2.normalized_label, f1.period_end, f2.period_end)
             f1.company_id,
             f1.statement,
-            f1.normalized_label as normalized_label1,
-            f2.normalized_label as normalized_label2,
+            f1.concept as concept1,
+            f2.concept as concept2,
+            f1.normalized_label as label1,
+            f2.normalized_label as label2,
             f1.period_end as period_end1,
             f2.period_end as period_end2,
-            f1.normalized_axis_label as axis_label1,
-            f2.normalized_axis_label as axis_label2,
-            f1.normalized_member_label as member_label1,
-            f2.normalized_member_label as member_label2
+            f1.axis as axis1,
+            f2.axis as axis2,
+            f1.member as member1,
+            f2.member as member2,
+            f1.member_label as member_label1,
+            f2.member_label as member_label2,
+            f1.normalized_axis_label as normalized_axis_label1,
+            f2.normalized_axis_label as normalized_axis_label2,
+            f1.normalized_member_label as normalized_member_label1,
+            f2.normalized_member_label as normalized_member_label2,
+            f1.overridden as overridden1,
+            f2.overridden as overridden2
           FROM facts f1
           JOIN facts f2
           ON
@@ -183,87 +196,143 @@ def upgrade() -> None:
             AND f1.normalized_comparative_value = f2.normalized_value
             AND f1.comparative_period_end = f2.period_end
           WHERE
-            f1.normalized_axis_label <> f2.normalized_axis_label
-            OR f1.normalized_member_label <> f2.normalized_member_label
+            (
+                f1.normalized_axis_label <> f2.normalized_axis_label
+                OR f1.normalized_member_label <> f2.normalized_member_label
+            )
             AND f1.period_end > f2.period_end
-          -- ORDER BY f1.company_id, f1.statement, f1.concept, f1.concept, f1.period_end, f2.period_end
+        ),
+
+        -- 1. Identify all starting points (newest side of each directed link)
+        roots AS (
+          SELECT
+            company_id,
+            statement,
+            concept1 as root_concept,
+            label1 as root_label,
+            axis1 as root_axis,
+            member1 as root_member,
+            member_label1 as root_member_label,
+            normalized_axis_label1 as root_normalized_axis_label,
+            normalized_member_label1 as root_normalized_member_label,
+            overridden1 as root_overridden,
+            period_end1 as root_period
+          FROM matches
+        ),
+
+        -- 2. Start from *every* root concept
+        chain AS (
+        SELECT
+          r.company_id,
+          r.statement,
+          r.root_concept as concept,
+          r.root_label as label,
+          r.root_axis as axis,
+          r.root_member as member,
+          r.root_member_label as member_label,
+          r.root_normalized_axis_label as normalized_axis_label,
+          r.root_normalized_member_label as normalized_member_label,
+          r.root_overridden as overridden,
+          r.root_period as current_period,
+          r.root_period as root_period,
+          md5(r.company_id || '|' || r.statement || '|' || r.root_concept || '|' || r.root_label || '|' || r.root_axis || '|' || r.root_member || '|' || r.root_member_label || '|' || r.root_normalized_axis_label || '|' || r.root_normalized_member_label || '|' || 'chaining') AS group_id
+        FROM roots r
+
+        UNION ALL
+
+        -- 3. Recursively traverse the directed edges forward in time (newer → older)
+        SELECT
+          c.company_id,
+          c.statement,
+          m.concept2 as concept,
+          m.label2 as label,
+          m.axis2 as axis,
+          m.member2 as member,
+          m.member_label2 as member_label,
+          m.normalized_axis_label2 as normalized_axis_label,
+          m.normalized_member_label2 as normalized_member_label,
+          m.overridden2 as overridden,
+          m.period_end2 as current_period,
+          c.root_period as root_period,
+          c.group_id as group_id
+        FROM chain c
+        JOIN matches m
+          ON m.company_id = c.company_id
+          AND m.statement = c.statement
+          AND m.concept1 = c.concept
+          AND m.label1 = c.label
+          AND m.axis1 = c.axis
+          AND m.member1 = c.member
+          AND m.member_label1 = c.member_label
+          AND m.normalized_axis_label1 = c.normalized_axis_label
+          AND m.normalized_member_label1 = c.normalized_member_label
+          AND m.period_end1 <= c.current_period
+        ),
+
+        -- 4. Select normalized values giving priority to overridden values and recent periods
+        group_normalized AS (
+            SELECT DISTINCT ON (group_id)
+                group_id,
+                normalized_axis_label,
+                normalized_member_label,
+                overridden
+            FROM chain
+            ORDER BY group_id, overridden DESC, current_period DESC
         )
 
-        SELECT * FROM candidate_matches
+        -- 5. Collapse duplicates (same concept can appear in multiple roots, take the latest one)
+        SELECT DISTINCT ON (company_id, axis, member, member_label)
+          company_id,
+          axis,
+          member,
+          member_label,
+          gn.normalized_axis_label,
+          gn.normalized_member_label,
+          group_id,
+          root_period as group_max_period_end,
+          gn.overridden
+        FROM chain
+        JOIN group_normalized gn USING (group_id)
+        ORDER BY company_id, axis, member, member_label, normalized_axis_label, normalized_member_label, root_period DESC
         """
     )
 
-    # # Create merged view
-    # op.execute(
-    #     """
-    #     CREATE VIEW dimension_normalization_combined AS
+    # Create merged view
+    op.execute(
+        """
+        CREATE VIEW dimension_normalization AS
 
-    #     SELECT DISTINCT ON (company_id, statement, concept)
-    #         company_id,
-    #         statement,
-    #         concept,
-    #         normalized_label,
-    #         group_id,
-    #         group_max_period_end
-    #     FROM (
-    #         SELECT *, 1 AS src_priority
-    #         FROM concept_normalization_chaining
+        SELECT DISTINCT ON (company_id, axis, member, member_label)
+            company_id,
+            axis,
+            member,
+            member_label,
+            normalized_axis_label,
+            normalized_member_label,
+            group_id,
+            group_max_period_end,
+            overridden
+        FROM (
+            SELECT *, 1 AS src_priority
+            FROM dimension_normalization_chaining
 
-    #         UNION ALL
+            UNION ALL
 
-    #         SELECT *, 2 AS src_priority
-    #         FROM concept_normalization_grouping
-    #     ) t
-    #     ORDER BY
-    #         company_id,
-    #         statement,
-    #         concept,
-    #         src_priority
-    #     """
-    # )
-
-    # op.execute(
-    #     """
-    #     CREATE VIEW dimension_normalization AS
-
-    #     WITH combined AS (
-    #         SELECT * FROM concept_normalization_combined
-    #     ),
-    #     group_overrides AS (
-    #       SELECT
-    #         cn.group_id,
-    #         MAX(cno.normalized_label) as normalized_label,
-    #         MAX(cno.weight) as weight,
-    #         MAX(cno.unit) as unit
-    #       FROM combined cn
-    #       JOIN concept_normalization_overrides cno
-    #       ON cn.statement = cno.statement
-    #       AND cn.concept = cno.concept
-    #       GROUP BY cn.group_id
-    #     )
-
-    #     SELECT
-    #       cn.company_id,
-    #       cn.statement,
-    #       cn.concept,
-    #       COALESCE(go.normalized_label, cn.normalized_label) as normalized_label,
-    #       -- COALESCE(go.weight, cn.weight) as weight,
-    #       go.weight as weight,
-    #       -- COALESCE(go.unit, cn.unit) as unit,
-    #       go.unit as unit,
-    #       cn.group_id,
-    #       go.normalized_label IS NOT NULL as overridden
-    #     FROM combined cn
-    #     LEFT JOIN group_overrides go
-    #     ON cn.group_id = go.group_id
-    #     """
-    # )
+            SELECT *, 2 AS src_priority
+            FROM dimension_normalization_grouping
+        ) t
+        ORDER BY
+            company_id,
+            axis,
+            member,
+            member_label,
+            src_priority
+        """
+    )
 
 
 def downgrade() -> None:
     # Drop the views
+    op.execute("DROP VIEW IF EXISTS dimension_normalization")
+    op.execute("DROP VIEW IF EXISTS dimension_normalization_chaining")
     op.execute("DROP VIEW IF EXISTS dimension_normalization_grouping")
-    # op.execute("DROP VIEW IF EXISTS dimension_normalization")
-    # op.execute("DROP VIEW IF EXISTS dimension_normalization_combined")
-    # op.execute("DROP VIEW IF EXISTS dimension_normalization_chaining")
-    # op.execute("DROP VIEW IF EXISTS dimension_normalization_grouping")
