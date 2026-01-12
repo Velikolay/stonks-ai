@@ -1,7 +1,7 @@
 """add_quarterly_financials_view
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0008
+Revises: 0007
 Create Date: 2025-08-22 01:15:46.030435
 
 """
@@ -9,8 +9,8 @@ Create Date: 2025-08-22 01:15:46.030435
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0007"
-down_revision = "0006"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 
@@ -78,7 +78,6 @@ def upgrade() -> None:
                 ff.concept,
                 ff.axis,
                 ff.member,
-                ff.member_label,
                 ff.period_end,
                 ff.period,
                 ff.is_abstract,
@@ -91,7 +90,7 @@ def upgrade() -> None:
                 FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
-            FROM normalized_financial_facts ff
+            FROM financial_facts_normalized ff
             JOIN filings_cte f
             ON
                 ff.company_id = f.company_id
@@ -120,7 +119,6 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
-                member_label,
                 latest_abstract_id as abstract_id,
                 latest_weight as weight,
                 latest_position as position,
@@ -172,7 +170,6 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
-                member_label,
                 abstract_id,
                 period_end,
                 position,
@@ -199,7 +196,6 @@ def upgrade() -> None:
                 concept,
                 axis,
                 member,
-                member_label,
                 latest_abstract_id as abstract_id,
                 period_end,
                 normalized_label,
@@ -243,7 +239,6 @@ def upgrade() -> None:
                 a.weight,
                 a.axis,
                 a.member,
-                a.member_label,
                 a.statement,
                 a.abstract_id,
                 a.period_end,
@@ -280,7 +275,6 @@ def upgrade() -> None:
             unit,
             axis,
             member,
-            member_label,
             statement,
             abstract_id,
             period_end,
@@ -308,7 +302,6 @@ def upgrade() -> None:
             unit,
             axis,
             member,
-            member_label,
             statement,
             abstract_id,
             period_end,
@@ -338,7 +331,6 @@ def upgrade() -> None:
             unit,
             axis,
             member,
-            member_label,
             statement,
             abstract_id,
             period_end,

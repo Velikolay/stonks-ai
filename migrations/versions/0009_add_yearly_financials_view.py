@@ -1,7 +1,7 @@
 """add_yearly_financials_view
 
-Revision ID: 0008
-Revises: 0007
+Revision ID: 0009
+Revises: 0008
 Create Date: 2025-01-27 10:00:00.000000
 
 """
@@ -9,8 +9,8 @@ Create Date: 2025-01-27 10:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0008"
-down_revision = "0007"
+revision = "0009"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 
@@ -49,7 +49,7 @@ def upgrade() -> None:
                 FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
                 FIRST_VALUE(ff.position) OVER w AS latest_position,
                 FIRST_VALUE(ff.weight) OVER w AS latest_weight
-            FROM normalized_financial_facts ff
+            FROM financial_facts_normalized ff
             JOIN filings f
             ON
                 ff.company_id = f.company_id
