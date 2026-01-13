@@ -88,7 +88,7 @@ def upgrade() -> None:
                             if row["normalized_member_label"] != ""
                             else None
                         ),
-                        "tags": row.get("tags", None),
+                        "tags": row["tags"].split(";") if row["tags"] != "" else None,
                     }
                 )
             except Exception as e:
