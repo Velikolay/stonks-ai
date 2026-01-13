@@ -16,6 +16,10 @@ from filings.models.concept_normalization_override import (
     ConceptNormalizationOverrideCreate,
     ConceptNormalizationOverrideUpdate,
 )
+from filings.models.dimension_normalization_override import (
+    DimensionNormalizationOverrideCreate,
+    DimensionNormalizationOverrideUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -474,3 +478,314 @@ async def refresh_financials(
         )
 
     return results
+
+
+class DimensionNormalizationOverrideResponse(BaseModel):
+    """Response model for dimension normalization override."""
+
+    axis: str
+    member: str
+    member_label: str
+    normalized_axis_label: str
+    normalized_member_label: Optional[str] = None
+    tags: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+@router.get(
+    "/dimension-normalization-overrides",
+    response_model=List[DimensionNormalizationOverrideResponse],
+)
+async def list_dimension_normalization_overrides(
+    axis: Optional[str] = Query(None, description="Filter by axis"),
+) -> List[DimensionNormalizationOverrideResponse]:
+    """List all dimension normalization overrides, optionally filtered by axis."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        overrides = filings_db.dimension_normalization_overrides.list_all(axis)
+        return [
+            DimensionNormalizationOverrideResponse(
+                axis=override.axis,
+                member=override.member,
+                member_label=override.member_label,
+                normalized_axis_label=override.normalized_axis_label,
+                normalized_member_label=override.normalized_member_label,
+                tags=override.tags,
+                created_at=override.created_at,
+                updated_at=override.updated_at,
+            )
+            for override in overrides
+        ]
+    except Exception as e:
+        logger.error(f"Error listing dimension normalization overrides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/dimension-normalization-overrides",
+    response_model=DimensionNormalizationOverrideResponse,
+    status_code=201,
+)
+async def create_dimension_normalization_override(
+    override: DimensionNormalizationOverrideCreate,
+) -> DimensionNormalizationOverrideResponse:
+    """Create a new dimension normalization override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        created_override = filings_db.dimension_normalization_overrides.create(override)
+        return DimensionNormalizationOverrideResponse(
+            axis=created_override.axis,
+            member=created_override.member,
+            member_label=created_override.member_label,
+            normalized_axis_label=created_override.normalized_axis_label,
+            normalized_member_label=created_override.normalized_member_label,
+            tags=created_override.tags,
+            created_at=created_override.created_at,
+            updated_at=created_override.updated_at,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating dimension normalization override: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put(
+    "/dimension-normalization-overrides/{axis}/{member}/{member_label}",
+    response_model=DimensionNormalizationOverrideResponse,
+)
+async def update_dimension_normalization_override(
+    axis: str = Path(..., description="Axis identifier"),
+    member: str = Path(..., description="Member identifier"),
+    member_label: str = Path(..., description="Member label identifier"),
+    override_update: DimensionNormalizationOverrideUpdate = ...,
+) -> DimensionNormalizationOverrideResponse:
+    """Update an existing dimension normalization override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        updated_override = filings_db.dimension_normalization_overrides.update(
+            axis, member, member_label, override_update
+        )
+        if not updated_override:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dimension normalization override not found: ({axis}, {member}, {member_label})",
+            )
+        return DimensionNormalizationOverrideResponse(
+            axis=updated_override.axis,
+            member=updated_override.member,
+            member_label=updated_override.member_label,
+            normalized_axis_label=updated_override.normalized_axis_label,
+            normalized_member_label=updated_override.normalized_member_label,
+            tags=updated_override.tags,
+            created_at=updated_override.created_at,
+            updated_at=updated_override.updated_at,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating dimension normalization override: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/dimension-normalization-overrides/{axis}/{member}/{member_label}",
+    status_code=204,
+)
+async def delete_dimension_normalization_override(
+    axis: str = Path(..., description="Axis identifier"),
+    member: str = Path(..., description="Member identifier"),
+    member_label: str = Path(..., description="Member label identifier"),
+) -> None:
+    """Delete a dimension normalization override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        deleted = filings_db.dimension_normalization_overrides.delete(
+            axis, member, member_label
+        )
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dimension normalization override not found: ({axis}, {member}, {member_label})",
+            )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting dimension normalization override: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dimension-normalization-overrides/export")
+async def export_dimension_normalization_overrides_to_csv(
+    axis: Optional[str] = Query(None, description="Filter by axis"),
+) -> StreamingResponse:
+    """Export dimension normalization overrides to CSV."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        overrides = filings_db.dimension_normalization_overrides.list_all(axis)
+
+        # Create CSV content
+        output = io.StringIO()
+        fieldnames = [
+            "axis",
+            "member",
+            "member_label",
+            "normalized_axis_label",
+            "normalized_member_label",
+            "tags",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for override in overrides:
+            writer.writerow(
+                {
+                    "axis": override.axis,
+                    "member": override.member,
+                    "member_label": override.member_label,
+                    "normalized_axis_label": override.normalized_axis_label,
+                    "normalized_member_label": override.normalized_member_label or "",
+                    "tags": ",".join(override.tags) if override.tags else "",
+                }
+            )
+
+        output.seek(0)
+        filename = "dimension_normalization_overrides.csv"
+        if axis:
+            filename = f"dimension_normalization_overrides_{axis.replace(' ', '_')}.csv"
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting dimension normalization overrides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/dimension-normalization-overrides/import",
+    response_model=ImportResponse,
+)
+async def import_dimension_normalization_overrides_from_csv(
+    file: UploadFile = File(..., description="CSV file to import"),
+    update_existing: bool = Query(
+        False, description="Update existing records if they exist"
+    ),
+) -> ImportResponse:
+    """Import dimension normalization overrides from CSV file."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV file")
+
+    created = 0
+    updated = 0
+    errors = []
+
+    try:
+        # Read file content
+        content = await file.read()
+        content_str = content.decode("utf-8")
+        csv_file = io.StringIO(content_str)
+
+        # Parse CSV
+        reader = csv.DictReader(csv_file)
+        required_fields = ["axis", "member", "member_label", "normalized_axis_label"]
+
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+            try:
+                # Validate required fields
+                missing_fields = [f for f in required_fields if not row.get(f)]
+                if missing_fields:
+                    errors.append(
+                        f"Row {row_num}: Missing required fields: {', '.join(missing_fields)}"
+                    )
+                    continue
+
+                # Parse tags (comma-separated)
+                tags_str = row.get("tags", "").strip()
+                tags = None
+                if tags_str:
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+
+                # Create override object
+                override_create = DimensionNormalizationOverrideCreate(
+                    axis=row["axis"].strip(),
+                    member=row["member"].strip(),
+                    member_label=row["member_label"].strip(),
+                    normalized_axis_label=row["normalized_axis_label"].strip(),
+                    normalized_member_label=row.get(
+                        "normalized_member_label", ""
+                    ).strip()
+                    or None,
+                    tags=tags,
+                )
+
+                # Check if record exists
+                existing = filings_db.dimension_normalization_overrides.get_by_key(
+                    override_create.axis,
+                    override_create.member,
+                    override_create.member_label,
+                )
+
+                if existing:
+                    if update_existing:
+                        # Update existing record
+                        override_update = DimensionNormalizationOverrideUpdate(
+                            normalized_axis_label=override_create.normalized_axis_label,
+                            normalized_member_label=override_create.normalized_member_label,
+                            tags=override_create.tags,
+                        )
+                        filings_db.dimension_normalization_overrides.update(
+                            override_create.axis,
+                            override_create.member,
+                            override_create.member_label,
+                            override_update,
+                        )
+                        updated += 1
+                    else:
+                        errors.append(
+                            f"Row {row_num}: Record already exists: "
+                            f"({override_create.axis}, {override_create.member}, {override_create.member_label})"
+                        )
+                else:
+                    # Create new record
+                    filings_db.dimension_normalization_overrides.create(override_create)
+                    created += 1
+
+            except ValueError as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+            except Exception as e:
+                errors.append(f"Row {row_num}: Unexpected error: {str(e)}")
+                logger.error(f"Error processing row {row_num}: {e}")
+
+        message = f"Import completed: {created} created, {updated} updated"
+        if errors:
+            message += f", {len(errors)} errors"
+
+        return ImportResponse(
+            message=message, created=created, updated=updated, errors=errors
+        )
+
+    except Exception as e:
+        logger.error(f"Error importing dimension normalization overrides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
