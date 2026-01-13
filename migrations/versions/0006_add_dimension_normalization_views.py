@@ -43,7 +43,7 @@ def upgrade() -> None:
             FROM financial_facts ff
             LEFT JOIN dimension_normalization_overrides as dno
             ON
-                (ff.axis = dno.axis AND dno.member = '' AND dno.member_label = '')
+                (ff.axis = dno.axis AND dno.member = '*' AND dno.member_label = '*')
                 OR (ff.axis = dno.axis AND ff.member = dno.member)
                 OR (ff.axis = dno.axis AND ff.member_label = dno.member_label)
             WHERE

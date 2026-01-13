@@ -70,10 +70,10 @@ def upgrade() -> None:
             try:
                 # Skip empty rows
                 if (
-                    row.get("axis") is None
-                    or row.get("member") is None
-                    or row.get("member_label") is None
-                    or row.get("normalized_axis_label") is None
+                    not row.get("axis")
+                    or not row.get("member")
+                    or not row.get("member_label")
+                    or not row.get("normalized_axis_label")
                 ):
                     continue
 
