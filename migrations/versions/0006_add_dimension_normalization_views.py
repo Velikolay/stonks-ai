@@ -97,9 +97,9 @@ def upgrade() -> None:
         canonical AS (
             SELECT DISTINCT ON (g.group_id)
                 g.group_id,
-                COALESCE(b.normalized_member_label, b.member_label) AS normalized_member_label,
                 COALESCE(b.normalized_axis_label, b.axis) AS normalized_axis_label,
-                b.period_end AS group_max_period_end,
+                COALESCE(b.normalized_member_label, b.member_label) AS normalized_member_label,
+                MAX(b.period_end) OVER (PARTITION BY g.group_id) AS group_max_period_end,
                 b.overridden
             FROM groups_by_id g
             JOIN dimension_normalized_base b USING (id)
@@ -107,14 +107,11 @@ def upgrade() -> None:
                 g.group_id,
 
                 -- prefer rows that already have normalized values
+                (b.normalized_axis_label IS NOT NULL) DESC,
                 (b.normalized_member_label IS NOT NULL) DESC,
-                (b.normalized_axis_label  IS NOT NULL) DESC,
 
                 -- recent periods are preferred
-                b.period_end DESC,
-
-                -- deterministic tie-break
-                b.id ASC
+                b.period_end DESC
         )
 
         SELECT
