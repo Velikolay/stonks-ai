@@ -3,7 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
-from filings import CompanyCreate, FilingCreate, FilingsDatabase, FinancialFactCreate
+from filings import FilingCreate, FilingsDatabase, FinancialFactCreate
+from filings.models.company import CompanyCreate
 
 # Database connection string (update with your actual database URL)
 DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
@@ -17,11 +18,17 @@ def example_usage():
 
         # 1. Create a company
         print("1. Creating company...")
-        company_data = CompanyCreate(
-            ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
-        )
-
-        company = db.companies.get_or_create_company(company_data)
+        company = db.companies.get_company_by_ticker("AAPL", "NASDAQ")
+        if not company:
+            company_id = db.companies.insert_company(CompanyCreate(name="Apple Inc."))
+            company = db.companies.get_company_by_id(company_id) if company_id else None
+            if company:
+                db.companies.upsert_ticker(
+                    company_id=company.id,
+                    ticker="AAPL",
+                    exchange="NASDAQ",
+                    status="active",
+                )
         if company:
             print(f"Company created/found: {company.name} (ID: {company.id})")
 
@@ -29,8 +36,8 @@ def example_usage():
         print("\n2. Creating filing...")
         filing_data = FilingCreate(
             company_id=company.id,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -41,7 +48,7 @@ def example_usage():
 
         filing = db.filings.get_or_create_filing(filing_data)
         if filing:
-            print(f"Filing created/found: {filing.filing_number} (ID: {filing.id})")
+            print(f"Filing created/found: {filing.number} (ID: {filing.id})")
 
         # 3. Create financial facts
         print("\n3. Creating financial facts...")

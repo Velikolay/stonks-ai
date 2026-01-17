@@ -8,9 +8,8 @@ from pydantic import BaseModel, ConfigDict
 class CompanyBase(BaseModel):
     """Base company model."""
 
-    ticker: Optional[str] = None
-    exchange: Optional[str] = None
     name: str
+    industry: Optional[str] = None
 
 
 class CompanyCreate(CompanyBase):

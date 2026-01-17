@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("registry", sa.String(), nullable=False),
         sa.Column("number", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
-        sa.Column("company_id", sa.Boolean(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["company_id"],
@@ -64,6 +64,7 @@ def upgrade() -> None:
         "filings",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("registry_id", sa.Integer(), nullable=False),
         sa.Column("registry", sa.String(), nullable=False),
         sa.Column("number", sa.String(), nullable=False),
         sa.Column("form_type", sa.String(), nullable=False),
@@ -156,8 +157,12 @@ def downgrade() -> None:
     # Drop the enum type
     op.execute("DROP TYPE IF EXISTS period_type")
 
-    # Drop filings tabl
+    # Drop filings table
     op.drop_table("filings")
+
+    # Drop filing_registry and tickers tables
+    op.drop_table("filing_registry")
+    op.drop_table("tickers")
 
     # Drop companies table
     op.drop_table("companies")

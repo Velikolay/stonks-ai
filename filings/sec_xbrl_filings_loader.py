@@ -51,13 +51,31 @@ class SECXBRLFilingsLoader:
                 f"Loading {form} filings for {ticker} (limit: {limit}, override: {override})"
             )
 
+            # Resolve edgar company once (used for both ticker metadata and filings)
+            edgar_company = Company(ticker)
+
             # Get or create company
-            company = self._get_or_create_company(ticker)
+            company = self._get_or_create_company(edgar_company)
             if not company:
                 return {"error": f"Failed to get or create company for ticker {ticker}"}
 
+            cik = getattr(edgar_company, "cik", None)
+            if cik is None:
+                return {
+                    "error": f"Failed to determine CIK for ticker {ticker} (required for filing_registry)"
+                }
+            registry_id = self.database.companies.get_or_create_filing_registry_id(
+                company_id=company.id,
+                registry="SEC",
+                number=str(cik),
+                status="active",
+            )
+            if registry_id is None:
+                return {
+                    "error": f"Failed to get or create filing_registry for ticker {ticker}"
+                }
+
             # Get company filings
-            edgar_company = Company(ticker)
             filings = edgar_company.get_filings(
                 form=form,
                 is_xbrl=True,
@@ -78,7 +96,7 @@ class SECXBRLFilingsLoader:
 
                 try:
                     facts_count, was_updated = self._load_single_filing(
-                        filing, company.id, override
+                        filing, company.id, registry_id, override
                     )
                     if facts_count > 0:
                         loaded_count += 1
@@ -112,43 +130,102 @@ class SECXBRLFilingsLoader:
             logger.error(f"Error loading filings for {ticker}: {e}")
             return {"error": f"Failed to load filings for {ticker}: {str(e)}"}
 
-    def _get_or_create_company(self, ticker: str):
-        """Get existing company or create new one.
+    def _get_or_create_company(self, edgar_company: Company):
+        """Get existing company or create new one from the edgar Company object.
 
         Args:
-            ticker: Company ticker symbol
+            edgar_company: edgar Company instance
 
         Returns:
             Company object or None if failed
         """
         try:
-            # Try to get existing company
-            company = self.database.companies.get_company_by_ticker(ticker)
-            if company:
-                logger.info(f"Found existing company: {company.name} ({ticker})")
-                return company
+            # Pull canonical metadata from edgar (may require EDGAR identity to be set)
+            try:
+                tickers = list(edgar_company.tickers) or []
+            except Exception as e:
+                logger.error(f"Failed to read tickers from edgar Company: {e}")
+                tickers = []
 
-            # Create new company
-            logger.info(f"Creating new company for ticker: {ticker}")
-            company_data = CompanyCreate(
-                ticker=ticker,
-                exchange="NASDAQ",  # Default exchange
-                name=ticker,  # Could be enhanced to fetch actual company name
-                cik=None,  # Could be enhanced to fetch CIK
-                sector=None,
-                industry=None,
-            )
+            try:
+                exchanges = list(edgar_company.get_exchanges()) or []
+            except Exception:
+                exchanges = []
 
-            company = self.database.companies.get_or_create_company(company_data)
-            if company:
-                logger.info(f"Created new company: {company.name} ({ticker})")
-                return company
-            else:
-                logger.error(f"Failed to create company for ticker {ticker}")
+            try:
+                company_name = edgar_company.name or None
+            except Exception:
+                company_name = None
+
+            if not tickers:
+                logger.error(
+                    "edgar Company returned no tickers; cannot create ticker mappings"
+                )
                 return None
 
+            exchange = exchanges[0] if exchanges else "UNKNOWN"
+            if exchanges and len(exchanges) > 1:
+                logger.warning(
+                    "Multiple exchanges returned by edgar (%s); using %s",
+                    exchanges,
+                    exchange,
+                )
+
+            # 1) Try to resolve existing company by any returned ticker
+            for t in tickers:
+                existing = self.database.companies.get_company_by_ticker(t, exchange)
+                if existing:
+                    logger.info(
+                        "Found existing company %s via edgar tickers %s",
+                        existing.name,
+                        tickers,
+                    )
+                    return existing
+
+            # 2) Create new company, then attach all tickers to it (explicit create flow)
+            name_for_create = company_name or tickers[0]
+            industry_for_create = edgar_company.data.sic_description
+            company_id = self.database.companies.insert_company(
+                CompanyCreate(name=name_for_create, industry=industry_for_create)
+            )
+            if not company_id:
+                logger.error("Failed to insert company for edgar tickers %s", tickers)
+                return None
+
+            company = self.database.companies.get_company_by_id(company_id)
+            if not company:
+                logger.error(
+                    "Inserted company id=%s but could not reload it; tickers=%s",
+                    company_id,
+                    tickers,
+                )
+                return None
+
+            for additional in tickers:
+                ok = self.database.companies.upsert_ticker(
+                    company_id=company.id,
+                    ticker=additional,
+                    exchange=exchange,
+                    status="active",
+                )
+                if not ok:
+                    logger.warning(
+                        "Failed to upsert ticker mapping %s (%s) for company_id=%s",
+                        additional,
+                        exchange,
+                        company.id,
+                    )
+
+            logger.info(
+                "Created new company %s (id=%s) for edgar tickers %s",
+                company.name,
+                company.id,
+                tickers,
+            )
+            return company
+
         except Exception as e:
-            logger.error(f"Error getting/creating company for {ticker}: {e}")
+            logger.error(f"Error getting/creating company from edgar Company: {e}")
             return None
 
     def _calculate_fiscal_quarter(
@@ -184,7 +261,7 @@ class SECXBRLFilingsLoader:
             return None
 
     def _load_single_filing(
-        self, filing, company_id: int, override: bool
+        self, filing, company_id: int, registry_id: int, override: bool
     ) -> tuple[int, bool]:
         """Load a single filing and persist its data.
 
@@ -227,8 +304,9 @@ class SECXBRLFilingsLoader:
             # Create filing record
             filing_data = FilingCreate(
                 company_id=company_id,
-                source="SEC",
-                filing_number=filing.accession_number,
+                registry_id=registry_id,
+                registry="SEC",
+                number=filing.accession_number,
                 form_type=filing.form,
                 filing_date=self._parse_date(filing.filing_date),
                 fiscal_period_end=self._parse_date(filing.period_of_report),

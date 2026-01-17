@@ -29,8 +29,9 @@ class FilingOperations:
                     insert(self.filings_table)
                     .values(
                         company_id=filing.company_id,
-                        source=filing.source,
-                        filing_number=filing.filing_number,
+                        registry_id=filing.registry_id,
+                        registry=filing.registry,
+                        number=filing.number,
                         form_type=filing.form_type,
                         filing_date=filing.filing_date,
                         fiscal_period_end=filing.fiscal_period_end,
@@ -46,7 +47,7 @@ class FilingOperations:
                 conn.commit()
 
                 logger.info(
-                    f"Inserted filing: {filing.filing_number} with ID: {filing_id}"
+                    f"Inserted filing: {filing.registry}:{filing.number} with ID: {filing_id}"
                 )
                 return filing_id
 
@@ -69,8 +70,9 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        source=row.source,
-                        filing_number=row.filing_number,
+                        registry_id=row.registry_id,
+                        registry=row.registry,
+                        number=row.number,
                         form_type=row.form_type,
                         filing_date=row.filing_date,
                         fiscal_period_end=row.fiscal_period_end,
@@ -114,8 +116,9 @@ class FilingOperations:
                         Filing(
                             id=row.id,
                             company_id=row.company_id,
-                            source=row.source,
-                            filing_number=row.filing_number,
+                            registry_id=row.registry_id,
+                            registry=row.registry,
+                            number=row.number,
                             form_type=row.form_type,
                             filing_date=row.filing_date,
                             fiscal_period_end=row.fiscal_period_end,
@@ -151,8 +154,9 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        source=row.source,
-                        filing_number=row.filing_number,
+                        registry_id=row.registry_id,
+                        registry=row.registry,
+                        number=row.number,
                         form_type=row.form_type,
                         filing_date=row.filing_date,
                         fiscal_period_end=row.fiscal_period_end,
@@ -167,12 +171,17 @@ class FilingOperations:
             return None
 
     def get_filing_by_number(self, source: str, filing_number: str) -> Optional[Filing]:
-        """Get filing by source and filing number."""
+        """Get filing by registry and number.
+
+        Args:
+            source: Registry identifier (backward-compatible name; e.g. "SEC")
+            filing_number: Registry number (backward-compatible name; e.g. accession)
+        """
         try:
             with self.engine.connect() as conn:
                 stmt = select(self.filings_table).where(
-                    (self.filings_table.c.source == source)
-                    & (self.filings_table.c.filing_number == filing_number)
+                    (self.filings_table.c.registry == source)
+                    & (self.filings_table.c.number == filing_number)
                 )
 
                 result = conn.execute(stmt)
@@ -182,8 +191,9 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        source=row.source,
-                        filing_number=row.filing_number,
+                        registry_id=row.registry_id,
+                        registry=row.registry,
+                        number=row.number,
                         form_type=row.form_type,
                         filing_date=row.filing_date,
                         fiscal_period_end=row.fiscal_period_end,
@@ -200,7 +210,7 @@ class FilingOperations:
     def get_or_create_filing(self, filing: FilingCreate) -> Optional[Filing]:
         """Get existing filing or create new one."""
         # Try to find existing filing
-        existing = self.get_filing_by_number(filing.source, filing.filing_number)
+        existing = self.get_filing_by_number(filing.registry, filing.number)
         if existing:
             return existing
 
@@ -226,8 +236,9 @@ class FilingOperations:
                     filing = Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        source=row.source,
-                        filing_number=row.filing_number,
+                        registry_id=row.registry_id,
+                        registry=row.registry,
+                        number=row.number,
                         form_type=row.form_type,
                         filing_date=row.filing_date,
                         fiscal_period_end=row.fiscal_period_end,

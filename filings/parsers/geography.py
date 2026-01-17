@@ -32,6 +32,9 @@ class GeographyParser:
         self.geography_patterns = {
             "Americas": [
                 r"(?i)americas(?:excludingunitedstates)?",
+                r"(?i)northamerica",
+                r"(?i)southamerica",
+                r"(?i)latinamerica",
             ],
             "AsiaPacific": [
                 r"(?i)asiapacific",
@@ -42,26 +45,29 @@ class GeographyParser:
             "China": [
                 r"(?i)china",
                 r"(?i)greaterchina",
+                r"(?i)mainlandchina",
                 r"CN",
             ],
             "Japan": [
                 r"(?i)japan",
+                r"(?i)japanese",
                 r"JP",
             ],
             "UnitedStates": [
                 r"(?i)unitedstates",
                 r"(?i)usa",
-                r"(?i)america",
-                r"US",
+                r"(?i)^america$",
+                r"(?i)^us$",
             ],
             "NonUS": [
                 r"(?i)nonus",
-            ],
-            "EMEA": [
-                r"(?i)emea",
+                r"(?i)nonunitedstates",
+                r"(?i)nonunited\s+states",
             ],
             "Europe": [
                 r"(?i)europe",
+                r"(?i)european",
+                r"(?i)emea",
                 r"EU",
             ],
             "MiddleEast": [
@@ -69,18 +75,17 @@ class GeographyParser:
             ],
             "Africa": [
                 r"(?i)africa",
+                r"(?i)african",
             ],
             "India": [
                 r"(?i)india",
+                r"(?i)indian",
                 r"IN",
             ],
             "Korea": [
                 r"(?i)korea",
                 r"(?i)southkorea",
                 r"KR",
-            ],
-            "OtherCountries": [
-                r"(?i)other",
             ],
         }
 

@@ -4,7 +4,6 @@ from datetime import date
 from unittest.mock import Mock, patch
 
 from filings import FilingsDatabase
-from filings.models.company import Company
 from filings.models.filing import Filing
 from filings.models.financial_fact import FinancialFactCreate
 from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
@@ -30,7 +29,8 @@ class TestXBRLFilingsLoader:
         assert loader.parser == mock_parser
         assert loader.database == mock_database
 
-    def test_get_or_create_company_existing(self):
+    @patch("filings.sec_xbrl_filings_loader.Company")
+    def test_get_or_create_company_existing(self, mock_company_class):
         """Test getting existing company."""
         mock_database = Mock()
         mock_database.companies = Mock()
@@ -38,18 +38,27 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)
 
+        mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["AAPL"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "Apple Inc."
+        mock_company_class.return_value = mock_edgar_company
+
         # Mock existing company
-        existing_company = Mock(spec=Company)
+        existing_company = Mock()
+        existing_company.id = 1
         existing_company.name = "Apple Inc."
-        existing_company.ticker = "AAPL"
         mock_database.companies.get_company_by_ticker.return_value = existing_company
 
-        result = loader._get_or_create_company("AAPL")
+        result = loader._get_or_create_company(mock_edgar_company)
 
         assert result == existing_company
-        mock_database.companies.get_company_by_ticker.assert_called_once_with("AAPL")
+        mock_database.companies.get_company_by_ticker.assert_called_once_with(
+            "AAPL", "NASDAQ"
+        )
 
-    def test_get_or_create_company_new(self):
+    @patch("filings.sec_xbrl_filings_loader.Company")
+    def test_get_or_create_company_new(self, mock_company_class):
         """Test creating new company."""
         mock_database = Mock()
         mock_database.companies = Mock()
@@ -57,20 +66,37 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)
 
+        mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["AAPL"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "Apple Inc."
+        mock_company_class.return_value = mock_edgar_company
+
         # Mock no existing company
         mock_database.companies.get_company_by_ticker.return_value = None
 
         # Mock new company creation
-        new_company = Mock(spec=Company)
+        new_company = Mock()
+        new_company.id = 1
         new_company.name = "AAPL"
-        new_company.ticker = "AAPL"
-        mock_database.companies.get_or_create_company.return_value = new_company
+        mock_database.companies.insert_company.return_value = 1
+        mock_database.companies.get_company_by_id.return_value = new_company
+        mock_database.companies.upsert_ticker.return_value = True
 
-        result = loader._get_or_create_company("AAPL")
+        result = loader._get_or_create_company(mock_edgar_company)
 
         assert result == new_company
-        mock_database.companies.get_company_by_ticker.assert_called_once_with("AAPL")
-        mock_database.companies.get_or_create_company.assert_called_once()
+        mock_database.companies.get_company_by_ticker.assert_called_once_with(
+            "AAPL", "NASDAQ"
+        )
+        mock_database.companies.insert_company.assert_called_once()
+        mock_database.companies.get_company_by_id.assert_called_once_with(1)
+        mock_database.companies.upsert_ticker.assert_called_once_with(
+            company_id=1,
+            ticker="AAPL",
+            exchange="NASDAQ",
+            status="active",
+        )
 
     def test_load_single_filing_new(self):
         """Test loading a new filing."""
@@ -105,7 +131,7 @@ class TestXBRLFilingsLoader:
         mock_database.filings.insert_filing.return_value = mock_db_filing
         mock_database.financial_facts.insert_financial_facts_batch.return_value = [1, 2]
 
-        result = loader._load_single_filing(mock_filing, 1, override=False)
+        result = loader._load_single_filing(mock_filing, 1, 1, override=False)
 
         assert result[0] == 2
         mock_database.filings.insert_filing.assert_called_once()
@@ -143,7 +169,7 @@ class TestXBRLFilingsLoader:
         mock_database.filings.insert_filing.return_value = mock_db_filing
         mock_database.financial_facts.insert_financial_facts_batch.return_value = [1]
 
-        result = loader._load_single_filing(mock_filing_q2, 1, override=False)
+        result = loader._load_single_filing(mock_filing_q2, 1, 1, override=False)
         assert result[0] == 1
 
         # Verify Q2 was calculated correctly
@@ -166,7 +192,7 @@ class TestXBRLFilingsLoader:
         mock_database.filings.insert_filing.return_value = mock_db_filing
         mock_database.financial_facts.insert_financial_facts_batch.return_value = [1]
 
-        result = loader._load_single_filing(mock_filing_q4, 1, override=False)
+        result = loader._load_single_filing(mock_filing_q4, 1, 1, override=False)
         assert result[0] == 1
 
         # Verify Q4 was calculated correctly
@@ -188,7 +214,7 @@ class TestXBRLFilingsLoader:
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
 
-        result = loader._load_single_filing(mock_filing, 1, override=False)
+        result = loader._load_single_filing(mock_filing, 1, 1, override=False)
 
         assert result[0] == 0
         mock_database.filings.get_filing_by_number.assert_called_once_with(
@@ -232,7 +258,9 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts.delete_facts_by_filing_id.return_value = True
         mock_database.filings.delete_filing.return_value = True
 
-        result, was_updated = loader._load_single_filing(mock_filing, 1, override=True)
+        result, was_updated = loader._load_single_filing(
+            mock_filing, 1, 1, override=True
+        )
 
         assert result == 2
         assert was_updated is True
@@ -252,20 +280,21 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)  # No constructor override
 
-        # Mock company
-        mock_company = Mock()
-        mock_company.id = 1
-        mock_company.name = "Apple Inc."
-        mock_company.ticker = "AAPL"
-        mock_database.companies.get_company_by_ticker.return_value = mock_company
-
         # Mock edgar company and filings
         mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["AAPL"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "Apple Inc."
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
         mock_edgar_company.get_filings.return_value = [mock_filing]
         with patch("filings.sec_xbrl_filings_loader.Company") as mock_company_class:
             mock_company_class.return_value = mock_edgar_company
+
+            mock_company = Mock()
+            mock_company.id = 1
+            mock_company.name = "Apple Inc."
+            mock_database.companies.get_company_by_ticker.return_value = mock_company
 
             # Mock loading single filing with override
             loader._load_single_filing = Mock(
@@ -291,17 +320,18 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)
 
-        # Mock company
+        # Mock no filings
+        mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["AAPL"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.get_filings.return_value = []
+        mock_company_class.return_value = mock_edgar_company
+
         mock_company = Mock()
         mock_company.id = 1
         mock_company.name = "Apple Inc."
-        mock_company.ticker = "AAPL"
         mock_database.companies.get_company_by_ticker.return_value = mock_company
-
-        # Mock no filings
-        mock_edgar_company = Mock()
-        mock_edgar_company.get_filings.return_value = []
-        mock_company_class.return_value = mock_edgar_company
 
         result = loader.load_company_filings("AAPL", "10-Q", limit=5)
 
@@ -318,7 +348,7 @@ class TestXBRLFilingsLoader:
 
         # Mock company creation failure
         mock_database.companies.get_company_by_ticker.return_value = None
-        mock_database.companies.get_or_create_company.return_value = None
+        mock_database.companies.insert_company.return_value = None
 
         result = loader.load_company_filings("INVALID", "10-Q", limit=5)
 

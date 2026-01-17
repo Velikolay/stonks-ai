@@ -110,6 +110,8 @@ def test_engine(test_db_url: str) -> Engine:
         with engine.connect() as conn:
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
+            conn.execute(text("TRUNCATE TABLE filing_registry CASCADE"))
+            conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
@@ -131,6 +133,8 @@ def clean_tables(test_engine: Engine):
             # since they're just queries over the data
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
+            conn.execute(text("TRUNCATE TABLE filing_registry CASCADE"))
+            conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
@@ -151,7 +155,7 @@ def db(test_engine: Engine) -> FilingsDatabase:
 @pytest.fixture(scope="function")
 def sample_company() -> CompanyCreate:
     """Sample company data for testing."""
-    return CompanyCreate(ticker="AAPL", exchange="NASDAQ", name="Apple Inc.")
+    return CompanyCreate(name="Apple Inc.")
 
 
 @pytest.fixture(scope="function")
@@ -159,8 +163,9 @@ def sample_filing(sample_company: CompanyCreate) -> FilingCreate:
     """Sample filing data for testing."""
     return FilingCreate(
         company_id=1,  # Will be set in tests
-        source="SEC",
-        filing_number="0000320193-25-000073",
+        registry_id=0,  # Will be set in tests
+        registry="SEC",
+        number="0000320193-25-000073",
         form_type="10-Q",
         filing_date=date(2024, 12, 19),
         fiscal_period_end=date(2024, 9, 28),

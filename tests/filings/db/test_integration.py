@@ -4,33 +4,56 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from filings import (
-    CompanyCreate,
-    FilingCreate,
-    FinancialFact,
-    FinancialFactCreate,
-    PeriodType,
-)
+from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
+from filings.models.company import CompanyCreate
 
 
 class TestDatabaseIntegration:
     """Integration tests for database operations."""
 
+    def _ensure_registry_id(self, db, *, company_id: int) -> int:
+        registry_id = db.companies.get_or_create_filing_registry_id(
+            company_id=company_id,
+            registry="SEC",
+            number=str(company_id).zfill(10),  # CIK (unique per company for tests)
+            status="active",
+        )
+        assert registry_id is not None
+        return int(registry_id)
+
+    def _get_or_create_company_by_ticker(
+        self, db, *, ticker: str, exchange: str, name: str
+    ):
+        existing = db.companies.get_company_by_ticker(ticker, exchange)
+        if existing:
+            return existing
+        company_id = db.companies.insert_company(CompanyCreate(name=name))
+        assert company_id is not None
+        company = db.companies.get_company_by_id(company_id)
+        assert company is not None
+        assert db.companies.upsert_ticker(
+            company_id=company.id,
+            ticker=ticker,
+            exchange=exchange,
+            status="active",
+        )
+        return company
+
     def test_full_workflow(self, db):
         """Test complete workflow: company -> filing -> financial facts."""
         # 1. Create company
-        company_data = CompanyCreate(
-            ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
+        company = self._get_or_create_company_by_ticker(
+            db, ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
         )
-        company = db.companies.get_or_create_company(company_data)
         assert company is not None
-        assert company.ticker == "AAPL"
 
         # 2. Create filing
+        registry_id = self._ensure_registry_id(db, company_id=company.id)
         filing_data = FilingCreate(
             company_id=company.id,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry_id=registry_id,
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -99,24 +122,28 @@ class TestDatabaseIntegration:
     def test_multiple_companies_and_filings(self, db):
         """Test working with multiple companies and filings."""
         # Create multiple companies
-        companies_data = [
-            CompanyCreate(ticker="AAPL", exchange="NASDAQ", name="Apple Inc."),
-            CompanyCreate(ticker="MSFT", exchange="NASDAQ", name="Microsoft Corp."),
-            CompanyCreate(ticker="GOOGL", exchange="NASDAQ", name="Alphabet Inc."),
+        companies = [
+            self._get_or_create_company_by_ticker(
+                db, ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
+            ),
+            self._get_or_create_company_by_ticker(
+                db, ticker="MSFT", exchange="NASDAQ", name="Microsoft Corp."
+            ),
+            self._get_or_create_company_by_ticker(
+                db, ticker="GOOGL", exchange="NASDAQ", name="Alphabet Inc."
+            ),
         ]
-
-        companies = []
-        for company_data in companies_data:
-            company = db.companies.get_or_create_company(company_data)
-            companies.append(company)
+        assert all(c is not None for c in companies)
 
         # Create filings for each company
         filings = []
         for i, company in enumerate(companies):
+            registry_id = self._ensure_registry_id(db, company_id=company.id)
             filing_data = FilingCreate(
                 company_id=company.id,
-                source="SEC",
-                filing_number=f"0000320193-25-00007{i}",
+                registry_id=registry_id,
+                registry="SEC",
+                number=f"0000320193-25-00007{i}",
                 form_type="10-Q",
                 filing_date=date(2024, 12, 19),
                 fiscal_period_end=date(2024, 9, 28),
@@ -149,9 +176,9 @@ class TestDatabaseIntegration:
         # Verify all companies exist
         all_companies = db.companies.get_all_companies()
         assert len(all_companies) >= 3
-        assert any(c.ticker == "AAPL" for c in all_companies)
-        assert any(c.ticker == "MSFT" for c in all_companies)
-        assert any(c.ticker == "GOOGL" for c in all_companies)
+        assert any(c.name == "Apple Inc." for c in all_companies)
+        assert any(c.name == "Microsoft Corp." for c in all_companies)
+        assert any(c.name == "Alphabet Inc." for c in all_companies)
 
         # Verify filings for each company
         for company in companies:
@@ -162,25 +189,26 @@ class TestDatabaseIntegration:
     def test_get_or_create_operations(self, db):
         """Test get_or_create operations work correctly."""
         # Test company get_or_create
-        company_data = CompanyCreate(
-            ticker="TSLA", exchange="NASDAQ", name="Tesla Inc."
-        )
-
         # First call should create
-        company1 = db.companies.get_or_create_company(company_data)
+        company1 = self._get_or_create_company_by_ticker(
+            db, ticker="TSLA", exchange="NASDAQ", name="Tesla Inc."
+        )
         assert company1 is not None
-        assert company1.ticker == "TSLA"
 
         # Second call should retrieve existing
-        company2 = db.companies.get_or_create_company(company_data)
+        company2 = self._get_or_create_company_by_ticker(
+            db, ticker="TSLA", exchange="NASDAQ", name="Tesla Inc."
+        )
         assert company2 is not None
         assert company2.id == company1.id
 
         # Test filing get_or_create
+        registry_id = self._ensure_registry_id(db, company_id=company1.id)
         filing_data = FilingCreate(
             company_id=company1.id,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry_id=registry_id,
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -191,7 +219,7 @@ class TestDatabaseIntegration:
         # First call should create
         filing1 = db.filings.get_or_create_filing(filing_data)
         assert filing1 is not None
-        assert filing1.filing_number == "0000320193-25-000073"
+        assert filing1.number == "0000320193-25-000073"
 
         # Second call should retrieve existing
         filing2 = db.filings.get_or_create_filing(filing_data)
@@ -201,16 +229,18 @@ class TestDatabaseIntegration:
     def test_data_consistency(self, db):
         """Test data consistency across operations."""
         # Create company
-        company = db.companies.get_or_create_company(
-            CompanyCreate(ticker="NVDA", exchange="NASDAQ", name="NVIDIA Corp.")
+        company = self._get_or_create_company_by_ticker(
+            db, ticker="NVDA", exchange="NASDAQ", name="NVIDIA Corp."
         )
 
         # Create filing
+        registry_id = self._ensure_registry_id(db, company_id=company.id)
         filing = db.filings.get_or_create_filing(
             FilingCreate(
                 company_id=company.id,
-                source="SEC",
-                filing_number="0000320193-25-000073",
+                registry_id=registry_id,
+                registry="SEC",
+                number="0000320193-25-000073",
                 form_type="10-Q",
                 filing_date=date(2024, 12, 19),
                 fiscal_period_end=date(2024, 9, 28),
@@ -239,7 +269,7 @@ class TestDatabaseIntegration:
 
         # Verify data consistency
         retrieved_company = db.companies.get_company_by_id(company.id)
-        assert retrieved_company.ticker == "NVDA"
+        assert retrieved_company.name == "NVIDIA Corp."
 
         retrieved_filing = db.filings.get_filing_by_id(filing.id)
         assert retrieved_filing.company_id == company.id
@@ -254,8 +284,9 @@ class TestDatabaseIntegration:
         # Test inserting filing with non-existent company
         filing_data = FilingCreate(
             company_id=99999,  # Non-existent company
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry_id=0,
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),

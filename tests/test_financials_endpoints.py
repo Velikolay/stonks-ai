@@ -59,7 +59,6 @@ class TestFinancialsEndpoints:
         # Mock the database and operations
         mock_company = Mock()
         mock_company.id = 1
-        mock_company.ticker = "AAPL"
         mock_company.name = "Apple Inc."
         mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
 
@@ -82,7 +81,6 @@ class TestFinancialsEndpoints:
 
         # Test that the mock is set up correctly
         company = mock_filings_db.companies.get_company_by_ticker("AAPL")
-        assert company.ticker == "AAPL"
         assert company.name == "Apple Inc."
 
         metrics = mock_filings_db.quarterly_financials.get_quarterly_financials(Mock())
@@ -97,7 +95,6 @@ class TestFinancialsEndpoints:
         # Mock the database and operations
         mock_company = Mock()
         mock_company.id = 1
-        mock_company.ticker = "AAPL"
         mock_company.name = "Apple Inc."
         mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
 
@@ -119,7 +116,7 @@ class TestFinancialsEndpoints:
 
         # Test that the mock is set up correctly
         company = mock_filings_db.companies.get_company_by_ticker("AAPL")
-        assert company.ticker == "AAPL"
+        assert company.name == "Apple Inc."
 
         metrics = mock_filings_db.yearly_financials.get_yearly_financials(Mock())
         assert len(metrics) == 1
@@ -264,7 +261,6 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_company.ticker = "AAPL"
         mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
 
         # Mock filings
@@ -273,8 +269,9 @@ class TestGetFilingsEndpoint:
         mock_filing1 = Filing(
             id=1,
             company_id=1,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry_id=1,
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -285,8 +282,9 @@ class TestGetFilingsEndpoint:
         mock_filing2 = Filing(
             id=2,
             company_id=1,
-            source="SEC",
-            filing_number="0000320193-25-000074",
+            registry_id=1,
+            registry="SEC",
+            number="0000320193-25-000074",
             form_type="10-K",
             filing_date=date(2024, 11, 1),
             fiscal_period_end=date(2024, 9, 28),
@@ -319,7 +317,6 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_company.ticker = "AAPL"
         mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
 
         # Mock filings filtered by form_type
@@ -328,8 +325,9 @@ class TestGetFilingsEndpoint:
         mock_filing = Filing(
             id=1,
             company_id=1,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry_id=1,
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -345,7 +343,7 @@ class TestGetFilingsEndpoint:
         data = response.json()
         assert len(data) == 1
         assert data[0]["form_type"] == "10-Q"
-        assert data[0]["filing_number"] == "0000320193-25-000073"
+        assert data[0]["number"] == "0000320193-25-000073"
         assert data[0]["filing_date"] == "2024-12-19"
         assert data[0]["fiscal_period_end"] == "2024-09-28"
         assert data[0]["fiscal_year"] == 2024
@@ -383,7 +381,6 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_company.ticker = "AAPL"
         mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
 
         # Mock empty filings list
