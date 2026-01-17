@@ -21,11 +21,42 @@ def upgrade() -> None:
     op.create_table(
         "companies",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("ticker", sa.String(), nullable=True),
-        sa.Column("exchange", sa.String(), nullable=True),
         sa.Column("name", sa.String(), nullable=False),
+        sa.Column("industry", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("ticker", "exchange", name="uq_companies_ticker_exchange"),
+    )
+
+    # Create tickers table
+    op.create_table(
+        "tickers",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("ticker", sa.String(), nullable=False),
+        sa.Column("exchange", sa.String(), nullable=False),
+        sa.Column("status", sa.String(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
+        ),
+    )
+
+    # Create filing registry table
+    op.create_table(
+        "filing_registry",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("registry", sa.String(), nullable=False),
+        sa.Column("number", sa.String(), nullable=False),
+        sa.Column("status", sa.String(), nullable=False),
+        sa.Column("company_id", sa.Boolean(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
+        ),
+        sa.UniqueConstraint(
+            "registry", "number", name="uq_filing_registry_registry_number"
+        ),
     )
 
     # Create filings table
@@ -33,22 +64,24 @@ def upgrade() -> None:
         "filings",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("source", sa.String(), nullable=False),
-        sa.Column("filing_number", sa.String(), nullable=False),
+        sa.Column("registry", sa.String(), nullable=False),
+        sa.Column("number", sa.String(), nullable=False),
         sa.Column("form_type", sa.String(), nullable=False),
         sa.Column("filing_date", sa.Date(), nullable=False),
         sa.Column("fiscal_period_end", sa.Date(), nullable=False),
         sa.Column("fiscal_year", sa.Integer(), nullable=False),
         sa.Column("fiscal_quarter", sa.Integer(), nullable=False),
         sa.Column("public_url", sa.String(), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "source", "filing_number", name="uq_filings_source_filing_number"
+        sa.ForeignKeyConstraint(
+            ["registry_id"],
+            ["filing_registry.id"],
         ),
+        sa.UniqueConstraint("registry", "number", name="uq_filings_registry_number"),
     )
 
     # Create financial_facts table
