@@ -10,8 +10,8 @@ class FilingBase(BaseModel):
     """Base filing model."""
 
     company_id: int
-    source: str
-    filing_number: str
+    registry: str
+    number: str
     form_type: str
     filing_date: date
     fiscal_period_end: date

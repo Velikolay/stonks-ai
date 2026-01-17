@@ -139,8 +139,8 @@ class NormalizedLabelResponse(BaseModel):
 class FinancialFilingResponse(BaseModel):
     """Response model for financial filings."""
 
-    source: str
-    filing_number: str
+    registry: str
+    number: str
     form_type: str
     filing_date: str
     fiscal_period_end: str
@@ -424,8 +424,8 @@ async def get_filings(
         response_filings = []
         for filing in filings:
             response_filing = FinancialFilingResponse(
-                source=filing.source,
-                filing_number=filing.filing_number,
+                registry=filing.registry,
+                number=filing.number,
                 form_type=filing.form_type,
                 filing_date=filing.filing_date.isoformat(),
                 fiscal_period_end=filing.fiscal_period_end.isoformat(),

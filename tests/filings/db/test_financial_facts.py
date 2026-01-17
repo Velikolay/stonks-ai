@@ -256,8 +256,8 @@ class TestFinancialFactOperations:
         # Create multiple filings with revenue facts
         filing1 = FilingCreate(
             company_id=company.id,
-            source="SEC",
-            filing_number="0000320193-25-000073",
+            registry="SEC",
+            number="0000320193-25-000073",
             form_type="10-Q",
             filing_date=date(2024, 12, 19),
             fiscal_period_end=date(2024, 9, 28),
@@ -267,8 +267,8 @@ class TestFinancialFactOperations:
 
         filing2 = FilingCreate(
             company_id=company.id,
-            source="SEC",
-            filing_number="0000320193-25-000074",
+            registry="SEC",
+            number="0000320193-25-000074",
             form_type="10-Q",
             filing_date=date(2024, 6, 15),
             fiscal_period_end=date(2024, 3, 30),
@@ -332,8 +332,8 @@ class TestFinancialFactOperations:
         for i in range(5):
             filing = FilingCreate(
                 company_id=company.id,
-                source="SEC",
-                filing_number=f"0000320193-25-00007{i}",
+                registry="SEC",
+                number=f"0000320193-25-00007{i}",
                 form_type="10-Q",
                 filing_date=date(2024, 12, 19),
                 fiscal_period_end=date(2024, 9, 28),
