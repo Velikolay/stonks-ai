@@ -172,8 +172,10 @@ class SECXBRLFilingsLoader:
                 )
 
             # 1) Try to resolve existing company by any returned ticker
-            for t in tickers:
-                existing = self.database.companies.get_company_by_ticker(t, exchange)
+            for ticker in tickers:
+                existing = self.database.companies.get_company_by_ticker(
+                    ticker, exchange
+                )
                 if existing:
                     logger.info(
                         "Found existing company %s via edgar tickers %s",
@@ -201,17 +203,17 @@ class SECXBRLFilingsLoader:
                 )
                 return None
 
-            for additional in tickers:
+            for ticker in tickers:
                 ok = self.database.companies.upsert_ticker(
                     company_id=company.id,
-                    ticker=additional,
+                    ticker=ticker,
                     exchange=exchange,
                     status="active",
                 )
                 if not ok:
                     logger.warning(
                         "Failed to upsert ticker mapping %s (%s) for company_id=%s",
-                        additional,
+                        ticker,
                         exchange,
                         company.id,
                     )

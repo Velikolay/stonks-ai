@@ -313,13 +313,11 @@ class SECXBRLParser:
     def _create_disaggregated_metric_fact(
         self,
         row,
+        comparative_row,
         metric: str,
         dimension: str,
-        dimension_parsed: Optional[str] = None,
-        dimension_value_parsed: Optional[str] = None,
-        position: int = 0,
-        comparative_row=None,
-        form_type: str = "",
+        form_type: str,
+        position: int,
     ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact for disaggregated metrics.
 
@@ -327,8 +325,6 @@ class SECXBRLParser:
             row: DataFrame row from XBRL query
             metric: The metric being disaggregated (e.g., "Revenue", "OperatingIncome")
             dimension: The dimension axis
-            dimension_parsed: The parsed dimension (Product, Geographic)
-            dimension_value_parsed: The parsed dimension value
             position: Global position of this fact
 
         Returns:
@@ -346,15 +342,8 @@ class SECXBRLParser:
 
             axis = dimension
 
-            raw_member = row.get(self._to_df_dim(dimension), "")
-            member, member_label = self._normalize_disaggregated_member(
-                dimension=dimension,
-                raw_member=str(raw_member) if raw_member is not None else "",
-                dimension_parsed=dimension_parsed,
-                dimension_value_parsed=dimension_value_parsed,
-            )
-            if not member:
-                return None
+            member = row.get(self._to_df_dim(dimension), "")
+            member_label = row.get("dimension_member_label") or member
 
             # Skip if no value
             if not value or math.isnan(value):
@@ -434,44 +423,6 @@ class SECXBRLParser:
         except Exception:
             logger.exception(f"Error creating disaggregated {metric}, {dimension} fact")
             return None
-
-    def _normalize_disaggregated_member(
-        self,
-        *,
-        dimension: str,
-        raw_member: str,
-        dimension_parsed: Optional[str],
-        dimension_value_parsed: Optional[str],
-    ) -> tuple[str, str]:
-        """Normalize disaggregated axis member values for downstream consistency."""
-        # Product axis: map to aapl namespace members
-        if dimension.endswith("ProductOrServiceAxis"):
-            mapping = {
-                "iphone": "IPhone",
-                "ipad": "IPad",
-                "mac": "Mac",
-            }
-            key = raw_member.strip()
-            mapped = mapping.get(key.lower())
-            if mapped is None:
-                mapped = "".join(part.capitalize() for part in key.split())
-            return f"aapl:{mapped}Member", key
-
-        # Geographic axis: map to canonical regions and aapl namespace members
-        if dimension.endswith("StatementGeographicalAxis"):
-            parsed = self.geography_parser.parse_geography(raw_member)
-            label = parsed.geography if parsed else raw_member.strip()
-            mapped = "".join(part.capitalize() for part in label.split())
-            return f"aapl:{mapped}Member", label
-
-        # Business segments axis: only keep members that look like geographies
-        if dimension.endswith("StatementBusinessSegmentsAxis"):
-            parsed = self.geography_parser.parse_geography(raw_member)
-            if not parsed:
-                return "", ""
-            return raw_member.strip(), raw_member.strip()
-
-        return raw_member.strip(), raw_member.strip()
 
     def _determine_period_type(
         self, period_start: Optional[date], period_end: Optional[date], form_type: str
