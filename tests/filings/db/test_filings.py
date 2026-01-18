@@ -8,22 +8,24 @@ from filings import Filing, FilingCreate
 class TestFilingOperations:
     """Test filing database operations."""
 
-    def _ensure_registry_id(self, db, *, company_id: int) -> int:
-        registry_id = db.companies.get_or_create_filing_registry_id(
+    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
             status="active",
         )
-        assert registry_id is not None
-        return int(registry_id)
+        assert filing_entity_id is not None
+        return int(filing_entity_id)
 
     def test_insert_filing(self, db, sample_company, sample_filing):
         """Test inserting a new filing."""
         # Create company first
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Insert filing
         filing_id = db.filings.insert_filing(sample_filing)
@@ -52,7 +54,9 @@ class TestFilingOperations:
         # Create company and filing first
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing_id = db.filings.insert_filing(sample_filing)
 
         # Retrieve filing
@@ -74,12 +78,12 @@ class TestFilingOperations:
         """Test retrieving filings by company."""
         # Create company
         company = db.companies.get_or_create_company(sample_company)
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
 
         # Create multiple filings
         filing1 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -92,7 +96,7 @@ class TestFilingOperations:
 
         filing2 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000074",
             form_type="10-K",
@@ -118,12 +122,12 @@ class TestFilingOperations:
         """Test retrieving filings by company and form type."""
         # Create company
         company = db.companies.get_or_create_company(sample_company)
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
 
         # Create filings with different form types
         filing1 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -135,7 +139,7 @@ class TestFilingOperations:
 
         filing2 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000074",
             form_type="10-K",
@@ -159,12 +163,12 @@ class TestFilingOperations:
         """Test retrieving latest filing for company and form type."""
         # Create company
         company = db.companies.get_or_create_company(sample_company)
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
 
         # Create multiple filings with different dates
         filing1 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -176,7 +180,7 @@ class TestFilingOperations:
 
         filing2 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000074",
             form_type="10-Q",
@@ -202,7 +206,9 @@ class TestFilingOperations:
         # Create company and filing
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing_id = db.filings.insert_filing(sample_filing)
 
         # Retrieve filing by number
@@ -226,7 +232,9 @@ class TestFilingOperations:
         # Create company
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Get or create filing
         filing = db.filings.get_or_create_filing(sample_filing)
@@ -243,7 +251,9 @@ class TestFilingOperations:
         # Create company and filing
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         original_filing = db.filings.get_or_create_filing(sample_filing)
 
         # Try to get or create the same filing again
@@ -260,7 +270,7 @@ class TestFilingOperations:
         # Valid filing
         filing = FilingCreate(
             company_id=1,
-            registry_id=1,
+            filing_entity_id=1,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -281,7 +291,7 @@ class TestFilingOperations:
         complete_filing = Filing(
             id=1,
             company_id=1,
-            registry_id=1,
+            filing_entity_id=1,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",

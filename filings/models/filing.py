@@ -10,7 +10,7 @@ class FilingBase(BaseModel):
     """Base filing model."""
 
     company_id: int
-    registry_id: int
+    filing_entity_id: int
     registry: str
     number: str
     form_type: str

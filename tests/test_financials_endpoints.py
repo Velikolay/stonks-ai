@@ -269,7 +269,7 @@ class TestGetFilingsEndpoint:
         mock_filing1 = Filing(
             id=1,
             company_id=1,
-            registry_id=1,
+            filing_entity_id=1,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -282,7 +282,7 @@ class TestGetFilingsEndpoint:
         mock_filing2 = Filing(
             id=2,
             company_id=1,
-            registry_id=1,
+            filing_entity_id=1,
             registry="SEC",
             number="0000320193-25-000074",
             form_type="10-K",
@@ -325,7 +325,7 @@ class TestGetFilingsEndpoint:
         mock_filing = Filing(
             id=1,
             company_id=1,
-            registry_id=1,
+            filing_entity_id=1,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",

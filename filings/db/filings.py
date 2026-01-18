@@ -29,7 +29,7 @@ class FilingOperations:
                     insert(self.filings_table)
                     .values(
                         company_id=filing.company_id,
-                        registry_id=filing.registry_id,
+                        filing_entity_id=filing.filing_entity_id,
                         registry=filing.registry,
                         number=filing.number,
                         form_type=filing.form_type,
@@ -70,7 +70,7 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        registry_id=row.registry_id,
+                        filing_entity_id=row.filing_entity_id,
                         registry=row.registry,
                         number=row.number,
                         form_type=row.form_type,
@@ -116,7 +116,7 @@ class FilingOperations:
                         Filing(
                             id=row.id,
                             company_id=row.company_id,
-                            registry_id=row.registry_id,
+                            filing_entity_id=row.filing_entity_id,
                             registry=row.registry,
                             number=row.number,
                             form_type=row.form_type,
@@ -154,7 +154,7 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        registry_id=row.registry_id,
+                        filing_entity_id=row.filing_entity_id,
                         registry=row.registry,
                         number=row.number,
                         form_type=row.form_type,
@@ -191,7 +191,7 @@ class FilingOperations:
                     return Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        registry_id=row.registry_id,
+                        filing_entity_id=row.filing_entity_id,
                         registry=row.registry,
                         number=row.number,
                         form_type=row.form_type,
@@ -236,7 +236,7 @@ class FilingOperations:
                     filing = Filing(
                         id=row.id,
                         company_id=row.company_id,
-                        registry_id=row.registry_id,
+                        filing_entity_id=row.filing_entity_id,
                         registry=row.registry,
                         number=row.number,
                         form_type=row.form_type,

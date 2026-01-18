@@ -13,15 +13,15 @@ from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
 class TestFinancialFactOperations:
     """Test financial facts database operations."""
 
-    def _ensure_registry_id(self, db, *, company_id: int) -> int:
-        registry_id = db.companies.get_or_create_filing_registry_id(
+    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
             status="active",
         )
-        assert registry_id is not None
-        return int(registry_id)
+        assert filing_entity_id is not None
+        return int(filing_entity_id)
 
     def test_insert_financial_fact(
         self, db, sample_company, sample_filing, sample_financial_fact
@@ -30,7 +30,9 @@ class TestFinancialFactOperations:
         # Create company and filing first
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
         sample_financial_fact.company_id = company.id
         sample_financial_fact.filing_id = filing.id
@@ -60,7 +62,9 @@ class TestFinancialFactOperations:
         # Create company and filing first
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Create multiple facts
@@ -131,7 +135,9 @@ class TestFinancialFactOperations:
         # Create company and filing first
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
 
         abstract_key = str(uuid.uuid4())
@@ -211,7 +217,9 @@ class TestFinancialFactOperations:
         # Create company and filing
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Create multiple facts
@@ -268,10 +276,10 @@ class TestFinancialFactOperations:
         company = db.companies.get_or_create_company(sample_company)
 
         # Create multiple filings with revenue facts
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
         filing1 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -283,7 +291,7 @@ class TestFinancialFactOperations:
 
         filing2 = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000074",
             form_type="10-Q",
@@ -344,13 +352,13 @@ class TestFinancialFactOperations:
         """Test retrieving financial facts by concept with limit."""
         # Create company
         company = db.companies.get_or_create_company(sample_company)
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
 
         # Create multiple filings with revenue facts
         for i in range(5):
             filing = FilingCreate(
                 company_id=company.id,
-                registry_id=registry_id,
+                filing_entity_id=filing_entity_id,
                 registry="SEC",
                 number=f"0000320193-25-00007{i}",
                 form_type="10-Q",
@@ -513,7 +521,9 @@ class TestFinancialFactOperations:
         # Create company and filing
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Create fact with optional fields
@@ -550,7 +560,9 @@ class TestFinancialFactOperations:
         # Create company and filing
         company = db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.registry_id = self._ensure_registry_id(db, company_id=company.id)
+        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing = db.filings.get_or_create_filing(sample_filing)
 
         # Test with YTD period

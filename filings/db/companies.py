@@ -7,7 +7,7 @@ from sqlalchemy import MetaData, Table, insert, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models import Company, CompanyCreate
+from ..models import Company, CompanyCreate, FilingEntity
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ class CompanyOperations:
         metadata = MetaData()
         self.companies_table = Table("companies", metadata, autoload_with=engine)
         self.tickers_table = Table("tickers", metadata, autoload_with=engine)
-        self.filing_registry_table = Table(
-            "filing_registry", metadata, autoload_with=engine
+        self.filing_entities_table = Table(
+            "filing_entities", metadata, autoload_with=engine
         )
 
     def insert_company(self, company: CompanyCreate) -> Optional[int]:
@@ -190,7 +190,7 @@ class CompanyOperations:
             logger.error(f"Error upserting ticker {ticker} ({exchange}): {e}")
             return False
 
-    def get_or_create_filing_registry_id(
+    def get_or_create_filing_entities_id(
         self,
         *,
         company_id: int,
@@ -198,7 +198,7 @@ class CompanyOperations:
         number: str,
         status: str = "active",
     ) -> Optional[int]:
-        """Get or create a filing_registry row and return its ID.
+        """Get or create a filing_entities row and return its ID.
 
         This is a company-owned record (similar to tickers):
         - For SEC, number should be the company's CIK.
@@ -208,18 +208,18 @@ class CompanyOperations:
             with self.engine.connect() as conn:
                 existing = conn.execute(
                     select(
-                        self.filing_registry_table.c.id,
-                        self.filing_registry_table.c.company_id,
+                        self.filing_entities_table.c.id,
+                        self.filing_entities_table.c.company_id,
                     ).where(
-                        (self.filing_registry_table.c.registry == registry)
-                        & (self.filing_registry_table.c.number == number)
+                        (self.filing_entities_table.c.registry == registry)
+                        & (self.filing_entities_table.c.number == number)
                     )
                 ).fetchone()
 
                 if existing is not None:
                     if int(existing.company_id) != int(company_id):
                         logger.error(
-                            "filing_registry mismatch for %s:%s (existing company_id=%s, wanted=%s)",
+                            "filing_entities mismatch for %s:%s (existing company_id=%s, wanted=%s)",
                             registry,
                             number,
                             existing.company_id,
@@ -229,18 +229,69 @@ class CompanyOperations:
                     return int(existing.id)
 
                 insert_stmt = (
-                    insert(self.filing_registry_table)
+                    insert(self.filing_entities_table)
                     .values(
                         registry=registry,
                         number=number,
                         status=status,
                         company_id=company_id,
                     )
-                    .returning(self.filing_registry_table.c.id)
+                    .returning(self.filing_entities_table.c.id)
                 )
                 new_id = conn.execute(insert_stmt).scalar()
                 conn.commit()
                 return int(new_id) if new_id is not None else None
         except SQLAlchemyError as e:
-            logger.error(f"Error getting/creating filing_registry: {e}")
+            logger.error(f"Error getting/creating filing_entities: {e}")
             return None
+
+    def get_filing_entities_by_company_id(
+        self,
+        *,
+        company_id: int,
+        registry: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[FilingEntity]:
+        """Get all filing_entities records for a company.
+
+        Args:
+            company_id: Company ID.
+            registry: Optional registry filter (e.g. "SEC").
+            status: Optional status filter (e.g. "active").
+
+        Returns:
+            List of FilingEntity models.
+        """
+        try:
+            with self.engine.connect() as conn:
+                stmt = select(
+                    self.filing_entities_table.c.id,
+                    self.filing_entities_table.c.registry,
+                    self.filing_entities_table.c.number,
+                    self.filing_entities_table.c.status,
+                    self.filing_entities_table.c.company_id,
+                ).where(self.filing_entities_table.c.company_id == company_id)
+
+                if registry is not None:
+                    stmt = stmt.where(self.filing_entities_table.c.registry == registry)
+                if status is not None:
+                    stmt = stmt.where(self.filing_entities_table.c.status == status)
+
+                rows = conn.execute(stmt).fetchall()
+                return [
+                    FilingEntity(
+                        id=int(r.id),
+                        registry=str(r.registry),
+                        number=str(r.number),
+                        status=str(r.status),
+                        company_id=int(r.company_id),
+                    )
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error getting filing_entities records for company_id=%s: %s",
+                company_id,
+                e,
+            )
+            return []

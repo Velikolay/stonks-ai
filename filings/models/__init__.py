@@ -7,6 +7,7 @@ from .concept_normalization_override import (
     ConceptNormalizationOverrideUpdate,
 )
 from .filing import Filing, FilingBase, FilingCreate
+from .filing_entity import FilingEntity
 from .financial_fact import (
     FinancialFact,
     FinancialFactBase,
@@ -26,6 +27,7 @@ __all__ = [
     "FilingBase",
     "FilingCreate",
     "Filing",
+    "FilingEntity",
     "FinancialFactBase",
     "FinancialFactCreate",
     "FinancialFact",

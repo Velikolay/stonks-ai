@@ -110,7 +110,7 @@ def test_engine(test_db_url: str) -> Engine:
         with engine.connect() as conn:
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
-            conn.execute(text("TRUNCATE TABLE filing_registry CASCADE"))
+            conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))
             conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
@@ -133,7 +133,7 @@ def clean_tables(test_engine: Engine):
             # since they're just queries over the data
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
-            conn.execute(text("TRUNCATE TABLE filing_registry CASCADE"))
+            conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))
             conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
@@ -163,7 +163,7 @@ def sample_filing(sample_company: CompanyCreate) -> FilingCreate:
     """Sample filing data for testing."""
     return FilingCreate(
         company_id=1,  # Will be set in tests
-        registry_id=0,  # Will be set in tests
+        filing_entity_id=0,  # Will be set in tests
         registry="SEC",
         number="0000320193-25-000073",
         form_type="10-Q",

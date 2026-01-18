@@ -11,15 +11,15 @@ from filings.models.company import CompanyCreate
 class TestDatabaseIntegration:
     """Integration tests for database operations."""
 
-    def _ensure_registry_id(self, db, *, company_id: int) -> int:
-        registry_id = db.companies.get_or_create_filing_registry_id(
+    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
             status="active",
         )
-        assert registry_id is not None
-        return int(registry_id)
+        assert filing_entity_id is not None
+        return int(filing_entity_id)
 
     def _get_or_create_company_by_ticker(
         self, db, *, ticker: str, exchange: str, name: str
@@ -48,10 +48,10 @@ class TestDatabaseIntegration:
         assert company is not None
 
         # 2. Create filing
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
         filing_data = FilingCreate(
             company_id=company.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -138,10 +138,10 @@ class TestDatabaseIntegration:
         # Create filings for each company
         filings = []
         for i, company in enumerate(companies):
-            registry_id = self._ensure_registry_id(db, company_id=company.id)
+            filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
             filing_data = FilingCreate(
                 company_id=company.id,
-                registry_id=registry_id,
+                filing_entity_id=filing_entity_id,
                 registry="SEC",
                 number=f"0000320193-25-00007{i}",
                 form_type="10-Q",
@@ -203,10 +203,10 @@ class TestDatabaseIntegration:
         assert company2.id == company1.id
 
         # Test filing get_or_create
-        registry_id = self._ensure_registry_id(db, company_id=company1.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company1.id)
         filing_data = FilingCreate(
             company_id=company1.id,
-            registry_id=registry_id,
+            filing_entity_id=filing_entity_id,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",
@@ -234,11 +234,11 @@ class TestDatabaseIntegration:
         )
 
         # Create filing
-        registry_id = self._ensure_registry_id(db, company_id=company.id)
+        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
         filing = db.filings.get_or_create_filing(
             FilingCreate(
                 company_id=company.id,
-                registry_id=registry_id,
+                filing_entity_id=filing_entity_id,
                 registry="SEC",
                 number="0000320193-25-000073",
                 form_type="10-Q",
@@ -284,7 +284,7 @@ class TestDatabaseIntegration:
         # Test inserting filing with non-existent company
         filing_data = FilingCreate(
             company_id=99999,  # Non-existent company
-            registry_id=0,
+            filing_entity_id=0,
             registry="SEC",
             number="0000320193-25-000073",
             form_type="10-Q",

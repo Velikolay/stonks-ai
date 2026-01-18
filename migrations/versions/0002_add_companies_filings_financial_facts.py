@@ -43,7 +43,7 @@ def upgrade() -> None:
 
     # Create filing registry table
     op.create_table(
-        "filing_registry",
+        "filing_entities",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("registry", sa.String(), nullable=False),
         sa.Column("number", sa.String(), nullable=False),
@@ -55,7 +55,7 @@ def upgrade() -> None:
             ["companies.id"],
         ),
         sa.UniqueConstraint(
-            "registry", "number", name="uq_filing_registry_registry_number"
+            "registry", "number", name="uq_filing_entities_registry_number"
         ),
     )
 
@@ -64,7 +64,7 @@ def upgrade() -> None:
         "filings",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("registry_id", sa.Integer(), nullable=False),
+        sa.Column("filing_entity_id", sa.Integer(), nullable=False),
         sa.Column("registry", sa.String(), nullable=False),
         sa.Column("number", sa.String(), nullable=False),
         sa.Column("form_type", sa.String(), nullable=False),
@@ -79,8 +79,8 @@ def upgrade() -> None:
             ["companies.id"],
         ),
         sa.ForeignKeyConstraint(
-            ["registry_id"],
-            ["filing_registry.id"],
+            ["filing_entity_id"],
+            ["filing_entities.id"],
         ),
         sa.UniqueConstraint("registry", "number", name="uq_filings_registry_number"),
     )
@@ -160,8 +160,8 @@ def downgrade() -> None:
     # Drop filings table
     op.drop_table("filings")
 
-    # Drop filing_registry and tickers tables
-    op.drop_table("filing_registry")
+    # Drop filing_entities and tickers tables
+    op.drop_table("filing_entities")
     op.drop_table("tickers")
 
     # Drop companies table

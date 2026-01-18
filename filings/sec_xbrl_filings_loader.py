@@ -62,65 +62,72 @@ class SECXBRLFilingsLoader:
             cik = getattr(edgar_company, "cik", None)
             if cik is None:
                 return {
-                    "error": f"Failed to determine CIK for ticker {ticker} (required for filing_registry)"
+                    "error": f"Failed to determine CIK for ticker {ticker} (required for filing_entities)"
                 }
-            registry_id = self.database.companies.get_or_create_filing_registry_id(
+            filing_entity_id = self.database.companies.get_or_create_filing_entities_id(
                 company_id=company.id,
                 registry="SEC",
                 number=str(cik),
                 status="active",
             )
-            if registry_id is None:
+            if filing_entity_id is None:
                 return {
-                    "error": f"Failed to get or create filing_registry for ticker {ticker}"
+                    "error": f"Failed to get or create filing_entities for ticker {ticker}"
                 }
-
-            # Get company filings
-            filings = edgar_company.get_filings(
-                form=form,
-                is_xbrl=True,
+            filing_entities = self.database.companies.get_filing_entities_by_company_id(
+                company_id=company.id, registry="SEC", status="active"
             )
+            if not filing_entities:
+                filing_entities = []
 
-            if not filings:
-                logger.info(f"No {form} filings found for {ticker}")
-                return {"message": f"No {form} filings found for {ticker}"}
-
-            # Load filings up to limit
-            loaded_count = 0
+            total_loaded = 0
+            total_updated = 0
             total_facts = 0
-            updated_count = 0
 
-            for filing in filings:
-                if loaded_count >= limit:
-                    break
+            # For each filing entity (e.g. SEC + CIK), load filings via edgar and persist them
+            for filing_entity in filing_entities:
+                edgar_company_for_entity = Company(filing_entity.number)
+                filings = edgar_company_for_entity.get_filings(form=form, is_xbrl=True)
+                if not filings:
+                    continue
 
-                try:
-                    facts_count, was_updated = self._load_single_filing(
-                        filing, company.id, registry_id, override
-                    )
-                    if facts_count > 0:
-                        loaded_count += 1
+                loaded_for_entity = 0
+                for filing in filings:
+                    if loaded_for_entity >= limit:
+                        break
+
+                    try:
+                        facts_count, was_updated = self._load_single_filing(
+                            filing, company.id, filing_entity.id, override
+                        )
+                        if facts_count <= 0:
+                            continue
+
+                        loaded_for_entity += 1
+                        total_loaded += 1
                         total_facts += facts_count
                         if was_updated:
-                            updated_count += 1
+                            total_updated += 1
+
                         logger.info(
                             f"Loaded filing {filing.accession_number} with {facts_count} facts"
                             + (" (updated)" if was_updated else " (new)")
                         )
-                    else:
-                        logger.warning(
-                            f"No facts extracted from filing {filing.accession_number}"
+                    except Exception as e:
+                        logger.error(
+                            f"Error loading filing {getattr(filing, 'accession_number', '<unknown>')}: {e}"
                         )
+                        continue
 
-                except Exception as e:
-                    logger.error(f"Error loading filing {filing.accession_number}: {e}")
-                    continue
+            if total_loaded == 0:
+                logger.info(f"No {form} filings found for {ticker}")
+                return {"message": f"No {form} filings found for {ticker}"}
 
             return {
                 "ticker": ticker,
                 "form": form,
-                "filings_loaded": loaded_count,
-                "filings_updated": updated_count,
+                "filings_loaded": total_loaded,
+                "filings_updated": total_updated,
                 "total_facts": total_facts,
                 "company_id": company.id,
                 "override_mode": override,
@@ -263,7 +270,7 @@ class SECXBRLFilingsLoader:
             return None
 
     def _load_single_filing(
-        self, filing, company_id: int, registry_id: int, override: bool
+        self, filing, company_id: int, filing_entity_id: int, override: bool
     ) -> tuple[int, bool]:
         """Load a single filing and persist its data.
 
@@ -306,7 +313,7 @@ class SECXBRLFilingsLoader:
             # Create filing record
             filing_data = FilingCreate(
                 company_id=company_id,
-                registry_id=registry_id,
+                filing_entity_id=filing_entity_id,
                 registry="SEC",
                 number=filing.accession_number,
                 form_type=filing.form,
