@@ -18,6 +18,16 @@ class CompanyCreate(CompanyBase):
     pass
 
 
+class CompanyUpdate(BaseModel):
+    """Model for updating a company.
+
+    All fields are optional; only provided fields will be updated.
+    """
+
+    name: Optional[str] = None
+    industry: Optional[str] = None
+
+
 class Company(CompanyBase):
     """Complete company model with ID."""
 

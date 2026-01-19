@@ -8,6 +8,9 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from filings.models import FilingEntity, Ticker
+from filings.models.company import Company
+
 
 @pytest.fixture
 def client() -> TestClient:
@@ -79,6 +82,145 @@ class TestAdminEndpoints:
         assert data[0]["concept"] == "us-gaap:TestConcept"
         assert data[0]["statement"] == "Income Statement"
         assert data[0]["normalized_label"] == "Test Label"
+
+    @patch("api.admin.filings_db")
+    def test_list_companies_empty(self, mock_filings_db, client):
+        """Test listing companies when none exist."""
+        mock_filings_db.companies.get_all_companies.return_value = []
+
+        response = client.get("/admin/companies")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @patch("api.admin.filings_db")
+    def test_list_companies_with_relations(self, mock_filings_db, client):
+        """Test listing companies including tickers and filing entities."""
+        mock_filings_db.companies.get_all_companies.return_value = [
+            Company(id=1, name="Apple Inc.", industry="Technology")
+        ]
+        mock_filings_db.companies.get_tickers_by_company_ids.return_value = {
+            1: [
+                Ticker(
+                    id=10,
+                    ticker="AAPL",
+                    exchange="NASDAQ",
+                    status="active",
+                    company_id=1,
+                )
+            ]
+        }
+        mock_filings_db.companies.get_filing_entities_by_company_ids.return_value = {
+            1: [
+                FilingEntity(
+                    id=20,
+                    registry="SEC",
+                    number="0000320193",
+                    status="active",
+                    company_id=1,
+                )
+            ]
+        }
+
+        response = client.get("/admin/companies")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == 1
+        assert data[0]["name"] == "Apple Inc."
+        assert data[0]["industry"] == "Technology"
+        assert data[0]["tickers"][0]["ticker"] == "AAPL"
+        assert "company_id" not in data[0]["tickers"][0]
+        assert data[0]["filing_entities"][0]["number"] == "0000320193"
+        assert "company_id" not in data[0]["filing_entities"][0]
+
+    @patch("api.admin.filings_db")
+    def test_update_company_fields(self, mock_filings_db, client):
+        """Test updating company fields."""
+        mock_filings_db.companies.update_company.return_value = Company(
+            id=1, name="Apple Inc.", industry="Tech"
+        )
+        mock_filings_db.companies.get_tickers_by_company_id.return_value = []
+        mock_filings_db.companies.get_filing_entities_by_company_id.return_value = []
+
+        response = client.put("/admin/companies/1", json={"industry": "Tech"})
+
+        assert response.status_code == 200
+        assert response.json()["industry"] == "Tech"
+
+    @patch("api.admin.filings_db")
+    def test_add_company_ticker(self, mock_filings_db, client):
+        """Test adding a company ticker mapping."""
+        mock_filings_db.companies.get_company_by_id.return_value = Company(
+            id=1, name="Apple Inc.", industry=None
+        )
+        mock_filings_db.companies.create_ticker.return_value = Ticker(
+            id=10,
+            ticker="AAPL",
+            exchange="NASDAQ",
+            status="active",
+            company_id=1,
+        )
+
+        response = client.post(
+            "/admin/companies/1/tickers",
+            json={"ticker": "AAPL", "exchange": "NASDAQ", "status": "active"},
+        )
+
+        assert response.status_code == 201
+        assert response.json()["ticker"] == "AAPL"
+        assert "company_id" not in response.json()
+
+    @patch("api.admin.filings_db")
+    def test_delete_company_ticker(self, mock_filings_db, client):
+        """Test deleting a company ticker mapping."""
+        mock_filings_db.companies.delete_ticker.return_value = True
+
+        response = client.delete("/admin/companies/1/tickers/10")
+
+        assert response.status_code == 204
+
+    @patch("api.admin.filings_db")
+    def test_add_company_filing_entity(self, mock_filings_db, client):
+        """Test adding a filing entity to a company."""
+        mock_filings_db.companies.get_company_by_id.return_value = Company(
+            id=1, name="Apple Inc.", industry=None
+        )
+        mock_filings_db.companies.create_filing_entity.return_value = FilingEntity(
+            id=20,
+            registry="SEC",
+            number="0000320193",
+            status="active",
+            company_id=1,
+        )
+
+        response = client.post(
+            "/admin/companies/1/filing-entities",
+            json={"registry": "SEC", "number": "0000320193", "status": "active"},
+        )
+
+        assert response.status_code == 201
+        assert response.json()["registry"] == "SEC"
+        assert "company_id" not in response.json()
+
+    @patch("api.admin.filings_db")
+    def test_delete_company_filing_entity_conflict(self, mock_filings_db, client):
+        """Test deleting a filing entity returns 409 if it's still present (likely FK)."""
+        mock_filings_db.companies.delete_filing_entity.return_value = False
+        mock_filings_db.companies.get_filing_entities_by_company_id.return_value = [
+            FilingEntity(
+                id=20,
+                registry="SEC",
+                number="0000320193",
+                status="active",
+                company_id=1,
+            )
+        ]
+
+        response = client.delete("/admin/companies/1/filing-entities/20")
+
+        assert response.status_code == 409
 
     @patch("api.admin.filings_db")
     def test_list_overrides_with_statement_filter(

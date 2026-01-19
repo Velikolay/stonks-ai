@@ -3,11 +3,21 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, insert, select
+from sqlalchemy import MetaData, Table, delete, insert, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models import Company, CompanyCreate, FilingEntity
+from ..models import (
+    Company,
+    CompanyCreate,
+    CompanyUpdate,
+    FilingEntity,
+    FilingEntityCreate,
+    FilingEntityUpdate,
+    Ticker,
+    TickerCreate,
+    TickerUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +151,35 @@ class CompanyOperations:
             return None
         return self.get_company_by_id(company_id)
 
+    def update_company(
+        self, *, company_id: int, company: CompanyUpdate
+    ) -> Optional[Company]:
+        """Update company fields and return the updated company."""
+        values = {}
+        if company.name is not None:
+            values["name"] = company.name
+        if company.industry is not None:
+            values["industry"] = company.industry
+
+        if not values:
+            return self.get_company_by_id(company_id)
+
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(
+                    update(self.companies_table)
+                    .where(self.companies_table.c.id == company_id)
+                    .values(**values)
+                )
+                if res.rowcount == 0:
+                    conn.rollback()
+                    return None
+                conn.commit()
+                return self.get_company_by_id(company_id)
+        except SQLAlchemyError as e:
+            logger.error("Error updating company_id=%s: %s", company_id, e)
+            return None
+
     def upsert_ticker(
         self,
         *,
@@ -188,6 +227,225 @@ class CompanyOperations:
                 return True
         except SQLAlchemyError as e:
             logger.error(f"Error upserting ticker {ticker} ({exchange}): {e}")
+            return False
+
+    def get_tickers_by_company_id(
+        self,
+        *,
+        company_id: int,
+        status: Optional[str] = None,
+    ) -> List[Ticker]:
+        """Get all tickers for a company."""
+        try:
+            with self.engine.connect() as conn:
+                stmt = select(
+                    self.tickers_table.c.id,
+                    self.tickers_table.c.ticker,
+                    self.tickers_table.c.exchange,
+                    self.tickers_table.c.status,
+                    self.tickers_table.c.company_id,
+                ).where(self.tickers_table.c.company_id == company_id)
+
+                if status is not None:
+                    stmt = stmt.where(self.tickers_table.c.status == status)
+
+                rows = conn.execute(stmt).fetchall()
+                return [
+                    Ticker(
+                        id=int(r.id),
+                        ticker=str(r.ticker),
+                        exchange=str(r.exchange),
+                        status=str(r.status),
+                        company_id=int(r.company_id),
+                    )
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error("Error getting tickers for company_id=%s: %s", company_id, e)
+            return []
+
+    def get_tickers_by_company_ids(
+        self,
+        *,
+        company_ids: List[int],
+        status: Optional[str] = None,
+    ) -> dict[int, List[Ticker]]:
+        """Get tickers for multiple companies in one query.
+
+        Returns:
+            Mapping of company_id -> list of tickers.
+        """
+        if not company_ids:
+            return {}
+
+        try:
+            with self.engine.connect() as conn:
+                stmt = select(
+                    self.tickers_table.c.id,
+                    self.tickers_table.c.ticker,
+                    self.tickers_table.c.exchange,
+                    self.tickers_table.c.status,
+                    self.tickers_table.c.company_id,
+                ).where(self.tickers_table.c.company_id.in_(company_ids))
+
+                if status is not None:
+                    stmt = stmt.where(self.tickers_table.c.status == status)
+
+                rows = conn.execute(stmt).fetchall()
+                grouped: dict[int, List[Ticker]] = {}
+                for r in rows:
+                    cid = int(r.company_id)
+                    grouped.setdefault(cid, []).append(
+                        Ticker(
+                            id=int(r.id),
+                            ticker=str(r.ticker),
+                            exchange=str(r.exchange),
+                            status=str(r.status),
+                            company_id=cid,
+                        )
+                    )
+                return grouped
+        except SQLAlchemyError as e:
+            logger.error("Error getting tickers for company_ids=%s: %s", company_ids, e)
+            return {}
+
+    def create_ticker(
+        self, *, company_id: int, ticker: TickerCreate
+    ) -> Optional[Ticker]:
+        """Create a ticker mapping for a company, returning the created (or existing) row."""
+        try:
+            with self.engine.connect() as conn:
+                existing = conn.execute(
+                    select(self.tickers_table.c.id).where(
+                        (self.tickers_table.c.company_id == company_id)
+                        & (self.tickers_table.c.ticker == ticker.ticker)
+                        & (self.tickers_table.c.exchange == ticker.exchange)
+                    )
+                ).fetchone()
+                if existing is not None:
+                    row = conn.execute(
+                        select(
+                            self.tickers_table.c.id,
+                            self.tickers_table.c.ticker,
+                            self.tickers_table.c.exchange,
+                            self.tickers_table.c.status,
+                            self.tickers_table.c.company_id,
+                        ).where(self.tickers_table.c.id == existing.id)
+                    ).fetchone()
+                    if row is None:
+                        return None
+                    return Ticker(
+                        id=int(row.id),
+                        ticker=str(row.ticker),
+                        exchange=str(row.exchange),
+                        status=str(row.status),
+                        company_id=int(row.company_id),
+                    )
+
+                new_id = conn.execute(
+                    insert(self.tickers_table)
+                    .values(
+                        ticker=ticker.ticker,
+                        exchange=ticker.exchange,
+                        status=ticker.status,
+                        company_id=company_id,
+                    )
+                    .returning(self.tickers_table.c.id)
+                ).scalar()
+                if new_id is None:
+                    conn.rollback()
+                    return None
+                conn.commit()
+
+                row = conn.execute(
+                    select(
+                        self.tickers_table.c.id,
+                        self.tickers_table.c.ticker,
+                        self.tickers_table.c.exchange,
+                        self.tickers_table.c.status,
+                        self.tickers_table.c.company_id,
+                    ).where(self.tickers_table.c.id == int(new_id))
+                ).fetchone()
+                if row is None:
+                    return None
+                return Ticker(
+                    id=int(row.id),
+                    ticker=str(row.ticker),
+                    exchange=str(row.exchange),
+                    status=str(row.status),
+                    company_id=int(row.company_id),
+                )
+        except SQLAlchemyError as e:
+            logger.error("Error creating ticker for company_id=%s: %s", company_id, e)
+            return None
+
+    def update_ticker(
+        self,
+        *,
+        company_id: int,
+        ticker_id: int,
+        ticker: TickerUpdate,
+    ) -> Optional[Ticker]:
+        """Update a ticker mapping for a company."""
+        values = {}
+        if ticker.ticker is not None:
+            values["ticker"] = ticker.ticker
+        if ticker.exchange is not None:
+            values["exchange"] = ticker.exchange
+        if ticker.status is not None:
+            values["status"] = ticker.status
+
+        if not values:
+            return self._get_ticker_by_id(company_id=company_id, ticker_id=ticker_id)
+
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(
+                    update(self.tickers_table)
+                    .where(
+                        (self.tickers_table.c.id == ticker_id)
+                        & (self.tickers_table.c.company_id == company_id)
+                    )
+                    .values(**values)
+                )
+                if res.rowcount == 0:
+                    conn.rollback()
+                    return None
+                conn.commit()
+                return self._get_ticker_by_id(
+                    company_id=company_id, ticker_id=ticker_id
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error updating ticker_id=%s for company_id=%s: %s",
+                ticker_id,
+                company_id,
+                e,
+            )
+            return None
+
+    def delete_ticker(self, *, company_id: int, ticker_id: int) -> bool:
+        """Delete a ticker mapping for a company."""
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(
+                    delete(self.tickers_table).where(
+                        (self.tickers_table.c.id == ticker_id)
+                        & (self.tickers_table.c.company_id == company_id)
+                    )
+                )
+                if res.rowcount == 0:
+                    conn.rollback()
+                    return False
+                conn.commit()
+                return True
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error deleting ticker_id=%s for company_id=%s: %s",
+                ticker_id,
+                company_id,
+                e,
+            )
             return False
 
     def get_or_create_filing_entities_id(
@@ -245,6 +503,93 @@ class CompanyOperations:
             logger.error(f"Error getting/creating filing_entities: {e}")
             return None
 
+    def create_filing_entity(
+        self, *, company_id: int, filing_entity: FilingEntityCreate
+    ) -> Optional[FilingEntity]:
+        """Create (or get existing) filing entity for a company."""
+        entity_id = self.get_or_create_filing_entities_id(
+            company_id=company_id,
+            registry=filing_entity.registry,
+            number=filing_entity.number,
+            status=filing_entity.status,
+        )
+        if entity_id is None:
+            return None
+        return self._get_filing_entity_by_id(
+            company_id=company_id, filing_entity_id=entity_id
+        )
+
+    def update_filing_entity(
+        self,
+        *,
+        company_id: int,
+        filing_entity_id: int,
+        filing_entity: FilingEntityUpdate,
+    ) -> Optional[FilingEntity]:
+        """Update a filing entity for a company."""
+        values = {}
+        if filing_entity.registry is not None:
+            values["registry"] = filing_entity.registry
+        if filing_entity.number is not None:
+            values["number"] = filing_entity.number
+        if filing_entity.status is not None:
+            values["status"] = filing_entity.status
+
+        if not values:
+            return self._get_filing_entity_by_id(
+                company_id=company_id, filing_entity_id=filing_entity_id
+            )
+
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(
+                    update(self.filing_entities_table)
+                    .where(
+                        (self.filing_entities_table.c.id == filing_entity_id)
+                        & (self.filing_entities_table.c.company_id == company_id)
+                    )
+                    .values(**values)
+                )
+                if res.rowcount == 0:
+                    conn.rollback()
+                    return None
+                conn.commit()
+                return self._get_filing_entity_by_id(
+                    company_id=company_id, filing_entity_id=filing_entity_id
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error updating filing_entity_id=%s for company_id=%s: %s",
+                filing_entity_id,
+                company_id,
+                e,
+            )
+            return None
+
+    def delete_filing_entity(self, *, company_id: int, filing_entity_id: int) -> bool:
+        """Delete a filing entity for a company."""
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(
+                    delete(self.filing_entities_table).where(
+                        (self.filing_entities_table.c.id == filing_entity_id)
+                        & (self.filing_entities_table.c.company_id == company_id)
+                    )
+                )
+                if res.rowcount == 0:
+                    conn.rollback()
+                    return False
+                conn.commit()
+                return True
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error deleting filing_entity_id=%s for company_id=%s: %s",
+                filing_entity_id,
+                company_id,
+                e,
+            )
+            return False
+
     def get_filing_entities_by_company_id(
         self,
         *,
@@ -295,3 +640,125 @@ class CompanyOperations:
                 e,
             )
             return []
+
+    def get_filing_entities_by_company_ids(
+        self,
+        *,
+        company_ids: List[int],
+        registry: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> dict[int, List[FilingEntity]]:
+        """Get filing_entities for multiple companies in one query.
+
+        Returns:
+            Mapping of company_id -> list of filing entities.
+        """
+        if not company_ids:
+            return {}
+
+        try:
+            with self.engine.connect() as conn:
+                stmt = select(
+                    self.filing_entities_table.c.id,
+                    self.filing_entities_table.c.registry,
+                    self.filing_entities_table.c.number,
+                    self.filing_entities_table.c.status,
+                    self.filing_entities_table.c.company_id,
+                ).where(self.filing_entities_table.c.company_id.in_(company_ids))
+
+                if registry is not None:
+                    stmt = stmt.where(self.filing_entities_table.c.registry == registry)
+                if status is not None:
+                    stmt = stmt.where(self.filing_entities_table.c.status == status)
+
+                rows = conn.execute(stmt).fetchall()
+                grouped: dict[int, List[FilingEntity]] = {}
+                for r in rows:
+                    cid = int(r.company_id)
+                    grouped.setdefault(cid, []).append(
+                        FilingEntity(
+                            id=int(r.id),
+                            registry=str(r.registry),
+                            number=str(r.number),
+                            status=str(r.status),
+                            company_id=cid,
+                        )
+                    )
+                return grouped
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error getting filing_entities records for company_ids=%s: %s",
+                company_ids,
+                e,
+            )
+            return {}
+
+    def _get_ticker_by_id(self, *, company_id: int, ticker_id: int) -> Optional[Ticker]:
+        """Get a ticker row by ID scoped to company."""
+        try:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    select(
+                        self.tickers_table.c.id,
+                        self.tickers_table.c.ticker,
+                        self.tickers_table.c.exchange,
+                        self.tickers_table.c.status,
+                        self.tickers_table.c.company_id,
+                    ).where(
+                        (self.tickers_table.c.id == ticker_id)
+                        & (self.tickers_table.c.company_id == company_id)
+                    )
+                ).fetchone()
+                if row is None:
+                    return None
+                return Ticker(
+                    id=int(row.id),
+                    ticker=str(row.ticker),
+                    exchange=str(row.exchange),
+                    status=str(row.status),
+                    company_id=int(row.company_id),
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error getting ticker_id=%s for company_id=%s: %s",
+                ticker_id,
+                company_id,
+                e,
+            )
+            return None
+
+    def _get_filing_entity_by_id(
+        self, *, company_id: int, filing_entity_id: int
+    ) -> Optional[FilingEntity]:
+        """Get a filing entity row by ID scoped to company."""
+        try:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    select(
+                        self.filing_entities_table.c.id,
+                        self.filing_entities_table.c.registry,
+                        self.filing_entities_table.c.number,
+                        self.filing_entities_table.c.status,
+                        self.filing_entities_table.c.company_id,
+                    ).where(
+                        (self.filing_entities_table.c.id == filing_entity_id)
+                        & (self.filing_entities_table.c.company_id == company_id)
+                    )
+                ).fetchone()
+                if row is None:
+                    return None
+                return FilingEntity(
+                    id=int(row.id),
+                    registry=str(row.registry),
+                    number=str(row.number),
+                    status=str(row.status),
+                    company_id=int(row.company_id),
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error getting filing_entity_id=%s for company_id=%s: %s",
+                filing_entity_id,
+                company_id,
+                e,
+            )
+            return None

@@ -12,6 +12,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from filings.db import FilingsDatabase
+from filings.models import (
+    CompanyUpdate,
+    FilingEntityCreate,
+    FilingEntityUpdate,
+    TickerCreate,
+    TickerUpdate,
+)
 from filings.models.concept_normalization_override import (
     ConceptNormalizationOverrideCreate,
     ConceptNormalizationOverrideUpdate,
@@ -36,6 +43,34 @@ def set_filings_db(db: FilingsDatabase) -> None:
     filings_db = db
 
 
+class TickerResponse(BaseModel):
+    """Ticker response model for admin endpoints (no company_id)."""
+
+    id: int
+    ticker: str
+    exchange: str
+    status: str
+
+
+class FilingEntityResponse(BaseModel):
+    """Filing entity response model for admin endpoints (no company_id)."""
+
+    id: int
+    registry: str
+    number: str
+    status: str
+
+
+class CompanyResponse(BaseModel):
+    """Response model for a company with managed relationships."""
+
+    id: int
+    name: str
+    industry: Optional[str] = None
+    tickers: List[TickerResponse]
+    filing_entities: List[FilingEntityResponse]
+
+
 class ConceptNormalizationOverrideResponse(BaseModel):
     """Response model for concept normalization override."""
 
@@ -48,6 +83,19 @@ class ConceptNormalizationOverrideResponse(BaseModel):
     description: Optional[str] = None
     unit: Optional[str] = None
     weight: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DimensionNormalizationOverrideResponse(BaseModel):
+    """Response model for dimension normalization override."""
+
+    axis: str
+    member: str
+    member_label: str
+    normalized_axis_label: str
+    normalized_member_label: Optional[str] = None
+    tags: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -84,6 +132,275 @@ async def list_concept_normalization_overrides(
     except Exception as e:
         logger.error(f"Error listing concept normalization overrides: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/companies", response_model=List[CompanyResponse])
+async def list_companies() -> List[CompanyResponse]:
+    """List companies including tickers and filing entities."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        companies = filings_db.companies.get_all_companies()
+        if not companies:
+            return []
+
+        company_ids = [c.id for c in companies]
+        tickers_by_company_id = filings_db.companies.get_tickers_by_company_ids(
+            company_ids=company_ids
+        )
+        filing_entities_by_company_id = (
+            filings_db.companies.get_filing_entities_by_company_ids(
+                company_ids=company_ids
+            )
+        )
+
+        result: List[CompanyResponse] = []
+        for company in companies:
+            tickers = [
+                TickerResponse(
+                    id=t.id,
+                    ticker=t.ticker,
+                    exchange=t.exchange,
+                    status=t.status,
+                )
+                for t in tickers_by_company_id.get(company.id, [])
+            ]
+            filing_entities = [
+                FilingEntityResponse(
+                    id=fe.id,
+                    registry=fe.registry,
+                    number=fe.number,
+                    status=fe.status,
+                )
+                for fe in filing_entities_by_company_id.get(company.id, [])
+            ]
+            result.append(
+                CompanyResponse(
+                    id=company.id,
+                    name=company.name,
+                    industry=company.industry,
+                    tickers=tickers,
+                    filing_entities=filing_entities,
+                )
+            )
+        return result
+    except Exception as e:
+        logger.error("Error listing companies: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/companies/{company_id}", response_model=CompanyResponse)
+async def update_company(
+    company_id: int = Path(..., description="Company ID"),
+    company_update: CompanyUpdate = ...,
+) -> CompanyResponse:
+    """Update company fields and return the updated company with relationships."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        updated = filings_db.companies.update_company(
+            company_id=company_id, company=company_update
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        tickers = filings_db.companies.get_tickers_by_company_id(company_id=company_id)
+        filing_entities = filings_db.companies.get_filing_entities_by_company_id(
+            company_id=company_id
+        )
+        return CompanyResponse(
+            id=updated.id,
+            name=updated.name,
+            industry=updated.industry,
+            tickers=[
+                TickerResponse(
+                    id=t.id,
+                    ticker=t.ticker,
+                    exchange=t.exchange,
+                    status=t.status,
+                )
+                for t in tickers
+            ],
+            filing_entities=[
+                FilingEntityResponse(
+                    id=fe.id,
+                    registry=fe.registry,
+                    number=fe.number,
+                    status=fe.status,
+                )
+                for fe in filing_entities
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating company_id=%s: %s", company_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/companies/{company_id}/tickers",
+    response_model=TickerResponse,
+    status_code=201,
+)
+async def add_company_ticker(
+    company_id: int = Path(..., description="Company ID"),
+    ticker: TickerCreate = ...,
+) -> TickerResponse:
+    """Add a ticker mapping to a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    company = filings_db.companies.get_company_by_id(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    created = filings_db.companies.create_ticker(company_id=company_id, ticker=ticker)
+    if created is None:
+        raise HTTPException(status_code=400, detail="Failed to create ticker")
+    return TickerResponse(
+        id=created.id,
+        ticker=created.ticker,
+        exchange=created.exchange,
+        status=created.status,
+    )
+
+
+@router.put(
+    "/companies/{company_id}/tickers/{ticker_id}",
+    response_model=TickerResponse,
+)
+async def update_company_ticker(
+    company_id: int = Path(..., description="Company ID"),
+    ticker_id: int = Path(..., description="Ticker ID"),
+    ticker_update: TickerUpdate = ...,
+) -> TickerResponse:
+    """Update a ticker mapping for a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    updated = filings_db.companies.update_ticker(
+        company_id=company_id, ticker_id=ticker_id, ticker=ticker_update
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Ticker not found")
+    return TickerResponse(
+        id=updated.id,
+        ticker=updated.ticker,
+        exchange=updated.exchange,
+        status=updated.status,
+    )
+
+
+@router.delete(
+    "/companies/{company_id}/tickers/{ticker_id}",
+    status_code=204,
+)
+async def delete_company_ticker(
+    company_id: int = Path(..., description="Company ID"),
+    ticker_id: int = Path(..., description="Ticker ID"),
+) -> None:
+    """Delete a ticker mapping for a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    deleted = filings_db.companies.delete_ticker(
+        company_id=company_id, ticker_id=ticker_id
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Ticker not found")
+
+
+@router.post(
+    "/companies/{company_id}/filing-entities",
+    response_model=FilingEntityResponse,
+    status_code=201,
+)
+async def add_company_filing_entity(
+    company_id: int = Path(..., description="Company ID"),
+    filing_entity: FilingEntityCreate = ...,
+) -> FilingEntityResponse:
+    """Add a filing entity (e.g., SEC + CIK) to a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    company = filings_db.companies.get_company_by_id(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    created = filings_db.companies.create_filing_entity(
+        company_id=company_id, filing_entity=filing_entity
+    )
+    if created is None:
+        raise HTTPException(status_code=400, detail="Failed to create filing entity")
+    return FilingEntityResponse(
+        id=created.id,
+        registry=created.registry,
+        number=created.number,
+        status=created.status,
+    )
+
+
+@router.put(
+    "/companies/{company_id}/filing-entities/{filing_entity_id}",
+    response_model=FilingEntityResponse,
+)
+async def update_company_filing_entity(
+    company_id: int = Path(..., description="Company ID"),
+    filing_entity_id: int = Path(..., description="Filing entity ID"),
+    filing_entity_update: FilingEntityUpdate = ...,
+) -> FilingEntityResponse:
+    """Update a filing entity for a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    updated = filings_db.companies.update_filing_entity(
+        company_id=company_id,
+        filing_entity_id=filing_entity_id,
+        filing_entity=filing_entity_update,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Filing entity not found")
+    return FilingEntityResponse(
+        id=updated.id,
+        registry=updated.registry,
+        number=updated.number,
+        status=updated.status,
+    )
+
+
+@router.delete(
+    "/companies/{company_id}/filing-entities/{filing_entity_id}",
+    status_code=204,
+)
+async def delete_company_filing_entity(
+    company_id: int = Path(..., description="Company ID"),
+    filing_entity_id: int = Path(..., description="Filing entity ID"),
+) -> None:
+    """Delete a filing entity for a company."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    deleted = filings_db.companies.delete_filing_entity(
+        company_id=company_id, filing_entity_id=filing_entity_id
+    )
+    if deleted:
+        return
+
+    existing_ids = {
+        fe.id
+        for fe in filings_db.companies.get_filing_entities_by_company_id(
+            company_id=company_id
+        )
+    }
+    if filing_entity_id in existing_ids:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete filing entity: it may be referenced by filings",
+        )
+    raise HTTPException(status_code=404, detail="Filing entity not found")
 
 
 @router.post(
@@ -478,19 +795,6 @@ async def refresh_financials(
         )
 
     return results
-
-
-class DimensionNormalizationOverrideResponse(BaseModel):
-    """Response model for dimension normalization override."""
-
-    axis: str
-    member: str
-    member_label: str
-    normalized_axis_label: str
-    normalized_member_label: Optional[str] = None
-    tags: Optional[List[str]] = None
-    created_at: datetime
-    updated_at: datetime
 
 
 @router.get(
