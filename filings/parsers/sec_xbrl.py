@@ -11,8 +11,6 @@ import pandas as pd
 from edgar import Company, Filing
 
 from ..models import FinancialFactCreate, PeriodType
-from .geography import GeographyParser
-from .product import ProductParser
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +18,9 @@ logger = logging.getLogger(__name__)
 class SECXBRLParser:
     """Parser for SEC XBRL (10-Q, 10-K, etc.) filings using edgartools."""
 
-    def __init__(
-        self,
-        geography_parser: GeographyParser,
-        product_parser: ProductParser,
-    ):
-        """Initialize the parser.
-
-        Args:
-            geography_parser: Geography parser instance.
-        """
-        self.geography_parser = geography_parser
-        self.product_parser = product_parser
+    def __init__(self):
+        """Initialize the parser."""
+        pass
 
     def parse_filing(self, filing: Filing) -> list[FinancialFactCreate]:
         """Parse an XBRL filing and extract financial facts.

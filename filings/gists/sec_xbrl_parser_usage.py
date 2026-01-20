@@ -4,7 +4,6 @@ import logging
 
 from edgar import set_identity
 
-from filings.parsers.geography import GeographyParser
 from filings.parsers.sec_xbrl import SECXBRLParser
 
 # Set up logging
@@ -20,7 +19,7 @@ def example_parse_company_filings():
     set_identity("felinephonix@gmail.com")
 
     try:
-        parser = SECXBRLParser(GeographyParser())
+        parser = SECXBRLParser()
 
         # Parse the latest 3 10-Q filings for Apple
         facts = parser.parse_company_filings(ticker, form="10-Q", limit=1)

@@ -5,8 +5,6 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 
-from filings.parsers.geography import GeographyParser
-from filings.parsers.product import ProductParser
 from filings.parsers.sec_xbrl import SECXBRLParser
 
 
@@ -15,12 +13,7 @@ class TestSECXBRLParser:
 
     def test_parse_disaggregated_revenues_product(self):
         """Test parsing disaggregated revenues by product."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL query result for product revenue
         mock_revenue_df = pd.DataFrame(
@@ -77,12 +70,7 @@ class TestSECXBRLParser:
 
     def test_parse_disaggregated_revenues_geographic(self):
         """Test parsing disaggregated revenues by geographic region."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL query result for geographic revenue
         mock_revenue_df = pd.DataFrame(
@@ -126,12 +114,7 @@ class TestSECXBRLParser:
 
     def test_create_disaggregated_revenue_fact(self):
         """Test creating disaggregated revenue fact."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock row data
         row = {
@@ -165,12 +148,7 @@ class TestSECXBRLParser:
 
     def test_create_disaggregated_revenue_fact_invalid_value(self):
         """Test creating disaggregated revenue fact with invalid value."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock row data with invalid value
         row = {
@@ -195,12 +173,7 @@ class TestSECXBRLParser:
 
     def test_parser_requires_period_field_regression(self):
         """Regression test: ensure parser creates FinancialFact with period field."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock row data
         row = {
@@ -233,12 +206,7 @@ class TestSECXBRLParser:
 
     def test_create_financial_fact_with_hierarchy_requires_period(self):
         """Test that _create_financial_fact_with_hierarchy includes period field."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock row data
         row = {
@@ -276,12 +244,7 @@ class TestSECXBRLParser:
 
     def test_determine_period_type_from_column_validation(self):
         """Test that _determine_period_type_from_column handles various inputs correctly."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Test with empty period column (should return None for balance sheet items)
         result = parser._determine_period_type_from_column("", "Income Statement")
@@ -311,12 +274,7 @@ class TestSECXBRLParser:
 
     def test_determine_period_type_from_column_valid_inputs(self):
         """Test that _determine_period_type_from_column works with valid inputs."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Test with valid quarter period column
         result = parser._determine_period_type_from_column(
@@ -360,12 +318,7 @@ class TestSECXBRLParser:
 
     def test_is_column_mostly_empty(self):
         """Test that _is_column_mostly_empty correctly identifies empty columns."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Create a test DataFrame
         test_data = {
@@ -421,12 +374,7 @@ class TestSECXBRLParser:
 
     def test_parse_disaggregated_revenues_empty_data(self):
         """Test parsing disaggregated revenues with empty data."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL object with empty results
         mock_xbrl = Mock()
@@ -442,12 +390,7 @@ class TestSECXBRLParser:
 
     def test_parse_disaggregated_revenues_business_segment(self):
         """Test parsing disaggregated revenues by business segments (geographic regions)."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL query result for business segment revenue
         mock_revenue_df = pd.DataFrame(
@@ -504,12 +447,7 @@ class TestSECXBRLParser:
 
     def test_parse_disaggregated_revenues_business_segment_non_region(self):
         """Test that business segments without region information are ignored."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL query result for business segment revenue with non-region segments
         mock_revenue_df = pd.DataFrame(
@@ -551,28 +489,9 @@ class TestSECXBRLParser:
         # Should not extract any facts since none contain region information
         assert len(facts) == 0
 
-    def test_constructor_with_custom_geography_parser(self):
-        """Test that SECXBRLParser can accept a custom geography parser."""
-        # Create a custom geography parser
-        custom_parser = GeographyParser()
-
-        # Create SECXBRLParser with custom geography parser
-        parser = SECXBRLParser(
-            geography_parser=custom_parser,
-            product_parser=ProductParser(),
-        )
-
-        # Verify that the custom parser is used
-        assert parser.geography_parser is custom_parser
-
     def test_parse_disaggregated_metrics_operating_income(self):
         """Test parsing disaggregated operating income by product."""
-        geography_parser = GeographyParser()
-        product_parser = ProductParser()
-        parser = SECXBRLParser(
-            geography_parser=geography_parser,
-            product_parser=product_parser,
-        )
+        parser = SECXBRLParser()
 
         # Mock XBRL query result for operating income by product
         mock_operating_income_df = pd.DataFrame(

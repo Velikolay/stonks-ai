@@ -10,8 +10,6 @@ from edgar import Company
 from filings import FilingsDatabase
 from filings.models.company import CompanyCreate
 from filings.models.filing import FilingCreate
-from filings.parsers.geography import GeographyParser
-from filings.parsers.product import ProductParser
 from filings.parsers.sec_xbrl import SECXBRLParser
 
 logger = logging.getLogger(__name__)
@@ -30,7 +28,7 @@ class SECXBRLFilingsLoader:
             parser: Parser instance for extracting financial facts from filings
         """
         self.database = database
-        self.parser = parser or SECXBRLParser(GeographyParser(), ProductParser())
+        self.parser = parser or SECXBRLParser()
 
     def load_company_filings(
         self, ticker: str, form: str = "10-Q", limit: int = 5, override: bool = False
