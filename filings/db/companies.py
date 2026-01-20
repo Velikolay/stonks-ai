@@ -315,34 +315,7 @@ class CompanyOperations:
         """Create a ticker mapping for a company, returning the created (or existing) row."""
         try:
             with self.engine.connect() as conn:
-                existing = conn.execute(
-                    select(self.tickers_table.c.id).where(
-                        (self.tickers_table.c.company_id == company_id)
-                        & (self.tickers_table.c.ticker == ticker.ticker)
-                        & (self.tickers_table.c.exchange == ticker.exchange)
-                    )
-                ).fetchone()
-                if existing is not None:
-                    row = conn.execute(
-                        select(
-                            self.tickers_table.c.id,
-                            self.tickers_table.c.ticker,
-                            self.tickers_table.c.exchange,
-                            self.tickers_table.c.status,
-                            self.tickers_table.c.company_id,
-                        ).where(self.tickers_table.c.id == existing.id)
-                    ).fetchone()
-                    if row is None:
-                        return None
-                    return Ticker(
-                        id=int(row.id),
-                        ticker=str(row.ticker),
-                        exchange=str(row.exchange),
-                        status=str(row.status),
-                        company_id=int(row.company_id),
-                    )
-
-                new_id = conn.execute(
+                row = conn.execute(
                     insert(self.tickers_table)
                     .values(
                         ticker=ticker.ticker,
@@ -350,24 +323,19 @@ class CompanyOperations:
                         status=ticker.status,
                         company_id=company_id,
                     )
-                    .returning(self.tickers_table.c.id)
-                ).scalar()
-                if new_id is None:
-                    conn.rollback()
-                    return None
-                conn.commit()
-
-                row = conn.execute(
-                    select(
+                    .returning(
                         self.tickers_table.c.id,
                         self.tickers_table.c.ticker,
                         self.tickers_table.c.exchange,
                         self.tickers_table.c.status,
                         self.tickers_table.c.company_id,
-                    ).where(self.tickers_table.c.id == int(new_id))
+                    )
                 ).fetchone()
                 if row is None:
+                    conn.rollback()
                     return None
+
+                conn.commit()
                 return Ticker(
                     id=int(row.id),
                     ticker=str(row.ticker),
@@ -506,18 +474,42 @@ class CompanyOperations:
     def create_filing_entity(
         self, *, company_id: int, filing_entity: FilingEntityCreate
     ) -> Optional[FilingEntity]:
-        """Create (or get existing) filing entity for a company."""
-        entity_id = self.get_or_create_filing_entities_id(
-            company_id=company_id,
-            registry=filing_entity.registry,
-            number=filing_entity.number,
-            status=filing_entity.status,
-        )
-        if entity_id is None:
+        """Create a filing entity for a company."""
+        try:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    insert(self.filing_entities_table)
+                    .values(
+                        registry=filing_entity.registry,
+                        number=filing_entity.number,
+                        status=filing_entity.status,
+                        company_id=company_id,
+                    )
+                    .returning(
+                        self.filing_entities_table.c.id,
+                        self.filing_entities_table.c.registry,
+                        self.filing_entities_table.c.number,
+                        self.filing_entities_table.c.status,
+                        self.filing_entities_table.c.company_id,
+                    )
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return None
+
+                conn.commit()
+                return FilingEntity(
+                    id=int(row.id),
+                    registry=str(row.registry),
+                    number=str(row.number),
+                    status=str(row.status),
+                    company_id=int(row.company_id),
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error creating filing_entity for company_id=%s: %s", company_id, e
+            )
             return None
-        return self._get_filing_entity_by_id(
-            company_id=company_id, filing_entity_id=entity_id
-        )
 
     def update_filing_entity(
         self,
