@@ -39,6 +39,7 @@ def upgrade() -> None:
             ["company_id"],
             ["companies.id"],
         ),
+        sa.UniqueConstraint("ticker", "exchange", name="uq_tickers_ticker_exchange"),
     )
 
     # Create filing registry table
