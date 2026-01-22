@@ -70,6 +70,8 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        # Used to populate CompanyCreate.industry (must be a string for pydantic)
+        mock_edgar_company.data.sic_description = "Technology"
         mock_company_class.return_value = mock_edgar_company
 
         # Mock no existing company
@@ -285,6 +287,7 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.cik = "0000320193"
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
         mock_edgar_company.get_filings.return_value = [mock_filing]
@@ -295,6 +298,10 @@ class TestXBRLFilingsLoader:
             mock_company.id = 1
             mock_company.name = "Apple Inc."
             mock_database.companies.get_company_by_ticker.return_value = mock_company
+            mock_database.companies.get_or_create_filing_entities_id.return_value = 123
+            mock_database.companies.get_filing_entities_by_company_id.return_value = [
+                Mock(id=123, number="0000320193")
+            ]
 
             # Mock loading single filing with override
             loader._load_single_filing = Mock(
@@ -325,6 +332,7 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.cik = "0000320193"
         mock_edgar_company.get_filings.return_value = []
         mock_company_class.return_value = mock_edgar_company
 
@@ -332,6 +340,10 @@ class TestXBRLFilingsLoader:
         mock_company.id = 1
         mock_company.name = "Apple Inc."
         mock_database.companies.get_company_by_ticker.return_value = mock_company
+        mock_database.companies.get_or_create_filing_entities_id.return_value = 123
+        mock_database.companies.get_filing_entities_by_company_id.return_value = [
+            Mock(id=123, number="0000320193")
+        ]
 
         result = loader.load_company_filings("AAPL", "10-Q", limit=5)
 

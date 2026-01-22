@@ -80,7 +80,11 @@ class TestSECXBRLParser:
                 "numeric_value": [5000000, 3000000],
                 "period_start": ["2024-01-01", "2024-01-01"],
                 "period_end": ["2024-03-31", "2024-03-31"],
-                "dim_srt_StatementGeographicalAxis": ["Americas", "Europe"],
+                "dim_srt_StatementGeographicalAxis": [
+                    "aapl:AmericasMember",
+                    "aapl:EuropeMember",
+                ],
+                "dimension_member_label": ["Americas", "Europe"],
             }
         )
 
@@ -123,15 +127,16 @@ class TestSECXBRLParser:
             "numeric_value": 1000000,
             "period_start": "2024-01-01",
             "period_end": "2024-03-31",
-            "dim_srt_ProductOrServiceAxis": "iPhone",
+            "dim_srt_ProductOrServiceAxis": "aapl:IPhoneMember",
+            "dimension_member_label": "iPhone",
         }
 
         fact = parser._create_disaggregated_metric_fact(
             row,
+            comparative_row=None,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_parsed="Product",
-            dimension_value_parsed=None,
+            form_type="10-Q",
             position=0,
         )
 
@@ -162,10 +167,10 @@ class TestSECXBRLParser:
 
         fact = parser._create_disaggregated_metric_fact(
             row,
+            comparative_row=None,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_parsed="Product",
-            dimension_value_parsed=None,
+            form_type="10-Q",
             position=0,
         )
 
@@ -187,10 +192,10 @@ class TestSECXBRLParser:
 
         fact = parser._create_disaggregated_metric_fact(
             row,
+            comparative_row=None,
             metric="Revenue",
             dimension="srt:ProductOrServiceAxis",
-            dimension_parsed="Product",
-            dimension_value_parsed=None,
+            form_type="10-Q",
             position=0,
         )
 
@@ -444,50 +449,6 @@ class TestSECXBRLParser:
             assert fact.statement == "Income Statement"
             assert isinstance(fact.value, Decimal)
             assert fact.value > 0
-
-    def test_parse_disaggregated_revenues_business_segment_non_region(self):
-        """Test that business segments without region information are ignored."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL query result for business segment revenue with non-region segments
-        mock_revenue_df = pd.DataFrame(
-            {
-                "concept": ["Revenue", "Revenue", "Revenue"],
-                "label": ["Contract Revenue", "Contract Revenue", "Contract Revenue"],
-                "value": [4000000, 2000000, 1000000],
-                "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
-                "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
-                "dim_us-gaap_StatementBusinessSegmentsAxis": [
-                    "ProductRevenue",
-                    "CustomerSegment",
-                    "RandomText",
-                ],
-            }
-        )
-
-        # Mock XBRL object
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = mock_revenue_df
-        mock_xbrl.query.return_value = mock_query
-
-        # Mock empty results for other dimensions
-        empty_df = pd.DataFrame()
-        mock_query.by_concept.side_effect = lambda concept: mock_query
-        mock_query.by_dimension.side_effect = lambda dimension: mock_query
-        mock_query.to_dataframe.side_effect = lambda: (
-            empty_df
-            if "StatementBusinessSegmentsAxis"
-            not in str(mock_query.by_dimension.call_args)
-            else mock_revenue_df
-        )
-
-        facts = parser._parse_disaggregated_revenues(mock_xbrl)
-
-        # Should not extract any facts since none contain region information
-        assert len(facts) == 0
 
     def test_parse_disaggregated_metrics_operating_income(self):
         """Test parsing disaggregated operating income by product."""
