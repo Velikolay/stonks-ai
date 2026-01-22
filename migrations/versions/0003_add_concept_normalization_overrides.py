@@ -26,6 +26,7 @@ def upgrade() -> None:
     # Create concept normalization mapping table
     table = op.create_table(
         "concept_normalization_overrides",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
         sa.Column("normalized_label", sa.String(), nullable=False),
@@ -35,6 +36,8 @@ def upgrade() -> None:
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("abstract_concept", sa.String(), nullable=True),
+        # Support company-specific overrides
+        sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -47,35 +50,49 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint("concept", "statement"),
-        sa.ForeignKeyConstraint(
-            ["abstract_concept", "statement"],
-            [
-                "concept_normalization_overrides.concept",
-                "concept_normalization_overrides.statement",
-            ],
-            name="fk_concept_normalization_overrides_abstract_concept_statement",
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "concept",
+            "statement",
+            "company_id",
+            name="uq_concept_statement_company",
+            postgresql_nulls_not_distinct=True,
         ),
         sa.ForeignKeyConstraint(
-            ["parent_concept", "statement"],
+            ["abstract_concept", "statement", "company_id"],
             [
                 "concept_normalization_overrides.concept",
                 "concept_normalization_overrides.statement",
+                "concept_normalization_overrides.company_id",
             ],
-            name="fk_concept_normalization_overrides_parent_concept_statement",
+            name="fk_concept_normalization_overrides_abstract_concept",
+        ),
+        sa.ForeignKeyConstraint(
+            ["parent_concept", "statement", "company_id"],
+            [
+                "concept_normalization_overrides.concept",
+                "concept_normalization_overrides.statement",
+                "concept_normalization_overrides.company_id",
+            ],
+            name="fk_concept_normalization_overrides_parent_concept",
+        ),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
+            name="fk_concept_normalization_overrides_company_id",
         ),
     )
 
     # Create indexes for parent_concept and abstract_concept
     op.execute(
         """
-        CREATE INDEX idx_concept_normalization_overrides_parent_concept_statement ON concept_normalization_overrides (parent_concept, statement);
+        CREATE INDEX idx_concept_normalization_overrides_parent_concept ON concept_normalization_overrides (parent_concept, statement, company_id);
     """
     )
 
     op.execute(
         """
-        CREATE INDEX idx_concept_normalization_overrides_abstract_concept_statement ON concept_normalization_overrides (abstract_concept, statement);
+        CREATE INDEX idx_concept_normalization_overrides_abstract_concept ON concept_normalization_overrides (abstract_concept, statement, company_id);
     """
     )
 
@@ -143,10 +160,10 @@ def downgrade() -> None:
 
     # Drop indexes for parent_concept and abstract_concept
     op.execute(
-        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_parent_concept_statement"
+        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_parent_concept"
     )
     op.execute(
-        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_abstract_concept_statement"
+        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_abstract_concept"
     )
 
     # Drop concept_normalization_overrides table

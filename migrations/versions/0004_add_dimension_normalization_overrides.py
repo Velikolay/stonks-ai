@@ -26,11 +26,14 @@ def upgrade() -> None:
     # Create dimension normalization mapping table
     table = op.create_table(
         "dimension_normalization_overrides",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),
         sa.Column("member_label", sa.String(), nullable=False),
         sa.Column("normalized_axis_label", sa.String(), nullable=False),
         sa.Column("normalized_member_label", sa.String(), nullable=True),
+        # Support company-specific overrides
+        sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column("tags", sa.ARRAY(sa.String()), nullable=True),
         sa.Column(
             "created_at",
@@ -44,7 +47,20 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint("axis", "member", "member_label"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "axis",
+            "member",
+            "member_label",
+            "company_id",
+            name="uq_axis_member_label_company",
+            postgresql_nulls_not_distinct=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
+            name="fk_dimension_normalization_overrides_company_id",
+        ),
     )
 
     # Create trigger to update updated_at timestamp
