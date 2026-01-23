@@ -270,6 +270,7 @@ class TestConceptNormalizationOverridesOperations:
     def test_create_with_invalid_abstract_concept(self, db, sample_override):
         """Test creating override with invalid parent raises error."""
         override_with_invalid_parent = ConceptNormalizationOverrideCreate(
+            company_id=123,
             concept="us-gaap:ChildConcept",
             statement="Balance Sheet",
             normalized_label="Child Label",

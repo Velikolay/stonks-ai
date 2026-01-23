@@ -40,6 +40,7 @@ def sample_override_data():
 def mock_override():
     """Mock override object for testing."""
     mock = Mock()
+    mock.company_id = None
     mock.concept = "us-gaap:TestConcept"
     mock.statement = "Income Statement"
     mock.normalized_label = "Test Label"
@@ -237,7 +238,7 @@ class TestAdminEndpoints:
 
         assert response.status_code == 200
         mock_filings_db.concept_normalization_overrides.list_all.assert_called_once_with(
-            "Income Statement"
+            statement="Income Statement", company_id=None
         )
 
     @patch("api.admin.filings_db", None)
@@ -295,6 +296,7 @@ class TestAdminEndpoints:
         )
 
         updated_mock = Mock()
+        updated_mock.company_id = None
         updated_mock.concept = "us-gaap:TestConcept"
         updated_mock.statement = "Income Statement"
         updated_mock.normalized_label = "Updated Label"
