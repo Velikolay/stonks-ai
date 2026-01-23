@@ -12,6 +12,8 @@ from pydantic import BaseModel
 # Import financial endpoints
 from api.admin import router as admin_router
 from api.admin import set_filings_db as set_admin_filings_db
+from api.companies import router as companies_router
+from api.companies import set_filings_db as set_companies_filings_db
 from api.financials import router as financials_router
 from api.financials import set_filings_db
 from filings.db import FilingsDatabase
@@ -44,6 +46,7 @@ async def lifespan(app: FastAPI):
         # Set the database instance in the financials and admin modules
         set_filings_db(filings_db)
         set_admin_filings_db(filings_db)
+        set_companies_filings_db(filings_db)
 
         logger.info("RAG system and FilingsDatabase initialized successfully")
     except Exception as e:
@@ -224,3 +227,4 @@ async def process_filing(request: ProcessFilingRequest) -> ProcessFilingResponse
 # Include routers
 app.include_router(financials_router)
 app.include_router(admin_router)
+app.include_router(companies_router)

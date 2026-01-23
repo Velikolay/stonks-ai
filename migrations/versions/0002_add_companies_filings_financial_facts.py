@@ -28,8 +28,8 @@ def upgrade() -> None:
     op.create_index(
         "ix_companies_name_prefix",
         "companies",
-        ["name"],
-        postgresql_ops={"name": "text_pattern_ops"},
+        [sa.text("lower(name)")],
+        postgresql_ops={"lower": "text_pattern_ops"},
     )
 
     # Create tickers table
@@ -50,8 +50,8 @@ def upgrade() -> None:
     op.create_index(
         "ix_tickers_ticker_prefix",
         "tickers",
-        ["ticker"],
-        postgresql_ops={"ticker": "text_pattern_ops"},
+        [sa.text("lower(ticker)")],
+        postgresql_ops={"lower": "text_pattern_ops"},
     )
     op.create_index(
         "ix_tickers_company_id",

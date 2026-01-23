@@ -24,8 +24,8 @@ def example_load_aapl_filings():
     try:
         # Process filings
         result = loader.load_company_filings(
-            ticker="GOOGL",
-            form="10-K",
+            ticker="AAPL",
+            form="10-Q",
             limit=50,
         )
 

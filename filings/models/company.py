@@ -34,3 +34,17 @@ class Company(CompanyBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CompanySearch(BaseModel):
+    """Company search result model.
+
+    Contains the company identity plus the first ticker that matches the search prefix
+    (if any).
+    """
+
+    id: int
+    name: str
+    ticker: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

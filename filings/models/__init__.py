@@ -1,6 +1,6 @@
 """Database models package."""
 
-from .company import Company, CompanyBase, CompanyCreate, CompanyUpdate
+from .company import Company, CompanyBase, CompanyCreate, CompanySearch, CompanyUpdate
 from .concept_normalization_override import (
     ConceptNormalizationOverride,
     ConceptNormalizationOverrideCreate,
@@ -23,6 +23,7 @@ __all__ = [
     "CompanyCreate",
     "Company",
     "CompanyUpdate",
+    "CompanySearch",
     "ConceptNormalizationOverride",
     "ConceptNormalizationOverrideCreate",
     "ConceptNormalizationOverrideUpdate",

@@ -3,13 +3,15 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, delete, insert, select, update
+from sqlalchemy import MetaData, Table, delete, func, insert, literal, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.sql import union_all
 
 from ..models import (
     Company,
     CompanyCreate,
+    CompanySearch,
     CompanyUpdate,
     FilingEntity,
     FilingEntityCreate,
@@ -80,6 +82,99 @@ class CompanyOperations:
         except SQLAlchemyError as e:
             logger.error(f"Error getting company by ID: {e}")
             return None
+
+    def search_companies_by_prefix(
+        self, *, prefix: str, limit: int = 20
+    ) -> List[CompanySearch]:
+        """Search companies by name or ticker prefix (case-insensitive).
+
+        This follows the Postgres pattern:
+        - UNION ALL name matches (rank=1, ticker=NULL) with ticker matches (rank=0)
+        - DISTINCT ON (company_id) with ORDER BY company_id, rank, ticker
+          so ticker matches win, and the "first" ticker (alphabetical) is chosen.
+        """
+
+        def _escape_like(s: str) -> str:
+            """Escape LIKE wildcards so user input is treated literally."""
+            return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+        normalized = prefix.strip().lower()
+        if not normalized:
+            return []
+
+        # Keep the user's prefix semantics, but escape LIKE metacharacters.
+        like_pattern = f"{_escape_like(normalized)}%"
+        limit = max(1, min(int(limit), 20))
+
+        try:
+            with self.engine.connect() as conn:
+                name_rows = (
+                    select(
+                        self.companies_table.c.id.label("company_id"),
+                        self.companies_table.c.name.label("company_name"),
+                        self.tickers_table.c.ticker.label("ticker"),
+                        literal(1).label("rank"),
+                    )
+                    .select_from(
+                        self.companies_table.join(
+                            self.tickers_table,
+                            self.tickers_table.c.company_id
+                            == self.companies_table.c.id,
+                        )
+                    )
+                    .where(
+                        func.lower(self.companies_table.c.name).like(
+                            like_pattern, escape="\\"
+                        )
+                    )
+                )
+
+                ticker_rows = (
+                    select(
+                        self.companies_table.c.id.label("company_id"),
+                        self.companies_table.c.name.label("company_name"),
+                        self.tickers_table.c.ticker.label("ticker"),
+                        literal(0).label("rank"),
+                    )
+                    .select_from(
+                        self.companies_table.join(
+                            self.tickers_table,
+                            self.tickers_table.c.company_id
+                            == self.companies_table.c.id,
+                        )
+                    )
+                    .where(
+                        func.lower(self.tickers_table.c.ticker).like(
+                            like_pattern, escape="\\"
+                        )
+                    )
+                )
+
+                s = union_all(name_rows, ticker_rows).subquery()
+
+                stmt = (
+                    select(
+                        s.c.company_id,
+                        s.c.company_name,
+                        s.c.ticker,
+                    )
+                    # Postgres DISTINCT ON(company_id)
+                    .distinct(s.c.company_id)
+                    .order_by(s.c.company_id, s.c.rank, s.c.ticker)
+                    .limit(limit)
+                )
+                rows = conn.execute(stmt).fetchall()
+                return [
+                    CompanySearch(
+                        id=int(r.company_id),
+                        name=str(r.company_name),
+                        ticker=str(r.ticker) if r.ticker is not None else None,
+                    )
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error("Error searching companies by prefix=%s: %s", prefix, e)
+            return []
 
     def get_company_by_ticker(
         self, ticker: str, exchange: Optional[str] = None
