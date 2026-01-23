@@ -25,6 +25,12 @@ def upgrade() -> None:
         sa.Column("industry", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        "ix_companies_name_prefix",
+        "companies",
+        ["name"],
+        postgresql_ops={"name": "text_pattern_ops"},
+    )
 
     # Create tickers table
     op.create_table(
@@ -40,6 +46,17 @@ def upgrade() -> None:
             ["companies.id"],
         ),
         sa.UniqueConstraint("ticker", "exchange", name="uq_tickers_ticker_exchange"),
+    )
+    op.create_index(
+        "ix_tickers_ticker_prefix",
+        "tickers",
+        ["ticker"],
+        postgresql_ops={"ticker": "text_pattern_ops"},
+    )
+    op.create_index(
+        "ix_tickers_company_id",
+        "tickers",
+        ["company_id"],
     )
 
     # Create filing registry table
@@ -58,6 +75,11 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "registry", "number", name="uq_filing_entities_registry_number"
         ),
+    )
+    op.create_index(
+        "ix_filing_entities_company_id",
+        "filing_entities",
+        ["company_id"],
     )
 
     # Create filings table
@@ -160,6 +182,12 @@ def downgrade() -> None:
 
     # Drop filings table
     op.drop_table("filings")
+
+    # Drop indexes
+    op.drop_index("ix_tickers_company_id", table_name="tickers")
+    op.drop_index("ix_tickers_ticker_prefix", table_name="tickers")
+    op.drop_index("ix_companies_name_prefix", table_name="companies")
+    op.drop_index("ix_filing_entities_company_id", table_name="filing_entities")
 
     # Drop filing_entities and tickers tables
     op.drop_table("filing_entities")
