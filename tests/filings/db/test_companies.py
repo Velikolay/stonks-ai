@@ -58,6 +58,20 @@ class TestCompanyOperations:
         company = db.companies.get_company_by_id(99999)
         assert company is None
 
+    def test_get_companies_by_ids(self, db):
+        """Test retrieving multiple companies by IDs."""
+        c1_id = db.companies.insert_company(CompanyCreate(name="Company One"))
+        c2_id = db.companies.insert_company(CompanyCreate(name="Company Two"))
+        assert c1_id is not None
+        assert c2_id is not None
+
+        companies = db.companies.get_companies_by_ids(
+            company_ids=[c2_id, c1_id, 99999, c2_id]
+        )
+        ids = {c.id for c in companies}
+        assert c1_id in ids
+        assert c2_id in ids
+
     def test_get_company_by_ticker(self, db, sample_company):
         """Test retrieving company by ticker."""
         # Create company + ticker mapping first

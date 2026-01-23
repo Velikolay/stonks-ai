@@ -25,6 +25,14 @@ class CompanySearchResponse(BaseModel):
     ticker: Optional[str] = None
 
 
+class CompanyByIdResponse(BaseModel):
+    """API response model for retrieving companies by ID."""
+
+    id: int
+    name: str
+    industry: Optional[str] = None
+
+
 def set_filings_db(db: FilingsDatabase) -> None:
     """Set the global filings database instance."""
     global filings_db
@@ -53,4 +61,45 @@ async def search_companies(
         ]
     except Exception as e:
         logger.error("Error searching companies by prefix=%s: %s", prefix, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "",
+    response_model=List[CompanyByIdResponse],
+    response_model_exclude_none=True,
+)
+async def get_companies_by_ids(
+    ids: List[int] = Query(
+        ...,
+        description="Company IDs (repeatable): /companies?ids=1&ids=2",
+        min_items=1,
+        max_items=200,
+    ),
+) -> List[CompanyByIdResponse]:
+    """Get companies by IDs."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    unique_ids: List[int] = []
+    seen: set[int] = set()
+    for cid in ids:
+        if cid not in seen:
+            seen.add(cid)
+            unique_ids.append(cid)
+
+    try:
+        companies = filings_db.companies.get_companies_by_ids(company_ids=unique_ids)
+        companies_by_id = {c.id: c for c in companies}
+        return [
+            CompanyByIdResponse(
+                id=cid,
+                name=companies_by_id[cid].name,
+                industry=companies_by_id[cid].industry,
+            )
+            for cid in unique_ids
+            if cid in companies_by_id
+        ]
+    except Exception as e:
+        logger.error("Error getting companies by ids=%s: %s", ids, e)
         raise HTTPException(status_code=500, detail=str(e))
