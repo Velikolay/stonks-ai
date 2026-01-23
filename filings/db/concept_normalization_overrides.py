@@ -71,15 +71,16 @@ class ConceptNormalizationOverridesOperations:
         )
 
     def list_all(
-        self, *, company_id: int, statement: Optional[str] = None
+        self, *, company_id: Optional[int] = None, statement: Optional[str] = None
     ) -> List[ConceptNormalizationOverride]:
-        """Get concept normalization overrides filtered by company and (optionally) statement."""
+        """Get concept normalization overrides, optionally filtered by company/statement."""
         try:
             with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
                 if statement is not None:
                     stmt = stmt.where(self.overrides_table.c.statement == statement)
-                stmt = stmt.where(self.overrides_table.c.company_id == company_id)
+                if company_id is not None:
+                    stmt = stmt.where(self.overrides_table.c.company_id == company_id)
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
@@ -231,10 +232,10 @@ class ConceptNormalizationOverridesOperations:
 
     def update(
         self,
+        company_id: int,
         concept: str,
         statement: str,
         override_update: ConceptNormalizationOverrideUpdate,
-        company_id: int,
     ) -> Optional[ConceptNormalizationOverride]:
         """Update an existing concept normalization override."""
         # Get existing record to merge with update for validation
@@ -349,7 +350,7 @@ class ConceptNormalizationOverridesOperations:
             conn.rollback()
             raise
 
-    def delete(self, *, concept: str, statement: str, company_id: int) -> bool:
+    def delete(self, *, company_id: int, concept: str, statement: str) -> bool:
         """Delete a concept normalization override."""
         try:
             with self.engine.connect() as conn:

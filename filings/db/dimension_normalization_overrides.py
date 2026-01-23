@@ -29,7 +29,7 @@ class DimensionNormalizationOverridesOperations:
         )
 
     def list_all(
-        self, *, company_id: int, axis: Optional[str] = None
+        self, *, company_id: Optional[int] = None, axis: Optional[str] = None
     ) -> List[DimensionNormalizationOverride]:
         """Get dimension normalization overrides filtered by company and (optionally) axis."""
         try:
@@ -37,7 +37,8 @@ class DimensionNormalizationOverridesOperations:
                 stmt = select(self.overrides_table)
                 if axis is not None:
                     stmt = stmt.where(self.overrides_table.c.axis == axis)
-                stmt = stmt.where(self.overrides_table.c.company_id == company_id)
+                if company_id is not None:
+                    stmt = stmt.where(self.overrides_table.c.company_id == company_id)
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
@@ -69,17 +70,17 @@ class DimensionNormalizationOverridesOperations:
             raise
 
     def get_by_key(
-        self, *, axis: str, member: str, member_label: str, company_id: int
+        self, *, company_id: int, axis: str, member: str, member_label: str
     ) -> Optional[DimensionNormalizationOverride]:
         """Get a dimension normalization override by (axis, member, member_label, company_id)."""
         try:
             with self.engine.connect() as conn:
                 stmt = select(self.overrides_table).where(
                     and_(
+                        self.overrides_table.c.company_id == company_id,
                         self.overrides_table.c.axis == axis,
                         self.overrides_table.c.member == member,
                         self.overrides_table.c.member_label == member_label,
-                        self.overrides_table.c.company_id == company_id,
                     )
                 )
                 result = conn.execute(stmt)
@@ -170,11 +171,11 @@ class DimensionNormalizationOverridesOperations:
 
     def update(
         self,
+        company_id: int,
         axis: str,
         member: str,
         member_label: str,
         override_update: DimensionNormalizationOverrideUpdate,
-        company_id: int,
     ) -> Optional[DimensionNormalizationOverride]:
         """Update an existing dimension normalization override."""
         try:
@@ -253,10 +254,10 @@ class DimensionNormalizationOverridesOperations:
 
     def delete(
         self,
+        company_id: int,
         axis: str,
         member: str,
         member_label: str,
-        company_id: int,
     ) -> bool:
         """Delete a dimension normalization override."""
         try:
