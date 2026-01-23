@@ -74,7 +74,7 @@ class CompanyResponse(BaseModel):
 class ConceptNormalizationOverrideResponse(BaseModel):
     """Response model for concept normalization override."""
 
-    company_id: Optional[int] = None
+    company_id: int
     concept: str
     statement: str
     normalized_label: str
@@ -91,7 +91,7 @@ class ConceptNormalizationOverrideResponse(BaseModel):
 class DimensionNormalizationOverrideResponse(BaseModel):
     """Response model for dimension normalization override."""
 
-    company_id: Optional[int] = None
+    company_id: int
     axis: str
     member: str
     member_label: str
@@ -108,9 +108,7 @@ class DimensionNormalizationOverrideResponse(BaseModel):
 )
 async def list_concept_normalization_overrides(
     statement: Optional[str] = Query(None, description="Filter by statement type"),
-    company_id: Optional[int] = Query(
-        None, description="Filter by company_id (company-specific overrides only)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> List[ConceptNormalizationOverrideResponse]:
     """List all concept normalization overrides, optionally filtered by statement/company."""
     if not filings_db:
@@ -118,7 +116,7 @@ async def list_concept_normalization_overrides(
 
     try:
         overrides = filings_db.concept_normalization_overrides.list_all(
-            statement=statement, company_id=company_id
+            company_id=company_id, statement=statement
         )
         return [
             ConceptNormalizationOverrideResponse(
@@ -456,9 +454,7 @@ async def update_concept_normalization_override(
     statement: str = Path(..., description="Statement type"),
     concept: str = Path(..., description="Concept identifier"),
     override_update: ConceptNormalizationOverrideUpdate = ...,
-    company_id: Optional[int] = Query(
-        None, description="Company ID for company-specific override (omit for global)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> ConceptNormalizationOverrideResponse:
     """Update an existing concept normalization override."""
     if not filings_db:
@@ -510,9 +506,7 @@ async def update_concept_normalization_override(
 async def delete_concept_normalization_override(
     statement: str = Path(..., description="Statement type"),
     concept: str = Path(..., description="Concept identifier"),
-    company_id: Optional[int] = Query(
-        None, description="Company ID for company-specific override (omit for global)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> None:
     """Delete a concept normalization override."""
     if not filings_db:
@@ -520,7 +514,7 @@ async def delete_concept_normalization_override(
 
     try:
         deleted = filings_db.concept_normalization_overrides.delete(
-            concept, statement, company_id
+            concept=concept, statement=statement, company_id=company_id
         )
         if not deleted:
             raise HTTPException(
@@ -551,9 +545,7 @@ class ImportResponse(BaseModel):
 @router.get("/concept-normalization-overrides/export")
 async def export_concept_normalization_overrides_to_csv(
     statement: Optional[str] = Query(None, description="Filter by statement type"),
-    company_id: Optional[int] = Query(
-        None, description="Filter by company_id (company-specific overrides only)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> StreamingResponse:
     """Export concept normalization overrides to CSV."""
     if not filings_db:
@@ -561,7 +553,7 @@ async def export_concept_normalization_overrides_to_csv(
 
     try:
         overrides = filings_db.concept_normalization_overrides.list_all(
-            statement=statement, company_id=company_id
+            company_id=company_id, statement=statement
         )
 
         # Create CSV content
@@ -609,8 +601,7 @@ async def export_concept_normalization_overrides_to_csv(
             filename = (
                 f"concept_normalization_overrides_{statement.replace(' ', '_')}.csv"
             )
-        if company_id is not None:
-            filename = filename.replace(".csv", f"_company_{company_id}.csv")
+        filename = filename.replace(".csv", f"_company_{company_id}.csv")
 
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -690,7 +681,7 @@ async def import_concept_normalization_overrides_from_csv(
 
                 row_company_id_str = (row.get("company_id") or "").strip()
                 if not row_company_id_str:
-                    row_company_id = None
+                    row_company_id = 0
                 else:
                     try:
                         row_company_id = int(row_company_id_str)
@@ -716,9 +707,9 @@ async def import_concept_normalization_overrides_from_csv(
 
                 # Check if record exists
                 existing = filings_db.concept_normalization_overrides.get_by_key(
-                    override_create.concept,
-                    override_create.statement,
-                    override_create.company_id,
+                    concept=override_create.concept,
+                    statement=override_create.statement,
+                    company_id=override_create.company_id,
                 )
 
                 if existing:
@@ -737,7 +728,7 @@ async def import_concept_normalization_overrides_from_csv(
                             override_create.concept,
                             override_create.statement,
                             override_update,
-                            override_create.company_id,
+                            int(override_create.company_id),
                         )
                         updated += 1
                     else:
@@ -748,7 +739,11 @@ async def import_concept_normalization_overrides_from_csv(
                         )
                 else:
                     # Create new record (validation happens in DB layer)
-                    filings_db.concept_normalization_overrides.create(override_create)
+                    filings_db.concept_normalization_overrides.create(
+                        override_create.model_copy(
+                            update={"company_id": row_company_id}
+                        )
+                    )
                     created += 1
 
             except ValueError as e:
@@ -855,9 +850,7 @@ async def refresh_financials(
 )
 async def list_dimension_normalization_overrides(
     axis: Optional[str] = Query(None, description="Filter by axis"),
-    company_id: Optional[int] = Query(
-        None, description="Filter by company_id (company-specific overrides only)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> List[DimensionNormalizationOverrideResponse]:
     """List all dimension normalization overrides, optionally filtered by axis/company."""
     if not filings_db:
@@ -865,7 +858,7 @@ async def list_dimension_normalization_overrides(
 
     try:
         overrides = filings_db.dimension_normalization_overrides.list_all(
-            axis=axis, company_id=company_id
+            company_id=company_id, axis=axis
         )
         return [
             DimensionNormalizationOverrideResponse(
@@ -927,9 +920,7 @@ async def update_dimension_normalization_override(
     member: str = Path(..., description="Member identifier"),
     member_label: str = Path(..., description="Member label identifier"),
     override_update: DimensionNormalizationOverrideUpdate = ...,
-    company_id: Optional[int] = Query(
-        None, description="Company ID for company-specific override (omit for global)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> DimensionNormalizationOverrideResponse:
     """Update an existing dimension normalization override."""
     if not filings_db:
@@ -972,9 +963,7 @@ async def delete_dimension_normalization_override(
     axis: str = Path(..., description="Axis identifier"),
     member: str = Path(..., description="Member identifier"),
     member_label: str = Path(..., description="Member label identifier"),
-    company_id: Optional[int] = Query(
-        None, description="Company ID for company-specific override (omit for global)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> None:
     """Delete a dimension normalization override."""
     if not filings_db:
@@ -1001,9 +990,7 @@ async def delete_dimension_normalization_override(
 @router.get("/dimension-normalization-overrides/export")
 async def export_dimension_normalization_overrides_to_csv(
     axis: Optional[str] = Query(None, description="Filter by axis"),
-    company_id: Optional[int] = Query(
-        None, description="Filter by company_id (company-specific overrides only)"
-    ),
+    company_id: int = Query(..., description="Company ID"),
 ) -> StreamingResponse:
     """Export dimension normalization overrides to CSV."""
     if not filings_db:
@@ -1011,7 +998,7 @@ async def export_dimension_normalization_overrides_to_csv(
 
     try:
         overrides = filings_db.dimension_normalization_overrides.list_all(
-            axis=axis, company_id=company_id
+            company_id=company_id, axis=axis
         )
 
         # Create CSV content
@@ -1049,8 +1036,7 @@ async def export_dimension_normalization_overrides_to_csv(
         filename = "dimension_normalization_overrides.csv"
         if axis:
             filename = f"dimension_normalization_overrides_{axis.replace(' ', '_')}.csv"
-        if company_id is not None:
-            filename = filename.replace(".csv", f"_company_{company_id}.csv")
+        filename = filename.replace(".csv", f"_company_{company_id}.csv")
 
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -1110,7 +1096,7 @@ async def import_dimension_normalization_overrides_from_csv(
                 if tags_str:
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
 
-                # Parse optional company_id from CSV (empty/missing => None)
+                # Parse optional company_id from CSV (empty/missing => 0)
                 row_company_id_str = (row.get("company_id") or "").strip()
                 if row_company_id_str:
                     try:
@@ -1121,7 +1107,7 @@ async def import_dimension_normalization_overrides_from_csv(
                         )
                         continue
                 else:
-                    row_company_id = None
+                    row_company_id = 0
 
                 # Create override object
                 override_create = DimensionNormalizationOverrideCreate(
@@ -1139,10 +1125,10 @@ async def import_dimension_normalization_overrides_from_csv(
 
                 # Check if record exists
                 existing = filings_db.dimension_normalization_overrides.get_by_key(
-                    override_create.axis,
-                    override_create.member,
-                    override_create.member_label,
-                    override_create.company_id,
+                    axis=override_create.axis,
+                    member=override_create.member,
+                    member_label=override_create.member_label,
+                    company_id=int(override_create.company_id),
                 )
 
                 if existing:
@@ -1158,7 +1144,7 @@ async def import_dimension_normalization_overrides_from_csv(
                             override_create.member,
                             override_create.member_label,
                             override_update,
-                            override_create.company_id,
+                            int(override_create.company_id),
                         )
                         updated += 1
                     else:

@@ -54,7 +54,7 @@ class CompanyOperations:
 
                 conn.commit()
                 logger.info(f"Inserted company: {company.name} with ID: {company_id}")
-                return int(company_id)
+                return company_id
 
         except SQLAlchemyError as e:
             logger.error(f"Error inserting company: {e}")
@@ -324,7 +324,7 @@ class CompanyOperations:
                     )
                 ).fetchone()
                 if existing is not None:
-                    if int(existing.company_id) != int(company_id):
+                    if existing.company_id != company_id:
                         logger.warning(
                             "Ticker %s on %s already mapped to company_id=%s (wanted %s)",
                             ticker,
@@ -340,7 +340,7 @@ class CompanyOperations:
                         ticker=ticker,
                         exchange=exchange,
                         status=status,
-                        company_id=int(company_id),
+                        company_id=company_id,
                     )
                 )
                 conn.commit()
@@ -563,7 +563,7 @@ class CompanyOperations:
                 ).fetchone()
 
                 if existing is not None:
-                    if int(existing.company_id) != int(company_id):
+                    if existing.company_id != company_id:
                         logger.error(
                             "filing_entities mismatch for %s:%s (existing company_id=%s, wanted=%s)",
                             registry,
@@ -572,7 +572,7 @@ class CompanyOperations:
                             company_id,
                         )
                         return None
-                    return int(existing.id)
+                    return existing.id
 
                 insert_stmt = (
                     insert(self.filing_entities_table)

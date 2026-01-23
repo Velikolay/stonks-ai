@@ -3,19 +3,25 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class DimensionNormalizationOverrideBase(BaseModel):
     """Base dimension normalization override model."""
 
-    company_id: Optional[int] = None
+    company_id: int
     axis: str
     member: str
     member_label: str
+    is_global: bool = False
     normalized_axis_label: str
     normalized_member_label: Optional[str] = None
     tags: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def _sync_is_global(self) -> "DimensionNormalizationOverrideBase":
+        self.is_global = self.company_id == 0
+        return self
 
 
 class DimensionNormalizationOverrideCreate(DimensionNormalizationOverrideBase):

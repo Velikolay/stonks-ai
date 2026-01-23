@@ -12,6 +12,7 @@ from filings.models.concept_normalization_override import (
 def sample_override() -> ConceptNormalizationOverrideCreate:
     """Sample concept normalization override data for testing."""
     return ConceptNormalizationOverrideCreate(
+        company_id=0,
         concept="us-gaap:TestConcept",
         statement="Income Statement",
         normalized_label="Test Label",
@@ -26,6 +27,7 @@ def sample_override() -> ConceptNormalizationOverrideCreate:
 def sample_override_with_parent() -> ConceptNormalizationOverrideCreate:
     """Sample concept normalization override with parent for testing."""
     return ConceptNormalizationOverrideCreate(
+        company_id=0,
         concept="us-gaap:ChildConcept",
         statement="Balance Sheet",
         normalized_label="Child Label",
@@ -62,7 +64,7 @@ class TestConceptNormalizationOverridesOperations:
         """Test retrieving override by concept and statement."""
         created = db.concept_normalization_overrides.create(sample_override)
         retrieved = db.concept_normalization_overrides.get_by_key(
-            created.concept, created.statement
+            concept=created.concept, statement=created.statement, company_id=0
         )
 
         assert retrieved is not None
@@ -73,7 +75,7 @@ class TestConceptNormalizationOverridesOperations:
     def test_get_by_key_not_found(self, db):
         """Test retrieving non-existent override returns None."""
         retrieved = db.concept_normalization_overrides.get_by_key(
-            "us-gaap:NonExistent", "Income Statement"
+            concept="us-gaap:NonExistent", statement="Income Statement", company_id=0
         )
         assert retrieved is None
 
@@ -81,6 +83,7 @@ class TestConceptNormalizationOverridesOperations:
         """Test listing all overrides."""
         # Create multiple overrides
         override1 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept1",
             statement="Income Statement",
             normalized_label="Label 1",
@@ -88,12 +91,14 @@ class TestConceptNormalizationOverridesOperations:
             unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept2",
             statement="Balance Sheet",
             normalized_label="Label 2",
             is_abstract=True,
         )
         override3 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept3",
             statement="Income Statement",
             normalized_label="Label 3",
@@ -105,7 +110,7 @@ class TestConceptNormalizationOverridesOperations:
         db.concept_normalization_overrides.create(override2)
         db.concept_normalization_overrides.create(override3)
 
-        all_overrides = db.concept_normalization_overrides.list_all()
+        all_overrides = db.concept_normalization_overrides.list_all(company_id=0)
 
         assert len(all_overrides) >= 3
         concepts = [o.concept for o in all_overrides]
@@ -117,6 +122,7 @@ class TestConceptNormalizationOverridesOperations:
         """Test listing overrides filtered by statement."""
         # Create overrides for different statements
         override1 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept1",
             statement="Income Statement",
             normalized_label="Label 1",
@@ -124,6 +130,7 @@ class TestConceptNormalizationOverridesOperations:
             unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept2",
             statement="Balance Sheet",
             normalized_label="Label 2",
@@ -131,6 +138,7 @@ class TestConceptNormalizationOverridesOperations:
             unit="USD",
         )
         override3 = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:Concept3",
             statement="Income Statement",
             normalized_label="Label 3",
@@ -144,7 +152,7 @@ class TestConceptNormalizationOverridesOperations:
 
         # Filter by Income Statement
         income_statement_overrides = db.concept_normalization_overrides.list_all(
-            statement="Income Statement"
+            company_id=0, statement="Income Statement"
         )
 
         assert len(income_statement_overrides) >= 2
@@ -154,7 +162,7 @@ class TestConceptNormalizationOverridesOperations:
 
         # Filter by Balance Sheet
         balance_sheet_overrides = db.concept_normalization_overrides.list_all(
-            statement="Balance Sheet"
+            company_id=0, statement="Balance Sheet"
         )
 
         assert len(balance_sheet_overrides) >= 1
@@ -170,7 +178,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data
+            created.concept, created.statement, update_data, 0
         )
 
         assert updated is not None
@@ -189,7 +197,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data
+            created.concept, created.statement, update_data, 0
         )
 
         assert updated is not None
@@ -204,7 +212,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            "us-gaap:NonExistent", "Income Statement", update_data
+            "us-gaap:NonExistent", "Income Statement", update_data, 0
         )
 
         assert updated is None
@@ -216,7 +224,7 @@ class TestConceptNormalizationOverridesOperations:
         update_data = ConceptNormalizationOverrideUpdate()
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data
+            created.concept, created.statement, update_data, 0
         )
 
         assert updated is not None
@@ -228,21 +236,21 @@ class TestConceptNormalizationOverridesOperations:
         created = db.concept_normalization_overrides.create(sample_override)
 
         deleted = db.concept_normalization_overrides.delete(
-            created.concept, created.statement
+            concept=created.concept, statement=created.statement, company_id=0
         )
 
         assert deleted is True
 
         # Verify it's deleted
         retrieved = db.concept_normalization_overrides.get_by_key(
-            created.concept, created.statement
+            concept=created.concept, statement=created.statement, company_id=0
         )
         assert retrieved is None
 
     def test_delete_override_not_found(self, db):
         """Test deleting non-existent override returns False."""
         deleted = db.concept_normalization_overrides.delete(
-            "us-gaap:NonExistent", "Income Statement"
+            concept="us-gaap:NonExistent", statement="Income Statement", company_id=0
         )
 
         assert deleted is False
@@ -253,6 +261,7 @@ class TestConceptNormalizationOverridesOperations:
         """Test creating override with parent concept."""
         # First create the parent
         parent = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:ParentConcept",
             statement="Balance Sheet",
             normalized_label="Parent Label",
@@ -270,7 +279,7 @@ class TestConceptNormalizationOverridesOperations:
     def test_create_with_invalid_abstract_concept(self, db, sample_override):
         """Test creating override with invalid parent raises error."""
         override_with_invalid_parent = ConceptNormalizationOverrideCreate(
-            company_id=123,
+            company_id=0,
             concept="us-gaap:ChildConcept",
             statement="Balance Sheet",
             normalized_label="Child Label",
@@ -285,6 +294,7 @@ class TestConceptNormalizationOverridesOperations:
     def test_is_abstract_values(self, db):
         """Test creating overrides with different is_abstract values."""
         override_false = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:ConcreteConcept",
             statement="Income Statement",
             normalized_label="Concrete",
@@ -293,6 +303,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         override_true = ConceptNormalizationOverrideCreate(
+            company_id=0,
             concept="us-gaap:AbstractConcept",
             statement="Income Statement",
             normalized_label="Abstract",

@@ -40,7 +40,7 @@ def sample_override_data():
 def mock_override():
     """Mock override object for testing."""
     mock = Mock()
-    mock.company_id = None
+    mock.company_id = 0
     mock.concept = "us-gaap:TestConcept"
     mock.statement = "Income Statement"
     mock.normalized_label = "Test Label"
@@ -63,7 +63,7 @@ class TestAdminEndpoints:
         """Test listing overrides when database is empty."""
         mock_filings_db.concept_normalization_overrides.list_all.return_value = []
 
-        response = client.get("/admin/concept-normalization-overrides")
+        response = client.get("/admin/concept-normalization-overrides?company_id=0")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -75,7 +75,7 @@ class TestAdminEndpoints:
             mock_override
         ]
 
-        response = client.get("/admin/concept-normalization-overrides")
+        response = client.get("/admin/concept-normalization-overrides?company_id=0")
 
         assert response.status_code == 200
         data = response.json()
@@ -233,18 +233,18 @@ class TestAdminEndpoints:
         ]
 
         response = client.get(
-            "/admin/concept-normalization-overrides?statement=Income Statement"
+            "/admin/concept-normalization-overrides?statement=Income Statement&company_id=0"
         )
 
         assert response.status_code == 200
         mock_filings_db.concept_normalization_overrides.list_all.assert_called_once_with(
-            statement="Income Statement", company_id=None
+            company_id=0, statement="Income Statement"
         )
 
     @patch("api.admin.filings_db", None)
     def test_list_overrides_database_not_initialized(self, client):
         """Test listing overrides when database is not initialized."""
-        response = client.get("/admin/concept-normalization-overrides")
+        response = client.get("/admin/concept-normalization-overrides?company_id=0")
 
         assert response.status_code == 500
         assert "not initialized" in response.json()["detail"].lower()
@@ -296,7 +296,7 @@ class TestAdminEndpoints:
         )
 
         updated_mock = Mock()
-        updated_mock.company_id = None
+        updated_mock.company_id = 0
         updated_mock.concept = "us-gaap:TestConcept"
         updated_mock.statement = "Income Statement"
         updated_mock.normalized_label = "Updated Label"
@@ -319,7 +319,7 @@ class TestAdminEndpoints:
         }
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -336,7 +336,7 @@ class TestAdminEndpoints:
         update_data = {"normalized_label": "Updated Label"}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ANonExistent",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ANonExistent?company_id=0",
             json=update_data,
         )
 
@@ -503,7 +503,7 @@ class TestAdminEndpoints:
         mock_filings_db.concept_normalization_overrides.delete.return_value = True
 
         response = client.delete(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept"
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0"
         )
 
         assert response.status_code == 204
@@ -525,7 +525,7 @@ class TestAdminEndpoints:
         update_data = {"is_abstract": True}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -555,7 +555,7 @@ class TestAdminEndpoints:
         update_data = {"parent_concept": "us-gaap:ParentConcept"}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -581,7 +581,7 @@ class TestAdminEndpoints:
         update_data = {"is_abstract": False}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -606,7 +606,7 @@ class TestAdminEndpoints:
         update_data = {"parent_concept": "us-gaap:ParentConcept"}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -636,7 +636,7 @@ class TestAdminEndpoints:
         update_data = {"weight": 1.0}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -662,7 +662,7 @@ class TestAdminEndpoints:
         update_data = {"unit": "USD"}
 
         response = client.put(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept",
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0",
             json=update_data,
         )
 
@@ -677,7 +677,7 @@ class TestAdminEndpoints:
         mock_filings_db.concept_normalization_overrides.delete.return_value = False
 
         response = client.delete(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ANonExistent"
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ANonExistent?company_id=0"
         )
 
         assert response.status_code == 404
@@ -690,7 +690,7 @@ class TestAdminEndpoints:
         )
 
         response = client.delete(
-            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept"
+            "/admin/concept-normalization-overrides/Income%20Statement/us-gaap%3ATestConcept?company_id=0"
         )
 
         assert response.status_code == 400
@@ -702,7 +702,9 @@ class TestAdminEndpoints:
             mock_override
         ]
 
-        response = client.get("/admin/concept-normalization-overrides/export")
+        response = client.get(
+            "/admin/concept-normalization-overrides/export?company_id=0"
+        )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/csv; charset=utf-8"
@@ -729,7 +731,7 @@ class TestAdminEndpoints:
         ]
 
         response = client.get(
-            "/admin/concept-normalization-overrides/export?statement=Income Statement"
+            "/admin/concept-normalization-overrides/export?statement=Income Statement&company_id=0"
         )
 
         assert response.status_code == 200

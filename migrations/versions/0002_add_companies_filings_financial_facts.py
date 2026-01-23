@@ -18,13 +18,15 @@ depends_on = None
 
 def upgrade() -> None:
     # Create companies table
-    op.create_table(
+    companies_table = op.create_table(
         "companies",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("industry", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
+    # Dummpy company to avoid null company_id references / fks
+    op.execute(companies_table.insert().values(id=0, name="0", industry=None))
     op.create_index(
         "ix_companies_name_prefix",
         "companies",

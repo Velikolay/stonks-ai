@@ -26,14 +26,13 @@ def upgrade() -> None:
     # Create dimension normalization mapping table
     table = op.create_table(
         "dimension_normalization_overrides",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),
         sa.Column("member_label", sa.String(), nullable=False),
+        sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("normalized_axis_label", sa.String(), nullable=False),
         sa.Column("normalized_member_label", sa.String(), nullable=True),
-        # Support company-specific overrides
-        sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column("tags", sa.ARRAY(sa.String()), nullable=True),
         sa.Column(
             "created_at",
@@ -47,15 +46,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "axis",
-            "member",
-            "member_label",
-            "company_id",
-            name="uq_axis_member_label_company",
-            postgresql_nulls_not_distinct=True,
-        ),
+        sa.PrimaryKeyConstraint("company_id", "axis", "member", "member_label"),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
@@ -86,18 +77,23 @@ def upgrade() -> None:
             try:
                 # Skip empty rows
                 if (
-                    not row.get("axis")
+                    not row.get("company_id")
+                    or not row.get("axis")
                     or not row.get("member")
                     or not row.get("member_label")
                     or not row.get("normalized_axis_label")
                 ):
                     continue
 
+                is_global = row.get("is_global", "").lower() == "true"
+
                 rows.append(
                     {
+                        "company_id": row["company_id"],
                         "axis": row["axis"],
                         "member": row["member"],
                         "member_label": row["member_label"],
+                        "is_global": is_global,
                         "normalized_axis_label": row["normalized_axis_label"],
                         "normalized_member_label": (
                             row["normalized_member_label"]

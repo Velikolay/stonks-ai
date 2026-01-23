@@ -4,22 +4,28 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class ConceptNormalizationOverrideBase(BaseModel):
     """Base concept normalization override model."""
 
+    company_id: int
     concept: str
     statement: str
     normalized_label: str
     is_abstract: bool
-    company_id: Optional[int] = None
+    is_global: bool
     abstract_concept: Optional[str] = None
     parent_concept: Optional[str] = None
     description: Optional[str] = None
     unit: Optional[str] = None
     weight: Optional[Decimal] = None
+
+    @model_validator(mode="after")
+    def _sync_is_global(self) -> "ConceptNormalizationOverrideBase":
+        self.is_global = self.company_id == 0
+        return self
 
 
 class ConceptNormalizationOverrideCreate(ConceptNormalizationOverrideBase):

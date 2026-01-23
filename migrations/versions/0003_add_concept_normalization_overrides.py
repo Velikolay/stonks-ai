@@ -26,18 +26,17 @@ def upgrade() -> None:
     # Create concept normalization mapping table
     table = op.create_table(
         "concept_normalization_overrides",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
         sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
+        sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("abstract_concept", sa.String(), nullable=True),
-        # Support company-specific overrides
-        sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -50,14 +49,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "concept",
-            "statement",
-            "company_id",
-            name="uq_concept_statement_company",
-            postgresql_nulls_not_distinct=True,
-        ),
+        sa.PrimaryKeyConstraint("company_id", "concept", "statement"),
         sa.ForeignKeyConstraint(
             ["abstract_concept", "statement", "company_id"],
             [
@@ -118,11 +110,16 @@ def upgrade() -> None:
         for row in reader:
             try:
                 # Skip empty rows
-                if not row.get("concept") or not row.get("statement"):
+                if (
+                    not row.get("company_id")
+                    or not row.get("concept")
+                    or not row.get("statement")
+                ):
                     continue
 
                 # Convert boolean string to boolean
                 is_abstract = row.get("is_abstract", "").lower() == "true"
+                is_global = row.get("is_global", "").lower() == "true"
 
                 # Convert empty strings to None for nullable fields
                 abstract_concept = row.get("abstract_concept") or None
@@ -133,10 +130,12 @@ def upgrade() -> None:
 
                 rows.append(
                     {
+                        "company_id": row["company_id"],
                         "concept": row["concept"],
                         "statement": row["statement"],
                         "normalized_label": row["normalized_label"],
                         "is_abstract": is_abstract,
+                        "is_global": is_global,
                         "description": description,
                         "unit": unit,
                         "weight": weight,
