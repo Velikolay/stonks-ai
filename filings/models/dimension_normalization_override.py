@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 class DimensionNormalizationOverrideBase(BaseModel):
     """Base dimension normalization override model."""
 
+    company_id: Optional[int] = None
     axis: str
     member: str
     member_label: str

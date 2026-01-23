@@ -205,7 +205,7 @@ class ConceptNormalizationOverridesOperations:
                 conn.commit()
 
                 logger.info(
-                    "Created concept normalization override: (%s, %s, company_id=%s)",
+                    "Created concept normalization override: (%s, %s, %s)",
                     override.concept,
                     override.statement,
                     override.company_id,
@@ -385,14 +385,14 @@ class ConceptNormalizationOverridesOperations:
                 deleted = result.rowcount > 0
                 if deleted:
                     logger.info(
-                        "Deleted concept normalization override: (%s, %s, company_id=%s)",
+                        "Deleted concept normalization override: (%s, %s, %s)",
                         concept,
                         statement,
                         company_id,
                     )
                 else:
                     logger.warning(
-                        "Concept normalization override not found for deletion: (%s, %s, company_id=%s)",
+                        "Concept normalization override not found for deletion: (%s, %s, %s)",
                         concept,
                         statement,
                         company_id,
