@@ -71,20 +71,27 @@ class ConceptNormalizationOverridesOperations:
         )
 
     def list_all(
-        self, statement: Optional[str] = None
+        self, statement: Optional[str] = None, company_id: Optional[int] = None
     ) -> List[ConceptNormalizationOverride]:
-        """Get all concept normalization overrides, optionally filtered by statement."""
+        """Get all concept normalization overrides, optionally filtered by statement/company.
+
+        If company_id is provided, only company-specific overrides for that company are
+        returned (i.e., overrides with that company_id).
+        """
         try:
             with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
                 if statement is not None:
                     stmt = stmt.where(self.overrides_table.c.statement == statement)
+                if company_id is not None:
+                    stmt = stmt.where(self.overrides_table.c.company_id == company_id)
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
                 overrides = []
                 for row in rows:
                     override = ConceptNormalizationOverride(
+                        company_id=row.company_id,
                         concept=row.concept,
                         statement=row.statement,
                         normalized_label=row.normalized_label,
@@ -102,6 +109,11 @@ class ConceptNormalizationOverridesOperations:
                 logger.info(
                     f"Retrieved {len(overrides)} concept normalization overrides"
                     + (f" for statement: {statement}" if statement else "")
+                    + (
+                        f" for company_id: {company_id}"
+                        if company_id is not None
+                        else ""
+                    )
                 )
                 return overrides
 
@@ -110,15 +122,21 @@ class ConceptNormalizationOverridesOperations:
             raise
 
     def get_by_key(
-        self, concept: str, statement: str
+        self, concept: str, statement: str, company_id: Optional[int] = None
     ) -> Optional[ConceptNormalizationOverride]:
-        """Get a concept normalization override by concept and statement."""
+        """Get a concept normalization override by (concept, statement, company_id)."""
         try:
             with self.engine.connect() as conn:
+                company_clause = (
+                    self.overrides_table.c.company_id.is_(None)
+                    if company_id is None
+                    else self.overrides_table.c.company_id == company_id
+                )
                 stmt = select(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.concept == concept,
                         self.overrides_table.c.statement == statement,
+                        company_clause,
                     )
                 )
                 result = conn.execute(stmt)
@@ -126,6 +144,7 @@ class ConceptNormalizationOverridesOperations:
 
                 if row:
                     return ConceptNormalizationOverride(
+                        company_id=row.company_id,
                         concept=row.concept,
                         statement=row.statement,
                         normalized_label=row.normalized_label,
@@ -142,7 +161,11 @@ class ConceptNormalizationOverridesOperations:
 
         except SQLAlchemyError as e:
             logger.error(
-                f"Error getting concept normalization override ({concept}, {statement}): {e}"
+                "Error getting concept normalization override (%s, %s, %s): %s",
+                concept,
+                statement,
+                company_id,
+                e,
             )
             raise
 
@@ -163,6 +186,7 @@ class ConceptNormalizationOverridesOperations:
                 stmt = (
                     insert(self.overrides_table)
                     .values(
+                        company_id=override.company_id,
                         concept=override.concept,
                         statement=override.statement,
                         normalized_label=override.normalized_label,
@@ -181,10 +205,14 @@ class ConceptNormalizationOverridesOperations:
                 conn.commit()
 
                 logger.info(
-                    f"Created concept normalization override: ({override.concept}, {override.statement})"
+                    "Created concept normalization override: (%s, %s, company_id=%s)",
+                    override.concept,
+                    override.statement,
+                    override.company_id,
                 )
 
                 return ConceptNormalizationOverride(
+                    company_id=row.company_id,
                     concept=row.concept,
                     statement=row.statement,
                     normalized_label=row.normalized_label,
@@ -216,10 +244,11 @@ class ConceptNormalizationOverridesOperations:
         concept: str,
         statement: str,
         override_update: ConceptNormalizationOverrideUpdate,
+        company_id: Optional[int] = None,
     ) -> Optional[ConceptNormalizationOverride]:
         """Update an existing concept normalization override."""
         # Get existing record to merge with update for validation
-        existing = self.get_by_key(concept, statement)
+        existing = self.get_by_key(concept, statement, company_id)
         if not existing:
             return None
 
@@ -274,12 +303,18 @@ class ConceptNormalizationOverridesOperations:
                     # No fields to update, return existing record
                     return existing
 
+                company_clause = (
+                    self.overrides_table.c.company_id.is_(None)
+                    if company_id is None
+                    else self.overrides_table.c.company_id == company_id
+                )
                 stmt = (
                     update(self.overrides_table)
                     .where(
                         and_(
                             self.overrides_table.c.concept == concept,
                             self.overrides_table.c.statement == statement,
+                            company_clause,
                         )
                     )
                     .values(**update_values)
@@ -292,9 +327,13 @@ class ConceptNormalizationOverridesOperations:
 
                 if row:
                     logger.info(
-                        f"Updated concept normalization override: ({concept}, {statement})"
+                        "Updated concept normalization override: (%s, %s, %s)",
+                        concept,
+                        statement,
+                        company_id,
                     )
                     return ConceptNormalizationOverride(
+                        company_id=row.company_id,
                         concept=row.concept,
                         statement=row.statement,
                         normalized_label=row.normalized_label,
@@ -322,14 +361,22 @@ class ConceptNormalizationOverridesOperations:
             conn.rollback()
             raise
 
-    def delete(self, concept: str, statement: str) -> bool:
+    def delete(
+        self, concept: str, statement: str, company_id: Optional[int] = None
+    ) -> bool:
         """Delete a concept normalization override."""
         try:
             with self.engine.connect() as conn:
+                company_clause = (
+                    self.overrides_table.c.company_id.is_(None)
+                    if company_id is None
+                    else self.overrides_table.c.company_id == company_id
+                )
                 stmt = delete(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.concept == concept,
                         self.overrides_table.c.statement == statement,
+                        company_clause,
                     )
                 )
                 result = conn.execute(stmt)
@@ -338,11 +385,17 @@ class ConceptNormalizationOverridesOperations:
                 deleted = result.rowcount > 0
                 if deleted:
                     logger.info(
-                        f"Deleted concept normalization override: ({concept}, {statement})"
+                        "Deleted concept normalization override: (%s, %s, company_id=%s)",
+                        concept,
+                        statement,
+                        company_id,
                     )
                 else:
                     logger.warning(
-                        f"Concept normalization override not found for deletion: ({concept}, {statement})"
+                        "Concept normalization override not found for deletion: (%s, %s, company_id=%s)",
+                        concept,
+                        statement,
+                        company_id,
                     )
 
                 return deleted

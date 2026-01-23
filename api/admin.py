@@ -74,6 +74,7 @@ class CompanyResponse(BaseModel):
 class ConceptNormalizationOverrideResponse(BaseModel):
     """Response model for concept normalization override."""
 
+    company_id: Optional[int] = None
     concept: str
     statement: str
     normalized_label: str
@@ -106,15 +107,21 @@ class DimensionNormalizationOverrideResponse(BaseModel):
 )
 async def list_concept_normalization_overrides(
     statement: Optional[str] = Query(None, description="Filter by statement type"),
+    company_id: Optional[int] = Query(
+        None, description="Filter by company_id (company-specific overrides only)"
+    ),
 ) -> List[ConceptNormalizationOverrideResponse]:
-    """List all concept normalization overrides, optionally filtered by statement."""
+    """List all concept normalization overrides, optionally filtered by statement/company."""
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.concept_normalization_overrides.list_all(statement)
+        overrides = filings_db.concept_normalization_overrides.list_all(
+            statement=statement, company_id=company_id
+        )
         return [
             ConceptNormalizationOverrideResponse(
+                company_id=override.company_id,
                 concept=override.concept,
                 statement=override.statement,
                 normalized_label=override.normalized_label,
@@ -418,6 +425,7 @@ async def create_concept_normalization_override(
     try:
         created_override = filings_db.concept_normalization_overrides.create(override)
         return ConceptNormalizationOverrideResponse(
+            company_id=created_override.company_id,
             concept=created_override.concept,
             statement=created_override.statement,
             normalized_label=created_override.normalized_label,
@@ -449,6 +457,9 @@ async def update_concept_normalization_override(
     statement: str = Path(..., description="Statement type"),
     concept: str = Path(..., description="Concept identifier"),
     override_update: ConceptNormalizationOverrideUpdate = ...,
+    company_id: Optional[int] = Query(
+        None, description="Company ID for company-specific override (omit for global)"
+    ),
 ) -> ConceptNormalizationOverrideResponse:
     """Update an existing concept normalization override."""
     if not filings_db:
@@ -456,14 +467,18 @@ async def update_concept_normalization_override(
 
     try:
         updated_override = filings_db.concept_normalization_overrides.update(
-            concept, statement, override_update
+            concept, statement, override_update, company_id=company_id
         )
         if not updated_override:
             raise HTTPException(
                 status_code=404,
-                detail=f"Concept normalization override not found: ({concept}, {statement})",
+                detail=(
+                    f"Concept normalization override not found: "
+                    f"({concept}, {statement}, {company_id})"
+                ),
             )
         return ConceptNormalizationOverrideResponse(
+            company_id=updated_override.company_id,
             concept=updated_override.concept,
             statement=updated_override.statement,
             normalized_label=updated_override.normalized_label,
@@ -496,17 +511,25 @@ async def update_concept_normalization_override(
 async def delete_concept_normalization_override(
     statement: str = Path(..., description="Statement type"),
     concept: str = Path(..., description="Concept identifier"),
+    company_id: Optional[int] = Query(
+        None, description="Company ID for company-specific override (omit for global)"
+    ),
 ) -> None:
     """Delete a concept normalization override."""
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        deleted = filings_db.concept_normalization_overrides.delete(concept, statement)
+        deleted = filings_db.concept_normalization_overrides.delete(
+            concept, statement, company_id=company_id
+        )
         if not deleted:
             raise HTTPException(
                 status_code=404,
-                detail=f"Concept normalization override not found: ({concept}, {statement})",
+                detail=(
+                    f"Concept normalization override not found: "
+                    f"({concept}, {statement}, company_id={company_id})"
+                ),
             )
     except HTTPException:
         raise
@@ -529,17 +552,23 @@ class ImportResponse(BaseModel):
 @router.get("/concept-normalization-overrides/export")
 async def export_concept_normalization_overrides_to_csv(
     statement: Optional[str] = Query(None, description="Filter by statement type"),
+    company_id: Optional[int] = Query(
+        None, description="Filter by company_id (company-specific overrides only)"
+    ),
 ) -> StreamingResponse:
     """Export concept normalization overrides to CSV."""
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.concept_normalization_overrides.list_all(statement)
+        overrides = filings_db.concept_normalization_overrides.list_all(
+            statement=statement, company_id=company_id
+        )
 
         # Create CSV content
         output = io.StringIO()
         fieldnames = [
+            "company_id",
             "concept",
             "statement",
             "normalized_label",
@@ -556,6 +585,11 @@ async def export_concept_normalization_overrides_to_csv(
         for override in overrides:
             writer.writerow(
                 {
+                    "company_id": (
+                        str(override.company_id)
+                        if override.company_id is not None
+                        else ""
+                    ),
                     "concept": override.concept,
                     "statement": override.statement,
                     "normalized_label": override.normalized_label,
@@ -576,6 +610,8 @@ async def export_concept_normalization_overrides_to_csv(
             filename = (
                 f"concept_normalization_overrides_{statement.replace(' ', '_')}.csv"
             )
+        if company_id is not None:
+            filename = filename.replace(".csv", f"_company_{company_id}.csv")
 
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -653,8 +689,21 @@ async def import_concept_normalization_overrides_from_csv(
                         )
                         continue
 
+                row_company_id_str = (row.get("company_id") or "").strip()
+                if not row_company_id_str:
+                    row_company_id = None
+                else:
+                    try:
+                        row_company_id = int(row_company_id_str)
+                    except (ValueError, Exception):
+                        errors.append(
+                            f"Row {row_num}: Invalid company_id value: {row_company_id_str}"
+                        )
+                        continue
+
                 # Create override object
                 override_create = ConceptNormalizationOverrideCreate(
+                    company_id=row_company_id,
                     concept=row["concept"].strip(),
                     statement=row["statement"].strip(),
                     normalized_label=row["normalized_label"].strip(),
@@ -668,7 +717,9 @@ async def import_concept_normalization_overrides_from_csv(
 
                 # Check if record exists
                 existing = filings_db.concept_normalization_overrides.get_by_key(
-                    override_create.concept, override_create.statement
+                    override_create.concept,
+                    override_create.statement,
+                    override_create.company_id,
                 )
 
                 if existing:
@@ -687,12 +738,14 @@ async def import_concept_normalization_overrides_from_csv(
                             override_create.concept,
                             override_create.statement,
                             override_update,
+                            company_id=override_create.company_id,
                         )
                         updated += 1
                     else:
                         errors.append(
                             f"Row {row_num}: Record already exists: "
-                            f"({override_create.concept}, {override_create.statement})"
+                            f"({override_create.concept}, {override_create.statement}, "
+                            f"company_id={override_create.company_id})"
                         )
                 else:
                     # Create new record (validation happens in DB layer)

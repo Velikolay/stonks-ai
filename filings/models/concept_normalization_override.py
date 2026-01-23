@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 class ConceptNormalizationOverrideBase(BaseModel):
     """Base concept normalization override model."""
 
+    company_id: Optional[int] = None
     concept: str
     statement: str
     normalized_label: str
