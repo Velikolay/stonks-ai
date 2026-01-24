@@ -138,6 +138,15 @@ def clean_tables(test_engine: Engine):
             conn.execute(text("TRUNCATE TABLE companies CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
+            # Recreate the dummy "global" company row that migrations insert (id=0).
+            # Many tests use company_id=0 for global overrides and rely on this FK target.
+            conn.execute(
+                text(
+                    "INSERT INTO companies (id, name, industry) "
+                    "VALUES (0, '0', NULL) "
+                    "ON CONFLICT (id) DO NOTHING"
+                )
+            )
             conn.commit()
     except Exception:
         # Tables might not exist yet, which is fine for the first test

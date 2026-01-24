@@ -17,6 +17,7 @@ def sample_override() -> ConceptNormalizationOverrideCreate:
         statement="Income Statement",
         normalized_label="Test Label",
         is_abstract=False,
+        is_global=True,
         abstract_concept=None,
         description="Test description",
         unit="USD",
@@ -32,6 +33,7 @@ def sample_override_with_parent() -> ConceptNormalizationOverrideCreate:
         statement="Balance Sheet",
         normalized_label="Child Label",
         is_abstract=False,
+        is_global=True,
         abstract_concept="us-gaap:ParentConcept",
         description="Child description",
         unit="USD",
@@ -88,6 +90,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 1",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
@@ -96,6 +99,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Balance Sheet",
             normalized_label="Label 2",
             is_abstract=True,
+            is_global=True,
         )
         override3 = ConceptNormalizationOverrideCreate(
             company_id=0,
@@ -103,6 +107,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 3",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
 
@@ -127,6 +132,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 1",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
         override2 = ConceptNormalizationOverrideCreate(
@@ -135,6 +141,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Balance Sheet",
             normalized_label="Label 2",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
         override3 = ConceptNormalizationOverrideCreate(
@@ -143,6 +150,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Label 3",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
 
@@ -178,7 +186,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data, 0
+            0, created.concept, created.statement, update_data
         )
 
         assert updated is not None
@@ -197,7 +205,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data, 0
+            0, created.concept, created.statement, update_data
         )
 
         assert updated is not None
@@ -212,7 +220,7 @@ class TestConceptNormalizationOverridesOperations:
         )
 
         updated = db.concept_normalization_overrides.update(
-            "us-gaap:NonExistent", "Income Statement", update_data, 0
+            0, "us-gaap:NonExistent", "Income Statement", update_data
         )
 
         assert updated is None
@@ -224,7 +232,7 @@ class TestConceptNormalizationOverridesOperations:
         update_data = ConceptNormalizationOverrideUpdate()
 
         updated = db.concept_normalization_overrides.update(
-            created.concept, created.statement, update_data, 0
+            0, created.concept, created.statement, update_data
         )
 
         assert updated is not None
@@ -266,6 +274,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Balance Sheet",
             normalized_label="Parent Label",
             is_abstract=True,
+            is_global=True,
             abstract_concept=None,
         )
         db.concept_normalization_overrides.create(parent)
@@ -284,6 +293,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Balance Sheet",
             normalized_label="Child Label",
             is_abstract=False,
+            is_global=True,
             abstract_concept="us-gaap:NonExistentParent",
             unit="USD",
         )
@@ -299,6 +309,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Concrete",
             is_abstract=False,
+            is_global=True,
             unit="USD",
         )
 
@@ -308,6 +319,7 @@ class TestConceptNormalizationOverridesOperations:
             statement="Income Statement",
             normalized_label="Abstract",
             is_abstract=True,
+            is_global=True,
         )
 
         created_false = db.concept_normalization_overrides.create(override_false)

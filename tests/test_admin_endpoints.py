@@ -24,10 +24,12 @@ def client() -> TestClient:
 def sample_override_data():
     """Sample override data for testing."""
     return {
+        "company_id": 0,
         "concept": "us-gaap:TestConcept",
         "statement": "Income Statement",
         "normalized_label": "Test Label",
         "is_abstract": False,
+        "is_global": True,
         "abstract_concept": None,
         "description": "Test description",
         "unit": "USD",
@@ -45,6 +47,7 @@ def mock_override():
     mock.statement = "Income Statement"
     mock.normalized_label = "Test Label"
     mock.is_abstract = False
+    mock.is_global = True
     mock.abstract_concept = None
     mock.description = "Test description"
     mock.unit = "USD"  # Non-abstract records need unit
@@ -259,7 +262,7 @@ class TestAdminEndpoints:
         )
 
         response = client.post(
-            "/admin/concept-normalization-overrides/0", json=sample_override_data
+            "/admin/concept-normalization-overrides", json=sample_override_data
         )
 
         assert response.status_code == 201
@@ -277,7 +280,7 @@ class TestAdminEndpoints:
         )
 
         response = client.post(
-            "/admin/concept-normalization-overrides/0", json=sample_override_data
+            "/admin/concept-normalization-overrides", json=sample_override_data
         )
 
         assert response.status_code == 400
@@ -301,6 +304,7 @@ class TestAdminEndpoints:
         updated_mock.statement = "Income Statement"
         updated_mock.normalized_label = "Updated Label"
         updated_mock.is_abstract = False
+        updated_mock.is_global = True
         updated_mock.abstract_concept = None
         updated_mock.description = "Updated description"
         updated_mock.unit = "USD"
@@ -348,10 +352,12 @@ class TestAdminEndpoints:
     ):
         """Test creating override with parent_concept and is_abstract=True fails."""
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": True,
+            "is_global": True,
             "parent_concept": "us-gaap:ParentConcept",
             "unit": None,
             "weight": None,
@@ -377,10 +383,12 @@ class TestAdminEndpoints:
         )
 
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": False,
+            "is_global": True,
             "parent_concept": "us-gaap:ParentConcept",
             "unit": "USD",
             "weight": None,
@@ -406,10 +414,12 @@ class TestAdminEndpoints:
         )
 
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": False,
+            "is_global": True,
             "parent_concept": None,
             "unit": None,
             "weight": None,
@@ -430,10 +440,12 @@ class TestAdminEndpoints:
     ):
         """Test creating abstract override with parent_concept fails."""
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": True,
+            "is_global": True,
             "parent_concept": "us-gaap:ParentConcept",
             "unit": None,
             "weight": None,
@@ -457,10 +469,12 @@ class TestAdminEndpoints:
         )
 
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": True,
+            "is_global": True,
             "parent_concept": None,
             "unit": None,
             "weight": 1.0,
@@ -479,10 +493,12 @@ class TestAdminEndpoints:
     def test_create_override_abstract_with_unit_fails(self, mock_filings_db, client):
         """Test creating abstract override with unit fails."""
         override_data = {
+            "company_id": 0,
             "concept": "us-gaap:TestConcept",
             "statement": "Income Statement",
             "normalized_label": "Test Label",
             "is_abstract": True,
+            "is_global": True,
             "parent_concept": None,
             "unit": "USD",
             "weight": None,
@@ -743,10 +759,12 @@ class TestAdminEndpoints:
         # Setup mocks
         mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
         mock_created = Mock()
+        mock_created.company_id = 0
         mock_created.concept = "us-gaap:TestConcept"
         mock_created.statement = "Income Statement"
         mock_created.normalized_label = "Test Label"
         mock_created.is_abstract = False
+        mock_created.is_global = True
         mock_created.abstract_concept = None
         mock_created.description = "Test description"
         mock_created.unit = "USD"
@@ -762,10 +780,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "description",
                 "unit",
@@ -775,10 +795,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "Test description",
                 "unit": "USD",
@@ -808,6 +830,7 @@ class TestAdminEndpoints:
             mock_override
         )
         mock_updated = Mock()
+        mock_updated.company_id = 0
         mock_updated.concept = "us-gaap:TestConcept"
         mock_updated.statement = "Income Statement"
         mock_updated.normalized_label = "Updated Label"
@@ -828,10 +851,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "description",
                 "unit",
@@ -841,10 +866,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Updated Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "",
                 "unit": "USD",
@@ -880,10 +907,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "description",
                 "unit",
@@ -893,10 +922,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "",
             }
@@ -926,10 +957,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "description",
                 "unit",
@@ -939,10 +972,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "",
                 "unit": "USD",
@@ -979,10 +1014,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "parent_concept",
                 "description",
@@ -993,10 +1030,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "parent_concept": "",
                 "description": "",
@@ -1034,10 +1073,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "parent_concept",
                 "description",
@@ -1048,10 +1089,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "true",
+                "is_global": "true",
                 "abstract_concept": "",
                 "parent_concept": "",
                 "description": "",
@@ -1091,10 +1134,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "parent_concept",
                 "description",
@@ -1105,10 +1150,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "parent_concept": "us-gaap:ParentConcept",
                 "description": "",
@@ -1156,10 +1203,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "parent_concept",
                 "description",
@@ -1170,10 +1219,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:TestConcept",
                 "statement": "Income Statement",
                 "normalized_label": "Test Label",
                 "is_abstract": "true",
+                "is_global": "true",
                 "abstract_concept": "",
                 "parent_concept": "",
                 "description": "",
@@ -1236,10 +1287,12 @@ class TestAdminEndpoints:
         # Create mock for created records
         def create_side_effect(override):
             mock = Mock()
+            mock.company_id = override.company_id
             mock.concept = override.concept
             mock.statement = override.statement
             mock.normalized_label = override.normalized_label
             mock.is_abstract = override.is_abstract
+            mock.is_global = override.is_global
             mock.abstract_concept = override.abstract_concept
             mock.description = override.description
             mock.unit = override.unit
@@ -1257,10 +1310,12 @@ class TestAdminEndpoints:
         writer = csv.DictWriter(
             csv_content,
             fieldnames=[
+                "company_id",
                 "concept",
                 "statement",
                 "normalized_label",
                 "is_abstract",
+                "is_global",
                 "abstract_concept",
                 "description",
                 "unit",
@@ -1270,10 +1325,12 @@ class TestAdminEndpoints:
         writer.writeheader()
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:Concept1",
                 "statement": "Income Statement",
                 "normalized_label": "Label 1",
                 "is_abstract": "false",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "",
                 "unit": "USD",
@@ -1282,10 +1339,12 @@ class TestAdminEndpoints:
         )
         writer.writerow(
             {
+                "company_id": "0",
                 "concept": "us-gaap:Concept2",
                 "statement": "Balance Sheet",
                 "normalized_label": "Label 2",
                 "is_abstract": "true",
+                "is_global": "true",
                 "abstract_concept": "",
                 "description": "",
                 "unit": "",
