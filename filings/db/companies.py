@@ -83,31 +83,6 @@ class CompanyOperations:
             logger.error(f"Error getting company by ID: {e}")
             return None
 
-    def get_companies_by_ids(self, *, company_ids: List[int]) -> List[Company]:
-        """Get companies for multiple IDs in one query."""
-        if not company_ids:
-            return []
-
-        try:
-            with self.engine.connect() as conn:
-                stmt = select(self.companies_table).where(
-                    self.companies_table.c.id.in_(company_ids)
-                )
-                rows = conn.execute(stmt).fetchall()
-                return [
-                    Company(
-                        id=int(r.id),
-                        name=str(r.name),
-                        industry=getattr(r, "industry", None),
-                    )
-                    for r in rows
-                ]
-        except SQLAlchemyError as e:
-            logger.error(
-                "Error getting companies for company_ids=%s: %s", company_ids, e
-            )
-            return []
-
     def search_companies_by_prefix(
         self, *, prefix: str, limit: int = 20
     ) -> List[CompanySearch]:
