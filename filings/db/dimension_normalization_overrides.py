@@ -39,6 +39,7 @@ class DimensionNormalizationOverridesOperations:
                     stmt = stmt.where(self.overrides_table.c.axis == axis)
                 if company_id is not None:
                     stmt = stmt.where(self.overrides_table.c.company_id == company_id)
+                stmt = stmt.order_by(self.overrides_table.c.updated_at.desc())
                 result = conn.execute(stmt)
                 rows = result.fetchall()
 
