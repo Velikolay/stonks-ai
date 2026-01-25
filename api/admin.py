@@ -885,7 +885,7 @@ async def update_dimension_normalization_override(
         if not updated_override:
             raise HTTPException(
                 status_code=404,
-                detail=f"Dimension normalization override not found: ({axis}, {member}, {member_label})",
+                detail=f"Dimension normalization override not found: ({company_id}, {axis}, {member}, {member_label})",
             )
         return DimensionNormalizationOverrideResponse(
             company_id=updated_override.company_id,

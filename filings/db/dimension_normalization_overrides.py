@@ -46,12 +46,12 @@ class DimensionNormalizationOverridesOperations:
                 for row in rows:
                     override = DimensionNormalizationOverride(
                         company_id=row.company_id,
-                        is_global=row.is_global,
                         axis=row.axis,
                         member=row.member,
                         member_label=row.member_label,
                         normalized_axis_label=row.normalized_axis_label,
                         normalized_member_label=row.normalized_member_label,
+                        is_global=row.is_global,
                         tags=list(row.tags) if row.tags else None,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -89,12 +89,12 @@ class DimensionNormalizationOverridesOperations:
                 if row:
                     return DimensionNormalizationOverride(
                         company_id=row.company_id,
-                        is_global=row.is_global,
                         axis=row.axis,
                         member=row.member,
                         member_label=row.member_label,
                         normalized_axis_label=row.normalized_axis_label,
                         normalized_member_label=row.normalized_member_label,
+                        is_global=row.is_global,
                         tags=list(row.tags) if row.tags else None,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -125,9 +125,9 @@ class DimensionNormalizationOverridesOperations:
                         axis=override.axis,
                         member=override.member,
                         member_label=override.member_label,
-                        is_global=override.company_id == 0,
                         normalized_axis_label=override.normalized_axis_label,
                         normalized_member_label=override.normalized_member_label,
+                        is_global=override.company_id == 0,
                         tags=override.tags,
                     )
                     .returning(self.overrides_table)
@@ -147,12 +147,12 @@ class DimensionNormalizationOverridesOperations:
 
                 return DimensionNormalizationOverride(
                     company_id=row.company_id,
-                    is_global=row.is_global,
                     axis=row.axis,
                     member=row.member,
                     member_label=row.member_label,
                     normalized_axis_label=row.normalized_axis_label,
                     normalized_member_label=row.normalized_member_label,
+                    is_global=row.is_global,
                     tags=list(row.tags) if row.tags else None,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
@@ -196,20 +196,20 @@ class DimensionNormalizationOverridesOperations:
                 if not update_values:
                     # No fields to update, return existing record
                     return self.get_by_key(
+                        company_id=company_id,
                         axis=axis,
                         member=member,
                         member_label=member_label,
-                        company_id=company_id,
                     )
 
                 stmt = (
                     update(self.overrides_table)
                     .where(
                         and_(
+                            self.overrides_table.c.company_id == company_id,
                             self.overrides_table.c.axis == axis,
                             self.overrides_table.c.member == member,
                             self.overrides_table.c.member_label == member_label,
-                            self.overrides_table.c.company_id == company_id,
                         )
                     )
                     .values(**update_values)
@@ -223,10 +223,10 @@ class DimensionNormalizationOverridesOperations:
                 if row:
                     logger.info(
                         "Updated dimension normalization override: (%s, %s, %s, %s)",
+                        company_id,
                         axis,
                         member,
                         member_label,
-                        company_id,
                     )
                     return DimensionNormalizationOverride(
                         company_id=row.company_id,
@@ -235,6 +235,7 @@ class DimensionNormalizationOverridesOperations:
                         member_label=row.member_label,
                         normalized_axis_label=row.normalized_axis_label,
                         normalized_member_label=row.normalized_member_label,
+                        is_global=row.is_global,
                         tags=list(row.tags) if row.tags else None,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -264,10 +265,10 @@ class DimensionNormalizationOverridesOperations:
             with self.engine.connect() as conn:
                 stmt = delete(self.overrides_table).where(
                     and_(
+                        self.overrides_table.c.company_id == company_id,
                         self.overrides_table.c.axis == axis,
                         self.overrides_table.c.member == member,
                         self.overrides_table.c.member_label == member_label,
-                        self.overrides_table.c.company_id == company_id,
                     )
                 )
                 result = conn.execute(stmt)
@@ -277,18 +278,18 @@ class DimensionNormalizationOverridesOperations:
                 if deleted:
                     logger.info(
                         "Deleted dimension normalization override: (%s, %s, %s, %s)",
+                        company_id,
                         axis,
                         member,
                         member_label,
-                        company_id,
                     )
                 else:
                     logger.warning(
                         "Dimension normalization override not found for deletion: (%s, %s, %s, %s)",
+                        company_id,
                         axis,
                         member,
                         member_label,
-                        company_id,
                     )
 
                 return deleted

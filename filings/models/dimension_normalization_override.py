@@ -13,15 +13,9 @@ class DimensionNormalizationOverrideBase(BaseModel):
     axis: str
     member: str
     member_label: str
-    is_global: bool = False
     normalized_axis_label: str
     normalized_member_label: Optional[str] = None
     tags: Optional[List[str]] = None
-
-    @model_validator(mode="after")
-    def _sync_is_global(self) -> "DimensionNormalizationOverrideBase":
-        self.is_global = self.company_id == 0
-        return self
 
 
 class DimensionNormalizationOverrideCreate(DimensionNormalizationOverrideBase):
@@ -41,7 +35,14 @@ class DimensionNormalizationOverrideUpdate(BaseModel):
 class DimensionNormalizationOverride(DimensionNormalizationOverrideBase):
     """Complete dimension normalization override model."""
 
+    is_global: bool
+
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _sync_is_global(self) -> "DimensionNormalizationOverride":
+        self.is_global = self.company_id == 0
+        return self
