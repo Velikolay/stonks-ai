@@ -140,7 +140,7 @@ def upgrade() -> None:
             ff.*,
             -- apply the grouping normalization so it is part of the chaining algorithm
             -- this avoids complex combining logic later on
-            COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
+            COALESCE(cnoc.normalized_label, cnog.normalized_label, cn.normalized_label, ff.label) as normalized_label,
             COALESCE(dng.normalized_axis_label, ff.axis) as normalized_axis_label,
             COALESCE(dng.normalized_member_label, ff.member_label) as normalized_member_label,
             ff.value * ff.weight as normalized_value,
@@ -149,8 +149,12 @@ def upgrade() -> None:
           FROM financial_facts ff
           LEFT JOIN concept_normalization cn
             USING (company_id, statement, concept)
-          LEFT JOIN concept_normalization_overrides cno
-            USING (statement, concept)
+          LEFT JOIN concept_normalization_overrides cnoc
+            USING (company_id, statement, concept)
+          LEFT JOIN concept_normalization_overrides cnog
+            ON ff.statement = cnog.statement
+            AND ff.concept = cnog.concept
+            AND cnog.is_global = TRUE
           LEFT JOIN dimension_normalization_grouping dng
             ON ff.company_id = dng.company_id
             AND ff.axis = dng.axis

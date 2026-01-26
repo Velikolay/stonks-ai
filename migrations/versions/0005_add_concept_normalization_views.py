@@ -249,7 +249,7 @@ def upgrade() -> None:
         WITH combined AS (
             SELECT * FROM concept_normalization_combined
         ),
-        group_overrides AS (
+        global_group_overrides AS (
           SELECT
             cn.group_id,
             MAX(cno.normalized_label) as normalized_label,
@@ -258,24 +258,44 @@ def upgrade() -> None:
           FROM combined cn
           JOIN concept_normalization_overrides cno
           ON cn.statement = cno.statement
-          AND cn.concept = cno.concept
+            AND cn.concept = cno.concept
+            AND cno.is_global = TRUE
           GROUP BY cn.group_id
+        ),
+        company_group_overrides AS (
+          SELECT
+            cn.group_id,
+            cn.company_id,
+            MAX(cno.normalized_label) as normalized_label,
+            MAX(cno.weight) as weight,
+            MAX(cno.unit) as unit
+          FROM combined cn
+          JOIN concept_normalization_overrides cno
+          ON cn.company_id = cno.company_id
+            AND cn.statement = cno.statement
+            AND cn.concept = cno.concept
+          GROUP BY
+            cn.group_id,
+            cn.company_id
         )
 
         SELECT
           cn.company_id,
           cn.statement,
           cn.concept,
-          COALESCE(go.normalized_label, cn.normalized_label) as normalized_label,
-          -- COALESCE(go.weight, cn.weight) as weight,
-          go.weight as weight,
-          -- COALESCE(go.unit, cn.unit) as unit,
-          go.unit as unit,
+          COALESCE(cgo.normalized_label, ggo.normalized_label, cn.normalized_label) as normalized_label,
+          -- COALESCE(cgo.weight, ggo.weight, cn.weight) as weight,
+          COALESCE(cgo.weight, ggo.weight) as weight,
+          -- COALESCE(cgo.unit, ggo.unit, cn.unit) as unit,
+          COALESCE(cgo.unit, ggo.unit) as unit,
           cn.group_id,
-          go.normalized_label IS NOT NULL as overridden
+          COALESCE(cgo.normalized_label, ggo.normalized_label) IS NOT NULL as overridden
         FROM combined cn
-        LEFT JOIN group_overrides go
-        ON cn.group_id = go.group_id
+        LEFT JOIN company_group_overrides cgo
+        ON cn.company_id = cgo.company_id
+          AND cn.group_id = cgo.group_id
+        LEFT JOIN global_group_overrides ggo
+        ON cn.group_id = ggo.group_id
         """
     )
 
@@ -301,38 +321,50 @@ def upgrade() -> None:
                 cne.company_id,
                 cne.filing_id,
                 cne.statement,
-                cno.concept,
-                cno.parent_concept,
+                COALESCE(cnoc.concept, cnog.concept) as concept,
+                COALESCE(cnoc.parent_concept, cnog.parent_concept) as parent_concept,
                 cne.concept as concept_expand
-            FROM concept_normalization_overrides cno
-            JOIN concept_normalization_by_filing cn
+            FROM concept_normalization_by_filing cn
+            LEFT JOIN concept_normalization_overrides cnoc
             ON
-                cno.statement = cn.statement
-                AND cno.concept = cn.concept
-            JOIN concept_normalization_by_filing cne
+                cnoc.company_id = cn.company_id
+                AND cnoc.statement = cn.statement
+                AND cnoc.concept = cn.concept
+            LEFT JOIN concept_normalization_overrides cnog
+            ON
+                cn.statement = cnog.statement
+                AND cn.concept = cnog.concept
+                AND cnog.is_global = TRUE
+            LEFT JOIN concept_normalization_by_filing cne
             ON
                 cn.group_id = cne.group_id
             WHERE
-                cno.parent_concept IS NOT NULL
+                COALESCE(cnoc.parent_concept, cnog.parent_concept) IS NOT NULL
         ),
         parent_concept_expansion AS (
             SELECT
                 cne.company_id,
                 cne.filing_id,
                 cne.statement,
-                cno.concept,
-                cno.parent_concept,
+                COALESCE(cnoc.concept, cnog.concept) as concept,
+                COALESCE(cnoc.parent_concept, cnog.parent_concept) as parent_concept,
                 cne.concept as parent_concept_expand
-            FROM concept_normalization_overrides cno
-            JOIN concept_normalization_by_filing cn
+            FROM concept_normalization_by_filing cn
+            LEFT JOIN concept_normalization_overrides cnoc
             ON
-                cno.statement = cn.statement
-                AND cno.parent_concept = cn.concept
+                cnoc.company_id = cn.company_id
+                AND cnoc.statement = cn.statement
+                AND cnoc.parent_concept = cn.concept
+            LEFT JOIN concept_normalization_overrides cnog
+            ON
+                cnog.statement = cn.statement
+                AND cnog.parent_concept = cn.concept
+                AND cnog.is_global = TRUE
             JOIN concept_normalization_by_filing cne
             ON
                 cn.group_id = cne.group_id
             WHERE
-                cno.parent_concept IS NOT NULL
+                COALESCE(cnoc.parent_concept, cnog.parent_concept) IS NOT NULL
         ),
         transitive_expansion AS (
             SELECT
