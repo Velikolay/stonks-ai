@@ -112,7 +112,6 @@ def upgrade() -> None:
             LEFT JOIN parent_normalization_expansion_cte pne
             ON
                 pne.company_id = ff.company_id
-                AND pne.filing_id  = ff.filing_id
                 AND pne.statement  = ff.statement
                 AND pne.concept    = ff.concept
 
@@ -236,7 +235,6 @@ def upgrade() -> None:
 
             LEFT JOIN parent_normalization_expansion_cte pne
                 ON pne.company_id = f.company_id
-                AND pne.filing_id  = f.filing_id
                 AND pne.statement  = f.statement
                 AND pne.concept    = new.concept
 

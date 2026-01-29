@@ -303,73 +303,70 @@ def upgrade() -> None:
         """
         CREATE VIEW parent_normalization_expansion AS
 
-        WITH concept_normalization_by_filing AS (
-          SELECT
-            cn.company_id,
-            ff.filing_id,
-            cn.statement,
-            cn.concept,
-            cn.group_id
-          FROM concept_normalization cn
-          JOIN financial_facts ff
-            ON cn.company_id = ff.company_id
-            AND cn.statement = ff.statement
-            AND cn.concept = ff.concept
+        WITH concept_normalization_cte AS (
+          SELECT * FROM concept_normalization
         ),
         concept_expansion AS (
             SELECT
                 cne.company_id,
-                cne.filing_id,
                 cne.statement,
-                COALESCE(cnoc.concept, cnog.concept) as concept,
-                COALESCE(cnoc.parent_concept, cnog.parent_concept) as parent_concept,
+                cno.concept,
+                cno.parent_concept,
                 cne.concept as concept_expand
-            FROM concept_normalization_by_filing cn
-            LEFT JOIN concept_normalization_overrides cnoc
-            ON
-                cnoc.company_id = cn.company_id
-                AND cnoc.statement = cn.statement
-                AND cnoc.concept = cn.concept
-            LEFT JOIN concept_normalization_overrides cnog
-            ON
-                cn.statement = cnog.statement
-                AND cn.concept = cnog.concept
-                AND cnog.is_global = TRUE
-            LEFT JOIN concept_normalization_by_filing cne
+            FROM concept_normalization_cte cn
+            JOIN LATERAL (
+                SELECT
+                    *
+                FROM
+                    concept_normalization_overrides o
+                WHERE
+                    o.statement = cn.statement
+                    AND o.concept = cn.concept
+                    AND (
+                        o.company_id = cn.company_id
+                        OR o.is_global = TRUE
+                    )
+                ORDER BY
+                    (o.company_id = cn.company_id) DESC
+                LIMIT 1
+            ) cno ON TRUE
+            JOIN concept_normalization_cte cne
             ON
                 cn.group_id = cne.group_id
-            WHERE
-                COALESCE(cnoc.parent_concept, cnog.parent_concept) IS NOT NULL
+            WHERE cno.parent_concept IS NOT NULL
         ),
         parent_concept_expansion AS (
             SELECT
                 cne.company_id,
-                cne.filing_id,
                 cne.statement,
-                COALESCE(cnoc.concept, cnog.concept) as concept,
-                COALESCE(cnoc.parent_concept, cnog.parent_concept) as parent_concept,
+                cno.concept,
+                cno.parent_concept,
                 cne.concept as parent_concept_expand
-            FROM concept_normalization_by_filing cn
-            LEFT JOIN concept_normalization_overrides cnoc
-            ON
-                cnoc.company_id = cn.company_id
-                AND cnoc.statement = cn.statement
-                AND cnoc.parent_concept = cn.concept
-            LEFT JOIN concept_normalization_overrides cnog
-            ON
-                cnog.statement = cn.statement
-                AND cnog.parent_concept = cn.concept
-                AND cnog.is_global = TRUE
-            JOIN concept_normalization_by_filing cne
+            FROM concept_normalization_cte cn
+            JOIN LATERAL (
+                SELECT
+                    *
+                FROM
+                    concept_normalization_overrides o
+                WHERE
+                    o.statement = cn.statement
+                    AND o.parent_concept = cn.concept
+                    AND (
+                        o.company_id = cn.company_id
+                        OR o.is_global = TRUE
+                    )
+                ORDER BY
+                    (o.company_id = cn.company_id) DESC
+                LIMIT 1
+            ) cno ON TRUE
+            JOIN concept_normalization_cte cne
             ON
                 cn.group_id = cne.group_id
-            WHERE
-                COALESCE(cnoc.parent_concept, cnog.parent_concept) IS NOT NULL
+            WHERE cno.parent_concept IS NOT NULL
         ),
         transitive_expansion AS (
             SELECT
                 ce.company_id,
-                ce.filing_id,
                 ce.statement,
                 ce.concept_expand as concept,
                 pce.parent_concept_expand as parent_concept,
@@ -379,16 +376,15 @@ def upgrade() -> None:
             JOIN parent_concept_expansion pce
             ON
                 ce.company_id = pce.company_id
-                AND ce.filing_id = pce.filing_id
                 AND ce.statement = pce.statement
                 AND ce.concept = pce.concept
         )
 
-        SELECT company_id, filing_id, statement, concept_expand as concept, parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM concept_expansion
+        SELECT company_id, statement, concept_expand as concept, parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM concept_expansion
         UNION
-        SELECT company_id, filing_id, statement, concept, parent_concept_expand as parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM parent_concept_expansion
+        SELECT company_id, statement, concept, parent_concept_expand as parent_concept, concept as concept_source, parent_concept as parent_concept_source FROM parent_concept_expansion
         UNION
-        SELECT company_id, filing_id, statement, concept, parent_concept, concept_source, parent_concept_source FROM transitive_expansion
+        SELECT company_id, statement, concept, parent_concept, concept_source, parent_concept_source FROM transitive_expansion
         """
     )
 
