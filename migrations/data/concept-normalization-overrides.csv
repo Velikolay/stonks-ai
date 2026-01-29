@@ -1,16 +1,16 @@
 company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_concept,parent_concept,description,unit,weight
-0,us-gaap:Revenues,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:SalesRevenueNet,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:OperatingRevenues,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:CostOfGoodsAndServicesSold,Income Statement,Cost of Revenue,False,True,,,,usd,
-0,us-gaap:CostOfRevenue,Income Statement,Cost of Revenue,False,True,,,,usd,
-0,us-gaap:CostOfGoodsSold,Income Statement,Cost of Revenue,False,True,,,,usd,
-0,us-gaap:GrossProfit,Income Statement,Gross Profit,False,True,,,,usd,
-0,us-gaap:GrossProfitLoss,Income Statement,Gross Profit,False,True,,,,usd,
-0,us-gaap:OperatingIncomeLoss,Income Statement,Operating Income,False,True,,,,usd,
-0,us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxes,Income Statement,Operating Income,False,True,,,,usd,
+2,us-gaap:IncomeTaxesPaidNet,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
+2,us-gaap:IncomeTaxesPaid,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
+0,us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:Liabilities,,usd,1
+0,us-gaap:LongTermDebtAndCapitalLeaseObligations,Balance Sheet,Long-term Debt,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1
+0,us-gaap:AccruedIncomeTaxesNoncurrent,Balance Sheet,"Income taxes payable, non-current",False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1
+0,us-gaap:ContractWithCustomerLiabilityNoncurrent,Balance Sheet,Deferred Revenue Non-current,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1
+0,us-gaap:OperatingLeaseLiabilityNoncurrent,Balance Sheet,Operating lease liabilities,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1
+0,us-gaap:OtherLiabilitiesNoncurrent,Balance Sheet,Other Non Current Liabilities,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1
+0,us-gaap:LiabilitiesNoncurrentAbstract,Balance Sheet,Non-current Liabilities,True,True,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,,,
+0,us-gaap:OperatingLeaseRightOfUseAsset,Balance Sheet,Operating lease assets,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
+0,us-gaap:DeferredIncomeTaxAssetsNet,Balance Sheet,Deferred income taxes,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
+0,us-gaap:OtherLongTermInvestments,Balance Sheet,Non-marketable securities,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
 0,us-gaap:NetIncomeLoss,Income Statement,Net Income,False,True,,,,usd,
 0,us-gaap:ProfitLoss,Income Statement,Net Income,False,True,,,,usd,
 0,us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes,Income Statement,Net Income,False,True,,,,usd,
@@ -49,7 +49,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:ProceedsFromPaymentsForOtherFinancingActivities,Cash Flow Statement,Other Financing Activities,False,True,,,,usd,
 0,us-gaap:PaymentsForProceedsFromOtherInvestingActivities,Cash Flow Statement,Other Investing Activities,False,True,,,,usd,
 0,us-gaap:OtherNoncashIncomeExpense,Cash Flow Statement,Other Income Expenses,False,True,,,,usd,
-0,us-gaap:AssetsAbstract,Balance Sheet,Assets,True,True,,,,,
+0,us-gaap:Revenues,Income Statement,Revenue,False,True,,,,usd,
 0,us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,True,us-gaap:AssetsAbstract,,,,
 0,us-gaap:Goodwill,Balance Sheet,Goodwill,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:IntangibleAssetsNetExcludingGoodwill,Balance Sheet,Intangible Assets Excluding Goodwill,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
@@ -62,10 +62,20 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,True,,,,usd,
 0,us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,True,us-gaap:AssetsNoncurrentAbstract,,,usd,
 0,us-gaap:LiabilitiesCurrent,Balance Sheet,Total Current Liabilities,False,True,us-gaap:LiabilitiesCurrentAbstract,,,usd,
-0,us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,True,,,,usd,
 0,us-gaap:OperatingExpenses,Income Statement,Operating Expenses,False,True,,,,usd,
 0,us-gaap:StockholdersEquity,Balance Sheet,Total Equity,False,True,,,,usd,
 0,us-gaap:MarketableSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:PropertyPlantAndEquipmentNet,Balance Sheet,"Property, Plant and Equipment",False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:OtherAssetsNoncurrent,Balance Sheet,Other Non Current Assets,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
-0,us-gaap:OtherLiabilitiesNoncurrent,Balance Sheet,Other Non Current Liabilities,False,True,,us-gaap:LiabilitiesNoncurrent,,usd,1.0
+0,us-gaap:AssetsAbstract,Balance Sheet,Assets,True,True,,,,,
+0,us-gaap:SalesRevenueNet,Income Statement,Revenue,False,True,,,,usd,
+0,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
+0,us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
+0,us-gaap:OperatingRevenues,Income Statement,Revenue,False,True,,,,usd,
+0,us-gaap:CostOfGoodsAndServicesSold,Income Statement,Cost of Revenue,False,True,,,,usd,
+0,us-gaap:CostOfRevenue,Income Statement,Cost of Revenue,False,True,,,,usd,
+0,us-gaap:CostOfGoodsSold,Income Statement,Cost of Revenue,False,True,,,,usd,
+0,us-gaap:GrossProfit,Income Statement,Gross Profit,False,True,,,,usd,
+0,us-gaap:GrossProfitLoss,Income Statement,Gross Profit,False,True,,,,usd,
+0,us-gaap:OperatingIncomeLoss,Income Statement,Operating Income,False,True,,,,usd,
+0,us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxes,Income Statement,Operating Income,False,True,,,,usd,
