@@ -194,9 +194,9 @@ async def update_company(
         if updated is None:
             raise HTTPException(status_code=404, detail="Company not found")
 
-        tickers = filings_db.companies.get_tickers_by_company_id(company_id)
+        tickers = filings_db.companies.get_tickers_by_company_id(company_id=company_id)
         filing_entities = filings_db.companies.get_filing_entities_by_company_id(
-            company_id
+            company_id=company_id
         )
         return CompanyResponse(
             id=updated.id,
@@ -379,7 +379,9 @@ async def delete_company_filing_entity(
 
     existing_ids = {
         fe.id
-        for fe in filings_db.companies.get_filing_entities_by_company_id(company_id)
+        for fe in filings_db.companies.get_filing_entities_by_company_id(
+            company_id=company_id
+        )
     }
     if filing_entity_id in existing_ids:
         raise HTTPException(
