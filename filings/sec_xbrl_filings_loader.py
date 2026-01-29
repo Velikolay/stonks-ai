@@ -31,7 +31,12 @@ class SECXBRLFilingsLoader:
         self.parser = parser or SECXBRLParser()
 
     def load_company_filings(
-        self, ticker: str, form: str = "10-Q", limit: int = 5, override: bool = False
+        self,
+        ticker: str,
+        form: str = "10-Q",
+        limit: int = 5,
+        override: bool = False,
+        status: Optional[str] = None,
     ) -> dict:
         """Download and persist filings for a company.
 
@@ -73,7 +78,7 @@ class SECXBRLFilingsLoader:
                     "error": f"Failed to get or create filing_entities for ticker {ticker}"
                 }
             filing_entities = self.database.companies.get_filing_entities_by_company_id(
-                company_id=company.id, registry="SEC", status="active"
+                company_id=company.id, registry="SEC", status=status
             )
             if not filing_entities:
                 filing_entities = []

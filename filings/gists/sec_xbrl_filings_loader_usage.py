@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
 
 
-def example_load_aapl_filings():
-    """Example: Load Apple's 10-Q XBRL filings."""
-    logger.info("Loading Apple's 10-Q XBRL filings...")
+def example_load_filings():
+    """Example: Load 10-Q/K XBRL filings."""
+    logger.info("Loading 10-Q/K XBRL filings...")
 
     # Initialize database and loader
     database = FilingsDatabase(DATABASE_URL)
@@ -24,9 +24,9 @@ def example_load_aapl_filings():
     try:
         # Process filings
         result = loader.load_company_filings(
-            ticker="AAPL",
-            form="10-Q",
-            limit=50,
+            ticker="GOOGL",
+            form="10-K",
+            limit=20,
         )
 
         if "error" in result:
@@ -42,7 +42,7 @@ def example_load_aapl_filings():
 
 def example_load_with_override():
     """Example: Load XBRL filings with override to replace existing data."""
-    logger.info("Loading Apple's 10-Q XBRL filings with override...")
+    logger.info("Loading 10-Q/K XBRL filings with override...")
 
     # Initialize database and loader
     database = FilingsDatabase(DATABASE_URL)
@@ -72,6 +72,6 @@ def example_load_with_override():
 
 if __name__ == "__main__":
     # Run examples
-    example_load_aapl_filings()
+    example_load_filings()
     # print("\n" + "=" * 50 + "\n")
     # example_load_with_override()
