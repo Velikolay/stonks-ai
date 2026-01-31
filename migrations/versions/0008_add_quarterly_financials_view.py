@@ -27,37 +27,31 @@ def upgrade() -> None:
             SELECT
                 f.*,
                 ROW_NUMBER() OVER (
-                    ORDER BY company_id, fiscal_period_end
-                ) AS rn
+                    PARTITION BY company_id
+                    ORDER BY fiscal_period_end, id
+                ) AS seq
             FROM filings f
-        ),
-        windows AS (
-            SELECT
-                o.*,
-                MAX(CASE WHEN form_type = '10-K' THEN id END)
-                    OVER (ORDER BY rn ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING)
-                    AS k_id,
-                COUNT(*) FILTER (WHERE form_type = '10-Q')
-                    OVER (ORDER BY rn ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING)
-                    AS prev_q_count
-            FROM ordered_filings o
+            WHERE form_type IN ('10-K', '10-Q')
         ),
         filings_cte AS (
             SELECT
-                id,
-                company_id,
-                fiscal_year,
-                fiscal_quarter,
+                o.id,
+                o.company_id,
+                o.fiscal_year,
+                o.fiscal_quarter,
                 CASE
-                    WHEN form_type = '10-K'
-                        AND prev_q_count = 3
-                    THEN id
-                    WHEN form_type = '10-Q'
-                        AND k_id IS NOT NULL
-                    THEN k_id
-                    ELSE NULL
+                    WHEN o.form_type = '10-K' THEN o.id
+                    ELSE (
+                        SELECT k.id
+                        FROM ordered_filings k
+                        WHERE k.company_id = o.company_id
+                        AND k.form_type = '10-K'
+                        AND k.seq > o.seq
+                        ORDER BY k.seq
+                        LIMIT 1
+                    )
                 END AS fiscal_tag
-            FROM windows
+            FROM ordered_filings o
         ),
         all_filings_data AS (
             -- Get all filing data with proper quarter assignment based on fiscal_period_end
