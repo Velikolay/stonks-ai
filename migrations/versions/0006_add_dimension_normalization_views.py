@@ -201,6 +201,27 @@ def upgrade() -> None:
             ff.axis <> ''
         ),
 
+        same_period_pairs AS (
+          SELECT DISTINCT
+            f1.company_id,
+            f1.statement,
+            f1.normalized_label,
+            f1.normalized_axis_label as normalized_axis_label1,
+            f1.normalized_member_label as normalized_member_label1,
+            f2.normalized_axis_label as normalized_axis_label2,
+            f2.normalized_member_label as normalized_member_label2
+          FROM facts f1
+          JOIN facts f2
+            ON f1.company_id = f2.company_id
+            AND f1.statement = f2.statement
+            AND f1.normalized_label = f2.normalized_label
+            AND f1.period_end = f2.period_end
+          WHERE NOT (
+            f1.normalized_axis_label = f2.normalized_axis_label
+            AND f1.normalized_member_label = f2.normalized_member_label
+          )
+        ),
+
         matches AS (
           SELECT
             f1.company_id,
@@ -239,8 +260,9 @@ def upgrade() -> None:
           WHERE
             (
                 (
-                    NOT f1.overridden OR NOT f2.overridden
-                    AND (
+                    (
+                        NOT f1.overridden OR NOT f2.overridden
+                    ) AND (
                         f1.normalized_axis_label <> f2.normalized_axis_label
                         OR f1.normalized_member_label <> f2.normalized_member_label
                     )
@@ -251,7 +273,20 @@ def upgrade() -> None:
                 ) OR (
                     f1.override_level = 'member' AND f2.override_level = 'axis' AND f1.normalized_member_label = f2.normalized_axis_label AND f1.normalized_axis_label <> f2.normalized_axis_label
                 )
-            ) AND f1.period_end > f2.period_end
+            )
+            AND f1.period_end > f2.period_end
+            AND NOT EXISTS (
+              SELECT 1
+              FROM same_period_pairs spp
+              WHERE
+                spp.company_id = f1.company_id
+                AND spp.statement = f1.statement
+                AND spp.normalized_label = f1.normalized_label
+                AND spp.normalized_axis_label1 = f1.normalized_axis_label
+                AND spp.normalized_member_label1 = f1.normalized_member_label
+                AND spp.normalized_axis_label2 = f2.normalized_axis_label
+                AND spp.normalized_member_label2 = f2.normalized_member_label
+            )
         ),
 
         -- 1. Identify all starting points (newest side of each directed link)
@@ -393,10 +428,10 @@ def upgrade() -> None:
             override_priority,
             override_level
         FROM (
-            -- SELECT *, 1 AS src_priority
-            -- FROM dimension_normalization_chaining
+            SELECT *, 1 AS src_priority
+            FROM dimension_normalization_chaining
 
-            -- UNION ALL
+            UNION ALL
 
             SELECT *, 2 AS src_priority
             FROM dimension_normalization_grouping
