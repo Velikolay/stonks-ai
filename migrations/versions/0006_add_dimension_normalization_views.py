@@ -39,6 +39,16 @@ def upgrade() -> None:
                 COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label) as normalized_member_label,
                 ff.period_end,
                 (COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label) IS NOT NULL) AS overridden,
+                CASE
+                    WHEN COALESCE(dnoc.is_global, dnog.is_global) = FALSE THEN 'company'
+                    WHEN COALESCE(dnoc.is_global, dnog.is_global) = TRUE THEN 'global'
+                    ELSE NULL
+                END as override_priority,
+                CASE
+                    WHEN COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label) IS NOT NULL THEN 'member'
+                    WHEN COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label) IS NOT NULL THEN 'axis'
+                    ELSE NULL
+                END as override_level,
                 md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label, '') || '|' || COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label, '') || '|' || 'grouping') as id
             FROM financial_facts ff
             LEFT JOIN dimension_normalization_overrides as dnoc
@@ -111,15 +121,26 @@ def upgrade() -> None:
                 COALESCE(b.normalized_axis_label, b.axis) AS normalized_axis_label,
                 COALESCE(b.normalized_member_label, b.member_label) AS normalized_member_label,
                 MAX(b.period_end) OVER (PARTITION BY g.group_id) AS group_max_period_end,
-                b.overridden
+                b.overridden,
+                b.override_priority,
+                b.override_level
             FROM groups_by_id g
             JOIN dimension_normalized_base b USING (id)
             ORDER BY
                 g.group_id,
 
                 -- prefer rows that already have normalized values
-                (b.normalized_axis_label IS NOT NULL) DESC,
-                (b.normalized_member_label IS NOT NULL) DESC,
+                CASE b.override_priority
+                    WHEN 'company' THEN 1
+                    WHEN 'global' THEN 2
+                    ELSE 3
+                END,
+
+                CASE b.override_level
+                    WHEN 'member' THEN 1
+                    WHEN 'axis' THEN 2
+                    ELSE 3
+                END,
 
                 -- recent periods are preferred
                 b.period_end DESC
@@ -134,7 +155,9 @@ def upgrade() -> None:
             c.normalized_member_label,
             g.group_id,
             c.group_max_period_end,
-            c.overridden
+            c.overridden,
+            c.override_priority,
+            c.override_level
         FROM dimension_normalized_base b
         JOIN groups_by_id g USING (id)
         JOIN canonical c USING (group_id)
@@ -156,7 +179,9 @@ def upgrade() -> None:
             COALESCE(dng.normalized_member_label, ff.member_label) as normalized_member_label,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value,
-            COALESCE(dng.overridden, FALSE) as overridden
+            COALESCE(dng.overridden, FALSE) as overridden,
+            dng.override_priority,
+            dng.override_level
           FROM financial_facts ff
           LEFT JOIN concept_normalization cn
             USING (company_id, statement, concept)
@@ -197,7 +222,11 @@ def upgrade() -> None:
             f1.normalized_member_label as normalized_member_label1,
             f2.normalized_member_label as normalized_member_label2,
             f1.overridden as overridden1,
-            f2.overridden as overridden2
+            f2.overridden as overridden2,
+            f1.override_priority as override_priority1,
+            f2.override_priority as override_priority2,
+            f1.override_level as override_level1,
+            f2.override_level as override_level2
           FROM facts f1
           JOIN facts f2
           ON
@@ -209,10 +238,20 @@ def upgrade() -> None:
             AND f1.comparative_period_end = f2.period_end
           WHERE
             (
-                f1.normalized_axis_label <> f2.normalized_axis_label
-                OR f1.normalized_member_label <> f2.normalized_member_label
-            )
-            AND f1.period_end > f2.period_end
+                (
+                    NOT f1.overridden OR NOT f2.overridden
+                    AND (
+                        f1.normalized_axis_label <> f2.normalized_axis_label
+                        OR f1.normalized_member_label <> f2.normalized_member_label
+                    )
+                ) OR (
+                    f1.override_level = 'axis' AND f2.override_level = 'axis' AND f1.normalized_axis_label = f2.normalized_axis_label AND f1.normalized_member_label <> f2.normalized_member_label
+                ) OR (
+                    f1.override_level = 'axis' AND f2.override_level = 'member' AND f1.normalized_axis_label = f2.normalized_member_label AND f1.normalized_member_label <> f2.normalized_member_label
+                ) OR (
+                    f1.override_level = 'member' AND f2.override_level = 'axis' AND f1.normalized_member_label = f2.normalized_axis_label AND f1.normalized_axis_label <> f2.normalized_axis_label
+                )
+            ) AND f1.period_end > f2.period_end
         ),
 
         -- 1. Identify all starting points (newest side of each directed link)
@@ -228,6 +267,8 @@ def upgrade() -> None:
             normalized_axis_label1 as root_normalized_axis_label,
             normalized_member_label1 as root_normalized_member_label,
             overridden1 as root_overridden,
+            override_priority1 as root_override_priority,
+            override_level1 as root_override_level,
             period_end1 as root_period
           FROM matches
         ),
@@ -245,6 +286,8 @@ def upgrade() -> None:
           r.root_normalized_axis_label as normalized_axis_label,
           r.root_normalized_member_label as normalized_member_label,
           r.root_overridden as overridden,
+          r.root_override_priority as override_priority,
+          r.root_override_level as override_level,
           r.root_period as current_period,
           r.root_period as root_period,
           md5(r.company_id || '|' || r.statement || '|' || r.root_concept || '|' || r.root_label || '|' || r.root_axis || '|' || r.root_member || '|' || r.root_member_label || '|' || r.root_normalized_axis_label || '|' || r.root_normalized_member_label || '|' || 'chaining') AS group_id
@@ -264,6 +307,8 @@ def upgrade() -> None:
           m.normalized_axis_label2 as normalized_axis_label,
           m.normalized_member_label2 as normalized_member_label,
           m.overridden2 as overridden,
+          m.override_priority2 as override_priority,
+          m.override_level2 as override_level,
           m.period_end2 as current_period,
           c.root_period as root_period,
           c.group_id as group_id
@@ -287,9 +332,28 @@ def upgrade() -> None:
                 group_id,
                 normalized_axis_label,
                 normalized_member_label,
-                overridden
+                overridden,
+                override_priority,
+                override_level
             FROM chain
-            ORDER BY group_id, overridden DESC, current_period DESC
+            ORDER BY
+                group_id,
+
+                -- prefer rows that already have normalized values
+                CASE override_priority
+                    WHEN 'company' THEN 1
+                    WHEN 'global' THEN 2
+                    ELSE 3
+                END,
+
+                CASE override_level
+                    WHEN 'member' THEN 1
+                    WHEN 'axis' THEN 2
+                    ELSE 3
+                END,
+
+                -- recent periods are preferred
+                current_period DESC
         )
 
         -- 5. Collapse duplicates (same concept can appear in multiple roots, take the latest one)
@@ -302,7 +366,9 @@ def upgrade() -> None:
           gn.normalized_member_label,
           group_id,
           root_period as group_max_period_end,
-          gn.overridden
+          gn.overridden,
+          gn.override_priority,
+          gn.override_level
         FROM chain
         JOIN group_normalized gn USING (group_id)
         ORDER BY company_id, axis, member, member_label, normalized_axis_label, normalized_member_label, root_period DESC
@@ -323,12 +389,14 @@ def upgrade() -> None:
             normalized_member_label,
             group_id,
             group_max_period_end,
-            overridden
+            overridden,
+            override_priority,
+            override_level
         FROM (
-            SELECT *, 1 AS src_priority
-            FROM dimension_normalization_chaining
+            -- SELECT *, 1 AS src_priority
+            -- FROM dimension_normalization_chaining
 
-            UNION ALL
+            -- UNION ALL
 
             SELECT *, 2 AS src_priority
             FROM dimension_normalization_grouping
