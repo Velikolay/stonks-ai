@@ -80,8 +80,10 @@ def upgrade() -> None:
         ),
         exploded AS (
             SELECT id, member AS key FROM dimension_normalized_base
-            UNION ALL
-            SELECT id, COALESCE(normalized_member_label, member_label) AS key FROM dimension_normalized_base
+            UNION
+            SELECT id, member_label AS key FROM dimension_normalized_base
+            UNION
+            SELECT id, normalized_member_label AS key FROM dimension_normalized_base
         ),
         edges AS (
             SELECT DISTINCT
