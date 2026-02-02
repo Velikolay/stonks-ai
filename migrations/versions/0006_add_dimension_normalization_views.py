@@ -415,33 +415,134 @@ def upgrade() -> None:
         """
         CREATE VIEW dimension_normalization AS
 
-        SELECT DISTINCT ON (company_id, axis, member, member_label)
-            company_id,
-            axis,
-            member,
-            member_label,
-            normalized_axis_label,
-            normalized_member_label,
-            group_id,
-            group_max_period_end,
-            overridden,
-            override_priority,
-            override_level
-        FROM (
-            SELECT *, 1 AS src_priority
-            FROM dimension_normalization_chaining
+        WITH base AS (
+            SELECT * FROM dimension_normalization_grouping
 
             UNION ALL
 
-            SELECT *, 2 AS src_priority
-            FROM dimension_normalization_grouping
-        ) t
+            SELECT * FROM dimension_normalization_chaining
+        ),
+        groups AS (
+            SELECT DISTINCT company_id, group_id
+            FROM base
+        ),
+        group_members AS (
+            -- group_id -> set of (company_id, axis, member, member_label)
+            SELECT DISTINCT
+                company_id,
+                axis,
+                member,
+                member_label,
+                group_id
+            FROM base
+        ),
+        group_edges AS (
+            -- connect groups that overlap on at least one (company_id, axis, member, member_label)
+            SELECT DISTINCT
+                gm1.company_id,
+                gm1.group_id as group_id1,
+                gm2.group_id as group_id2
+            FROM group_members gm1
+            JOIN group_members gm2
+                ON gm1.company_id = gm2.company_id
+                AND gm1.axis = gm2.axis
+                AND gm1.member = gm2.member
+                AND gm1.member_label = gm2.member_label
+            WHERE gm1.group_id <> gm2.group_id
+        ),
+        group_components AS (
+            -- connected components over group_ids, per company_id
+            WITH RECURSIVE reach AS (
+                SELECT company_id, group_id as root_group_id, group_id
+                FROM groups
+
+                UNION
+
+                SELECT r.company_id, r.root_group_id, e.group_id2 as group_id
+                FROM reach r
+                JOIN group_edges e
+                    ON e.company_id = r.company_id
+                    AND e.group_id1 = r.group_id
+            )
+            SELECT
+                company_id,
+                group_id,
+                MIN(root_group_id) as component_id
+            FROM reach
+            GROUP BY company_id, group_id
+        ),
+        component_canonical AS (
+            -- pick one canonical normalized pair per connected component
+            SELECT DISTINCT ON (gc.company_id, gc.component_id)
+                gc.company_id,
+                gc.component_id,
+                b.normalized_axis_label,
+                b.normalized_member_label,
+                b.overridden,
+                b.override_priority,
+                b.override_level
+            FROM group_components gc
+            JOIN base b
+                ON b.company_id = gc.company_id
+                AND b.group_id = gc.group_id
+            ORDER BY
+                gc.company_id,
+                gc.component_id,
+                -- prefer higher-priority overrides
+                CASE b.override_priority
+                    WHEN 'company' THEN 1
+                    WHEN 'global' THEN 2
+                    ELSE 3
+                END,
+                CASE b.override_level
+                    WHEN 'member' THEN 1
+                    WHEN 'axis' THEN 2
+                    ELSE 3
+                END,
+                -- prefer more recent groups, then chaining over grouping as tie-breaker
+                b.group_max_period_end DESC
+        ),
+        component_group_max_period_end AS (
+            SELECT
+                gc.company_id,
+                gc.component_id,
+                MAX(b.group_max_period_end) as group_max_period_end
+            FROM group_components gc
+            JOIN base b
+                ON b.company_id = gc.company_id
+                AND b.group_id = gc.group_id
+            GROUP BY gc.company_id, gc.component_id
+        )
+
+        SELECT DISTINCT ON (gm.company_id, gm.axis, gm.member, gm.member_label)
+            gm.company_id,
+            gm.axis,
+            gm.member,
+            gm.member_label,
+            cc.normalized_axis_label,
+            cc.normalized_member_label,
+            gc.component_id as group_id,
+            cgmp.group_max_period_end,
+            cc.overridden,
+            cc.override_priority,
+            cc.override_level
+        FROM group_members gm
+        JOIN group_components gc
+            ON gc.company_id = gm.company_id
+            AND gc.group_id = gm.group_id
+        JOIN component_canonical cc
+            ON cc.company_id = gc.company_id
+            AND cc.component_id = gc.component_id
+        JOIN component_group_max_period_end cgmp
+            ON cgmp.company_id = gc.company_id
+            AND cgmp.component_id = gc.component_id
         ORDER BY
-            company_id,
-            axis,
-            member,
-            member_label,
-            src_priority
+            gm.company_id,
+            gm.axis,
+            gm.member,
+            gm.member_label,
+            -- deterministic pick (all rows for a given element should agree after unification)
+            gc.component_id
         """
     )
 
