@@ -139,14 +139,17 @@ class SECXBRLParser:
             # Track global fact position (only for facts, not abstracts)
             position = 0
 
-            # Filter out rows where dimension=True (if dimension column exists)
-            if "dimension" in statement_df.columns:
-                statement_df = statement_df[
-                    statement_df["dimension"] != True  # noqa: E712
-                ]
+            base_df = statement_df[statement_df["dimension"] != True]  # noqa: E712
+            # dimensions_df = statement_df[
+            #     statement_df["dimension"] == True  # noqa: E712
+            # ]
+
+            # Map concept -> label from the base (non-dimension) facts so dimension facts
+            # can reuse the same label and avoid "hierarchy" generation.
+            base_label_by_concept: dict[str, str] = {}
 
             # Iterate through each row in the statement
-            for _, row in statement_df.iterrows():
+            for _, row in base_df.iterrows():
                 # Create financial fact with hierarchy context
                 fact = self._create_financial_fact_with_hierarchy(
                     row,
@@ -158,12 +161,149 @@ class SECXBRLParser:
 
                 if fact:
                     facts.append(fact)
+                    if not fact.is_abstract:
+                        base_label_by_concept.setdefault(fact.concept, fact.label)
                     position += 1
+
+            # Handle dimension facts (rows where dimension=True)
+            # if dimensions_df is not None and not dimensions_df.empty:
+            #     for _, row in dimensions_df.iterrows():
+            #         fact = self._create_dimension_fact(
+            #             row=row,
+            #             statement_type=statement_type,
+            #             period_col=latest_period_col,
+            #             comparative_period_col=comparative_period_col,
+            #             base_label_by_concept=base_label_by_concept,
+            #         )
+            #         if fact:
+            #             facts.append(fact)
 
         except Exception:
             logger.exception(f"Error parsing {statement_type}")
 
         return facts
+
+    def _create_dimension_fact(
+        self,
+        row,
+        statement_type: str,
+        period_col: str,
+        comparative_period_col: Optional[str],
+        base_label_by_concept: dict[str, str],
+    ) -> Optional[FinancialFactCreate]:
+        """Create a FinancialFact from a dimension row (dimension=True).
+
+        Dimension facts must not create hierarchy (no parent/abstract keys) and must
+        reuse the label of the corresponding base fact.
+
+        Args:
+            row: DataFrame row from statement (dimension=True)
+            statement_type: Type of financial statement
+            period_col: Latest period column name (e.g. "2025-06-28 (Q2)")
+            comparative_period_col: Comparative period column name (if any)
+            base_label_by_concept: Mapping from SEC concept -> base fact label
+
+        Returns:
+            FinancialFactCreate or None if invalid
+        """
+        try:
+            concept = self._to_sec_concept(row.get("concept", ""))
+            if not concept:
+                return None
+
+            axis = row.get("dimension_axis")
+            member = row.get("dimension_member").replace("_", ":")
+            member_label = row.get("dimension_member_label")
+
+            if not axis or member is None:
+                return None
+
+            is_abstract = row.get("abstract")
+            label = base_label_by_concept.get(concept, row.get("label", concept))
+            unit = row.get("unit", "usd" if not is_abstract else None)
+
+            value = row.get(period_col)
+            comparative_value = (
+                row.get(comparative_period_col) if comparative_period_col else None
+            )
+            weight = row.get("weight")
+
+            # Skip facts without a value
+            if not is_abstract and (not value or math.isnan(value)):
+                return None
+
+            # Convert value to Decimal
+            value_decimal = None
+            if not is_abstract and value and not math.isnan(value):
+                try:
+                    value_decimal = Decimal(str(value))
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid value for concept {concept}: {value}")
+                    return None
+
+            # Convert comparative value to Decimal
+            comparative_value_decimal = None
+            if (
+                not is_abstract
+                and comparative_value
+                and not math.isnan(comparative_value)
+            ):
+                try:
+                    comparative_value_decimal = Decimal(str(comparative_value))
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid comparative value for concept {concept}: {comparative_value}"
+                    )
+
+            weight_decimal = None
+            if not is_abstract and weight and not math.isnan(weight):
+                try:
+                    weight_decimal = Decimal(str(weight))
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid weight for concept {concept}: {weight}")
+
+            period_end = self._parse_date(period_col.split(" ")[0])
+            comparative_period_end = (
+                self._parse_date(comparative_period_col.split(" ")[0])
+                if comparative_period_col
+                else None
+            )
+            period = self._determine_period_type_from_column(period_col, statement_type)
+
+            period_end_str = period_end.isoformat() if period_end else ""
+            fact_key = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_OID,
+                    f"{concept}|{statement_type}|{period_end_str}|{axis}|{member}|{member_label}",
+                )
+            )
+
+            return FinancialFactCreate(
+                key=fact_key,
+                parent_key=None,
+                abstract_key=None,
+                company_id=0,
+                filing_id=0,
+                form_type="",
+                concept=concept,
+                label=label,
+                value=value_decimal,
+                is_abstract=is_abstract,
+                comparative_value=comparative_value_decimal,
+                weight=weight_decimal,
+                unit=unit,
+                axis=axis,
+                member=member,
+                member_label=member_label,
+                statement=statement_type,
+                period_end=period_end,
+                comparative_period_end=comparative_period_end,
+                period=period,
+                position=None,
+            )
+        except Exception:
+            logger.exception(f"Error creating dimension fact from row {row}")
+            return None
 
     def _parse_disaggregated_metrics(
         self, xbrl, metric: str
@@ -716,8 +856,8 @@ class SECXBRLParser:
                 comparative_value=comparative_value_decimal,
                 weight=weight_decimal,
                 unit=unit,
-                axis=None,  # Could be extracted from dimension data if available
-                member=None,  # Could be extracted from dimension data if available
+                axis=None,
+                member=None,
                 statement=statement_type,
                 period_end=period_end,
                 comparative_period_end=comparative_period_end,
