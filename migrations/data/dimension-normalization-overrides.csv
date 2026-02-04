@@ -1,4 +1,5 @@
 company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_member_label,tags
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesMember,*,False,Product,Google Services,
 2,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,*,False,Product,Other Bets,
 2,us-gaap:ProductOrServiceAxis,goog:AdvertisingMember,*,False,Product,Google Inc,
 2,us-gaap:ProductOrServiceAxis,goog:AdvertisingRevenueMember,*,False,Product,Google advertising,

@@ -405,10 +405,47 @@ class SECXBRLParser:
             return facts
 
         # Find the column containing the axis
-        axis_col = self._find_axis_column(df, axis_name)
+        dim_col = self._find_dim_column(df, axis_name)
+
+        # If an axis member is associated with multiple different values in another
+        # dimension column (dim_*), ignore those "multi-dimension" rows and keep only
+        # the rows where the other dim_* column is NaN.
+        other_dim_cols = [
+            col for col in df.columns if col.startswith("dim_") and col != dim_col
+        ]
+        for other_dim_col in other_dim_cols:
+            non_null_nunique = df.groupby(dim_col)[other_dim_col].transform(
+                lambda s: s.dropna().nunique()
+            )
+            ambiguous_member = non_null_nunique >= 2
+            df = df[~ambiguous_member | df[other_dim_col].isna()]
+
+        # Handle members that appear more than once for the same period_key.
+        # If a (member, period_key) combination is duplicated:
+        # - keep it if the duplicated rows have the same value (keep one row)
+        # - drop it if the duplicated rows disagree on value (drop all rows in group)
+        if "period_key" in df.columns:
+            group_cols = [dim_col, "period_key"]
+
+            num_value_col = "numeric_value" if "numeric_value" in df.columns else None
+            str_value_col = "value" if "value" in df.columns else None
+            value_col = num_value_col or str_value_col
+
+            if value_col is None:
+                # Without a value column, duplicated groups are ambiguous → drop all.
+                df = df[~df.duplicated(subset=group_cols, keep=False)]
+            else:
+                duplicated_group = df.duplicated(subset=group_cols, keep=False)
+                nunique_by_group = df.groupby(group_cols)[value_col].transform(
+                    lambda s: s.nunique(dropna=False)
+                )
+                inconsistent_group = duplicated_group & (nunique_by_group > 1)
+                df = df[~inconsistent_group]
+                # For remaining duplicates with identical values, keep one row.
+                df = df.drop_duplicates(subset=group_cols, keep="first")
 
         # Get unique values from the axis column
-        members = df[axis_col].unique()
+        members = df[dim_col].unique()
 
         position = base_position
 
@@ -416,7 +453,7 @@ class SECXBRLParser:
         for member in members:
             # Get the first two rows matching this value, sorted by period_start desc
             member_rows = (
-                df[df[axis_col] == member]
+                df[df[dim_col] == member]
                 .sort_values("period_start", ascending=False)
                 .head(2)
             )
@@ -424,7 +461,7 @@ class SECXBRLParser:
             # Derive position from base position and current facts list length
             position += 1
             # Extract the dimension name from the column
-            dimension = self._dim_from_column(axis_col)
+            dimension = self._dim_from_column(dim_col)
 
             fact = self._create_disaggregated_metric_fact(
                 row=member_rows.iloc[0],
@@ -679,7 +716,7 @@ class SECXBRLParser:
         dim = sec_dim.replace(":", "_", 1)
         return f"dim_{dim}"
 
-    def _find_axis_column(self, df: pd.DataFrame, axis_name: str) -> Optional[str]:
+    def _find_dim_column(self, df: pd.DataFrame, axis_name: str) -> Optional[str]:
         """Find the column name that contains the given axis name.
 
         Args:
