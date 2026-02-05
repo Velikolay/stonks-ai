@@ -1,4 +1,5 @@
 company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_concept,parent_concept,description,unit,weight
+2,us-gaap:AdvertisingRevenue,Income Statement,Revenue,False,False,,,,usd,
 2,us-gaap:IncomeTaxesPaidNet,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
 2,us-gaap:IncomeTaxesPaid,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
 0,us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:Liabilities,,usd,1
