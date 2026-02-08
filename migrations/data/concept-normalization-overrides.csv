@@ -1,4 +1,10 @@
 company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_concept,parent_concept,description,unit,weight
+5,tsla:SalesRevenueAutomotive,Income Statement,Automotive Revenue,False,False,,,,usd,
+5,us-gaap:SalesRevenueGoodsNet,Income Statement,Net Revenue,False,False,,,,usd,
+5,us-gaap:OperatingLeasesIncomeStatementLeaseRevenue,Income Statement,Automotive Lease Revenue,False,False,,,,usd,
+5,tsla:CostOfAutomotiveLeasing,Income Statement,Cost of Automotive Leasing Revenue,False,False,,,,usd,
+5,tsla:CostOfRevenuesAutomotive,Income Statement,Cost of Automotive Revenue,False,False,,,,usd,
+5,us-gaap:CostOfGoodsSold,Income Statement,Cost of Automotive Revenue,False,False,,,,usd,
 2,us-gaap:AdvertisingRevenue,Income Statement,Revenue,False,False,,,,usd,
 2,us-gaap:IncomeTaxesPaidNet,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
 2,us-gaap:IncomeTaxesPaid,Cash Flow Statement,Cash paid for income taxes,False,False,,,,usd,
