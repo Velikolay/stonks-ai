@@ -109,6 +109,11 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("registry", "number", name="uq_filings_registry_number"),
     )
+    op.create_index(
+        "ix_filings_company_id",
+        "filings",
+        ["company_id"],
+    )
 
     # Create financial_facts table
     op.create_table(
@@ -183,6 +188,7 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS period_type")
 
     # Drop filings table
+    op.drop_index("ix_filings_company_id", table_name="filings")
     op.drop_table("filings")
 
     # Drop indexes

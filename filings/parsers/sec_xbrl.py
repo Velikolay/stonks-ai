@@ -22,6 +22,20 @@ class SECXBRLParser:
         """Initialize the parser."""
         pass
 
+    @staticmethod
+    def _is_nullish(value: object) -> bool:
+        """Return True when a scalar is None/NaN/pandas NA.
+
+        This is safe for non-numeric values (unlike calling math.isnan directly).
+        """
+        if value is None:
+            return True
+        try:
+            is_na = math.isnan(value)
+        except Exception:
+            return True
+        return is_na
+
     def parse_filing(self, filing: Filing) -> list[FinancialFactCreate]:
         """Parse an XBRL filing and extract financial facts.
 
@@ -229,12 +243,12 @@ class SECXBRLParser:
             weight = row.get("weight")
 
             # Skip facts without a value
-            if not is_abstract and (not value or math.isnan(value)):
+            if not is_abstract and self._is_nullish(value):
                 return None
 
             # Convert value to Decimal
             value_decimal = None
-            if not is_abstract and value and not math.isnan(value):
+            if not is_abstract and not self._is_nullish(value):
                 try:
                     value_decimal = Decimal(str(value))
                 except (ValueError, TypeError):
@@ -243,11 +257,7 @@ class SECXBRLParser:
 
             # Convert comparative value to Decimal
             comparative_value_decimal = None
-            if (
-                not is_abstract
-                and comparative_value
-                and not math.isnan(comparative_value)
-            ):
+            if not is_abstract and not self._is_nullish(comparative_value):
                 try:
                     comparative_value_decimal = Decimal(str(comparative_value))
                 except (ValueError, TypeError):
@@ -256,7 +266,7 @@ class SECXBRLParser:
                     )
 
             weight_decimal = None
-            if not is_abstract and weight and not math.isnan(weight):
+            if not is_abstract and not self._is_nullish(weight):
                 try:
                     weight_decimal = Decimal(str(weight))
                 except (ValueError, TypeError):
@@ -401,7 +411,12 @@ class SECXBRLParser:
         # Query disaggregated metrics by axis
         df = xbrl.query().by_concept(metric).by_dimension(axis_name).to_dataframe()
 
-        if df is None or df.empty:
+        if (
+            df is None
+            or df.empty
+            or "period_start" not in df.columns
+            or "period_end" not in df.columns
+        ):
             return facts
 
         # Find the column containing the axis
@@ -512,7 +527,7 @@ class SECXBRLParser:
             member_label = row.get("dimension_member_label") or member
 
             # Skip if no value
-            if not value or math.isnan(value):
+            if self._is_nullish(value):
                 return None
 
             # Convert value to Decimal
@@ -529,7 +544,7 @@ class SECXBRLParser:
                 if comparative_row is not None
                 else None
             )
-            if comparative_value and not math.isnan(comparative_value):
+            if not self._is_nullish(comparative_value):
                 try:
                     comparative_value_decimal = Decimal(str(comparative_value))
                 except (ValueError, TypeError):
@@ -538,7 +553,7 @@ class SECXBRLParser:
                     )
 
             weight_decimal = None
-            if weight and not math.isnan(weight):
+            if not self._is_nullish(weight):
                 try:
                     weight_decimal = Decimal(str(weight))
                 except (ValueError, TypeError):
@@ -547,16 +562,21 @@ class SECXBRLParser:
                     )
 
             # Parse dates
-            period_start = self._parse_date(row.get("period_start"))
             period_end = self._parse_date(row.get("period_end"))
-
             comparative_period_end = (
                 self._parse_date(comparative_row.get("period_end"))
                 if comparative_row is not None
                 else None
             )
 
+            if period_end is None:
+                logger.warning(
+                    f"Invalid period end for disaggregated {metric}, {dimension} fact: {row.get('period_end')}"
+                )
+                return None
+
             # Determine period type based on dates
+            period_start = self._parse_date(row.get("period_start"))
             period = self._determine_period_type(period_start, period_end, form_type)
 
             # Create the financial fact
@@ -795,7 +815,7 @@ class SECXBRLParser:
                 return None
 
             # Skip facts without a value
-            if not is_abstract and (not value or math.isnan(value)):
+            if not is_abstract and self._is_nullish(value):
                 return None
 
             # Skip undesired abstracts
@@ -813,7 +833,7 @@ class SECXBRLParser:
 
             # Convert value to Decimal
             value_decimal = None
-            if not is_abstract and value and not math.isnan(value):
+            if not is_abstract and not self._is_nullish(value):
                 try:
                     value_decimal = Decimal(str(value))
                 except (ValueError, TypeError):
@@ -822,11 +842,7 @@ class SECXBRLParser:
 
             # Convert comparative value to Decimal
             comparative_value_decimal = None
-            if (
-                not is_abstract
-                and comparative_value
-                and not math.isnan(comparative_value)
-            ):
+            if not is_abstract and not self._is_nullish(comparative_value):
                 try:
                     comparative_value_decimal = Decimal(str(comparative_value))
                 except (ValueError, TypeError):
@@ -835,7 +851,7 @@ class SECXBRLParser:
                     )
 
             weight_decimal = None
-            if not is_abstract and weight and not math.isnan(weight):
+            if not is_abstract and not self._is_nullish(weight):
                 try:
                     weight_decimal = Decimal(str(weight))
                 except (ValueError, TypeError):
