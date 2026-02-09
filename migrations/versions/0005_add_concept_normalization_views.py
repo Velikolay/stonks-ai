@@ -86,6 +86,22 @@ def upgrade() -> None:
           WHERE
             f1.concept <> f2.concept
             AND f1.period_end > f2.period_end
+            AND NOT EXISTS (
+                SELECT 1
+                FROM financial_facts fx
+                WHERE fx.company_id = f1.company_id
+                    AND fx.statement = f1.statement
+                    AND fx.period_end = f1.period_end
+                    AND fx.concept = f2.concept
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM financial_facts fx
+                WHERE fx.company_id = f2.company_id
+                    AND fx.statement = f2.statement
+                    AND fx.period_end = f2.period_end
+                    AND fx.concept = f1.concept
+            )
           ORDER BY f1.company_id, f1.statement, f1.concept, f2.concept, f1.period_end, f2.period_end
         ),
 
