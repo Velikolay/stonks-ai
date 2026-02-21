@@ -269,13 +269,17 @@ def upgrade() -> None:
           SELECT
             cn.group_id,
             MAX(cno.normalized_label) as normalized_label,
-            MAX(cno.weight) as weight,
+            MAX(ch.weight) as weight,
             MAX(cno.unit) as unit
           FROM combined cn
           JOIN concept_normalization_overrides cno
           ON cn.statement = cno.statement
             AND cn.concept = cno.concept
             AND cno.is_global = TRUE
+          LEFT JOIN concept_hierarchy ch
+            ON ch.statement = cno.statement
+            AND ch.concept = cno.concept
+            AND ch.company_id = cno.company_id
           GROUP BY cn.group_id
         ),
         company_group_overrides AS (
@@ -283,13 +287,17 @@ def upgrade() -> None:
             cn.group_id,
             cn.company_id,
             MAX(cno.normalized_label) as normalized_label,
-            MAX(cno.weight) as weight,
+            MAX(ch.weight) as weight,
             MAX(cno.unit) as unit
           FROM combined cn
           JOIN concept_normalization_overrides cno
           ON cn.company_id = cno.company_id
             AND cn.statement = cno.statement
             AND cn.concept = cno.concept
+          LEFT JOIN concept_hierarchy ch
+            ON ch.company_id = cno.company_id
+            AND ch.statement = cno.statement
+            AND ch.concept = cno.concept
           GROUP BY
             cn.group_id,
             cn.company_id
@@ -334,7 +342,7 @@ def upgrade() -> None:
                 SELECT
                     *
                 FROM
-                    concept_normalization_overrides o
+                    concept_hierarchy o
                 WHERE
                     o.statement = cn.statement
                     AND o.concept = cn.concept
@@ -363,7 +371,7 @@ def upgrade() -> None:
                 SELECT
                     *
                 FROM
-                    concept_normalization_overrides o
+                    concept_hierarchy o
                 WHERE
                     o.statement = cn.statement
                     AND o.parent_concept = cn.concept

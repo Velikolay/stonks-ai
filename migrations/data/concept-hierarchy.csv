@@ -1,0 +1,24 @@
+company_id,statement,concept,is_global,weight,parent_concept,abstract_concept
+0,Balance Sheet,us-gaap:LiabilitiesNoncurrent,True,1,us-gaap:Liabilities,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:LongTermDebtAndCapitalLeaseObligations,True,1,us-gaap:LiabilitiesNoncurrent,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:AccruedIncomeTaxesNoncurrent,True,1,us-gaap:LiabilitiesNoncurrent,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:ContractWithCustomerLiabilityNoncurrent,True,1,us-gaap:LiabilitiesNoncurrent,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:OperatingLeaseLiabilityNoncurrent,True,1,us-gaap:LiabilitiesNoncurrent,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:OtherLiabilitiesNoncurrent,True,1,us-gaap:LiabilitiesNoncurrent,us-gaap:LiabilitiesNoncurrentAbstract
+0,Balance Sheet,us-gaap:LiabilitiesNoncurrentAbstract,True,,,us-gaap:LiabilitiesAndStockholdersEquityAbstract
+0,Balance Sheet,us-gaap:OperatingLeaseRightOfUseAsset,True,1,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:DeferredIncomeTaxAssetsNet,True,1,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:OtherLongTermInvestments,True,1,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:AssetsNoncurrentAbstract,True,,,us-gaap:AssetsAbstract
+0,Balance Sheet,us-gaap:Goodwill,True,1.0,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:IntangibleAssetsNetExcludingGoodwill,True,1.0,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:LongTermDebtNoncurrent,True,1.0,us-gaap:LiabilitiesNoncurrent,
+0,Balance Sheet,us-gaap:DeferredRevenueNoncurrent,True,1.0,us-gaap:LiabilitiesNoncurrent,
+0,Balance Sheet,us-gaap:LiabilitiesCurrentAbstract,True,,,us-gaap:LiabilitiesAndStockholdersEquityAbstract
+0,Balance Sheet,us-gaap:AccountsPayable,True,1.0,us-gaap:LiabilitiesCurrent,us-gaap:LiabilitiesCurrentAbstract
+0,Balance Sheet,us-gaap:AccountsPayableCurrent,True,1.0,us-gaap:LiabilitiesCurrent,us-gaap:LiabilitiesCurrentAbstract
+0,Balance Sheet,us-gaap:AssetsNoncurrent,True,,,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:LiabilitiesCurrent,True,,,us-gaap:LiabilitiesCurrentAbstract
+0,Balance Sheet,us-gaap:MarketableSecuritiesNoncurrent,True,1.0,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:PropertyPlantAndEquipmentNet,True,1.0,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract
+0,Balance Sheet,us-gaap:OtherAssetsNoncurrent,True,1.0,us-gaap:AssetsNoncurrent,us-gaap:AssetsNoncurrentAbstract

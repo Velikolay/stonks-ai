@@ -100,18 +100,29 @@ def upgrade() -> None:
 
             LEFT JOIN LATERAL (
                 SELECT
-                    *
+                    r.company_id,
+                    r.statement,
+                    r.concept,
+                    r.normalized_label,
+                    r.unit,
+                    h.weight,
+                    h.parent_concept,
+                    h.abstract_concept
                 FROM
-                    concept_normalization_overrides o
+                    concept_normalization_overrides r
+                LEFT JOIN concept_hierarchy h
+                    ON h.company_id = r.company_id
+                    AND h.statement = r.statement
+                    AND h.concept = r.concept
                 WHERE
-                    o.statement = ff.statement
-                    AND o.concept = ff.concept
+                    r.statement = ff.statement
+                    AND r.concept = ff.concept
                     AND (
-                        o.company_id = ff.company_id
-                        OR o.is_global = TRUE
+                        r.company_id = ff.company_id
+                        OR r.is_global = TRUE
                     )
                 ORDER BY
-                    (o.company_id = ff.company_id) DESC
+                    (r.company_id = ff.company_id) DESC
                 LIMIT 1
             ) cno ON TRUE
 
@@ -161,7 +172,7 @@ def upgrade() -> None:
                 cno.concept,
                 cno.normalized_label AS label,
                 cno.normalized_label,
-                cno.is_abstract,
+                (cno.concept LIKE '%Abstract') as is_abstract,
                 0 AS value,
                 0 AS comparative_value,
                 cno.weight,
@@ -224,18 +235,29 @@ def upgrade() -> None:
 
             JOIN LATERAL (
                 SELECT
-                    *
+                    r.company_id,
+                    r.statement,
+                    r.concept,
+                    r.normalized_label,
+                    r.unit,
+                    h.weight,
+                    h.parent_concept,
+                    h.abstract_concept
                 FROM
-                    concept_normalization_overrides o
+                    concept_normalization_overrides r
+                LEFT JOIN concept_hierarchy h
+                    ON h.company_id = r.company_id
+                    AND h.statement = r.statement
+                    AND h.concept = r.concept
                 WHERE
-                    o.statement = f.statement
-                    AND o.concept = new.concept
+                    r.statement = f.statement
+                    AND r.concept = new.concept
                     AND (
-                        o.company_id = f.company_id
-                        OR o.is_global = TRUE
+                        r.company_id = f.company_id
+                        OR r.is_global = TRUE
                     )
                 ORDER BY
-                    (o.company_id = f.company_id) DESC
+                    (r.company_id = f.company_id) DESC
                 LIMIT 1
             ) cno ON TRUE
 

@@ -128,16 +128,28 @@ def upgrade() -> None:
             -- Add previous quarter data for YTD conversion
             SELECT
                 q.*,
-                CASE
-                    WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
-                    THEN LAG(value) OVER w
-                    ELSE NULL
-                END AS prev_value
+                COALESCE(
+                    CASE
+                        WHEN (period_end - LAG(period_end) OVER w_same_concept) BETWEEN 80 AND 100
+                        THEN LAG(value) OVER w_same_concept
+                        ELSE NULL
+                    END,
+                    CASE
+                        WHEN (period_end - LAG(period_end) OVER w_any) BETWEEN 80 AND 100
+                        THEN LAG(value) OVER w_any
+                        ELSE NULL
+                    END
+                ) AS prev_value
             FROM quarterly_filings_raw q
-            WINDOW w AS (
-                PARTITION BY company_id, statement, normalized_label, axis, member
-                ORDER BY period_end
-            )
+            WINDOW
+                w_any AS (
+                    PARTITION BY company_id, statement, normalized_label, axis, member
+                    ORDER BY period_end
+                ),
+                w_same_concept AS (
+                    PARTITION BY company_id, statement, concept, normalized_label, axis, member
+                    ORDER BY period_end
+                )
         ),
         quarterly_filings AS (
             -- Convert YTD data to quarterly values

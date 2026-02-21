@@ -23,17 +23,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create concept normalization mapping table
-    table = op.create_table(
-        "concept_normalization_overrides",
+    # Create concept graph / hierarchy table
+    hierarchy_table = op.create_table(
+        "concept_hierarchy",
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
-        sa.Column("normalized_label", sa.String(), nullable=False),
-        sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("is_global", sa.Boolean(), nullable=False),
-        sa.Column("description", sa.String(), nullable=True),
-        sa.Column("unit", sa.String(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("parent_concept", sa.String(), nullable=True),
         sa.Column("abstract_concept", sa.String(), nullable=True),
@@ -51,22 +47,53 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("company_id", "concept", "statement"),
         sa.ForeignKeyConstraint(
-            ["abstract_concept", "statement", "company_id"],
-            [
-                "concept_normalization_overrides.concept",
-                "concept_normalization_overrides.statement",
-                "concept_normalization_overrides.company_id",
-            ],
-            name="fk_concept_normalization_overrides_abstract_concept",
+            ["company_id"],
+            ["companies.id"],
+            name="fk_concept_hierarchy_company_id",
         ),
-        sa.ForeignKeyConstraint(
-            ["parent_concept", "statement", "company_id"],
-            [
-                "concept_normalization_overrides.concept",
-                "concept_normalization_overrides.statement",
-                "concept_normalization_overrides.company_id",
-            ],
-            name="fk_concept_normalization_overrides_parent_concept",
+    )
+
+    # Create normalization rules table
+    rules_table = op.create_table(
+        "concept_normalization_overrides",
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("concept", sa.String(), nullable=False),
+        sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("label", sa.String(), nullable=False, server_default=sa.text("'*'")),
+        sa.Column(
+            "form_type", sa.String(), nullable=False, server_default=sa.text("'*'")
+        ),
+        sa.Column(
+            "from_period", sa.String(), nullable=False, server_default=sa.text("'*'")
+        ),
+        sa.Column(
+            "to_period", sa.String(), nullable=False, server_default=sa.text("'*'")
+        ),
+        sa.Column("is_global", sa.Boolean(), nullable=False),
+        sa.Column("description", sa.String(), nullable=True),
+        sa.Column("unit", sa.String(), nullable=True),
+        sa.Column("normalized_label", sa.String(), nullable=False),
+        sa.Column("normalized_concept", sa.String(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
+        sa.PrimaryKeyConstraint(
+            "company_id",
+            "concept",
+            "statement",
+            "label",
+            "form_type",
+            "from_period",
+            "to_period",
         ),
         sa.ForeignKeyConstraint(
             ["company_id"],
@@ -75,20 +102,41 @@ def upgrade() -> None:
         ),
     )
 
-    # Create indexes for parent_concept and abstract_concept
+    # Indexes for hierarchy traversal
     op.execute(
         """
-        CREATE INDEX idx_concept_normalization_overrides_parent_concept ON concept_normalization_overrides (parent_concept, statement, company_id);
+        CREATE INDEX idx_concept_hierarchy_parent_concept
+        ON concept_hierarchy (company_id, parent_concept, statement);
+    """
+    )
+    op.execute(
+        """
+        CREATE INDEX idx_concept_hierarchy_abstract_concept
+        ON concept_hierarchy (company_id, abstract_concept, statement);
     """
     )
 
+    # Index for normalized concept lookups
     op.execute(
         """
-        CREATE INDEX idx_concept_normalization_overrides_abstract_concept ON concept_normalization_overrides (abstract_concept, statement, company_id);
+        CREATE INDEX idx_concept_normalization_overrides_normalized_concept
+        ON concept_normalization_overrides (
+            company_id,
+            COALESCE(normalized_concept, concept),
+            statement
+        );
     """
     )
 
-    # Create trigger to update updated_at timestamp
+    # Triggers to update updated_at timestamp
+    op.execute(
+        """
+        CREATE TRIGGER update_concept_hierarchy_updated_at
+        BEFORE UPDATE ON concept_hierarchy
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    """
+    )
     op.execute(
         """
         CREATE TRIGGER update_concept_normalization_overrides_updated_at
@@ -98,14 +146,17 @@ def upgrade() -> None:
     """
     )
 
-    # Insert initial concept mappings from CSV file
+    # Insert initial concept mappings from CSV files
     migration_dir = Path(__file__).parent
-    csv_path = migration_dir.parent / "data" / "concept-normalization-overrides.csv"
+    hierarchy_csv_path = migration_dir.parent / "data" / "concept-hierarchy.csv"
+    rules_csv_path = (
+        migration_dir.parent / "data" / "concept-normalization-overrides.csv"
+    )
 
     connection = op.get_bind()
 
-    rows = []
-    with open(csv_path, "r", encoding="utf-8") as f:
+    hierarchy_rows = []
+    with open(hierarchy_csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
@@ -117,27 +168,22 @@ def upgrade() -> None:
                 ):
                     continue
 
-                # Convert boolean string to boolean
-                is_abstract = row.get("is_abstract", "").lower() == "true"
+                company_id = int(row["company_id"])
+                concept = row["concept"]
+                statement = row["statement"]
                 is_global = row.get("is_global", "").lower() == "true"
 
                 # Convert empty strings to None for nullable fields
                 abstract_concept = row.get("abstract_concept") or None
                 parent_concept = row.get("parent_concept") or None
-                description = row.get("description") or None
-                unit = row.get("unit") or None
                 weight = row.get("weight") or None
 
-                rows.append(
+                hierarchy_rows.append(
                     {
-                        "company_id": row["company_id"],
-                        "concept": row["concept"],
-                        "statement": row["statement"],
-                        "normalized_label": row["normalized_label"],
-                        "is_abstract": is_abstract,
+                        "company_id": company_id,
+                        "concept": concept,
+                        "statement": statement,
                         "is_global": is_global,
-                        "description": description,
-                        "unit": unit,
                         "weight": weight,
                         "parent_concept": parent_concept,
                         "abstract_concept": abstract_concept,
@@ -147,8 +193,56 @@ def upgrade() -> None:
                 logger.exception(f"Error processing row {row}")
                 raise e
 
-    if rows:
-        connection.execute(table.insert(), rows)
+    rules_rows = []
+    with open(rules_csv_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                # Skip empty rows
+                if (
+                    not row.get("company_id")
+                    or not row.get("concept")
+                    or not row.get("statement")
+                ):
+                    continue
+
+                company_id = int(row["company_id"])
+                concept = row["concept"]
+                statement = row["statement"]
+                is_global = row.get("is_global", "").lower() == "true"
+
+                def _star_default(value: object) -> str:
+                    if value is None:
+                        return "*"
+                    stripped = str(value).strip()
+                    return stripped if stripped else "*"
+
+                rules_rows.append(
+                    {
+                        "company_id": company_id,
+                        "concept": concept,
+                        "statement": statement,
+                        "label": _star_default(row.get("label")),
+                        "form_type": _star_default(row.get("form_type")),
+                        "from_period": _star_default(row.get("from_period")),
+                        "to_period": _star_default(row.get("to_period")),
+                        "is_global": is_global,
+                        "description": (row.get("description") or "").strip() or None,
+                        "unit": (row.get("unit") or "").strip() or None,
+                        "normalized_label": row["normalized_label"],
+                        "normalized_concept": (
+                            (row.get("normalized_concept") or "").strip() or None
+                        ),
+                    }
+                )
+            except Exception as e:
+                logger.exception(f"Error processing row {row}")
+                raise e
+
+    if hierarchy_rows:
+        connection.execute(hierarchy_table.insert(), hierarchy_rows)
+    if rules_rows:
+        connection.execute(rules_table.insert(), rules_rows)
 
 
 def downgrade() -> None:
@@ -156,14 +250,18 @@ def downgrade() -> None:
     op.execute(
         "DROP TRIGGER IF EXISTS update_concept_normalization_overrides_updated_at ON concept_normalization_overrides"
     )
+    op.execute(
+        "DROP TRIGGER IF EXISTS update_concept_hierarchy_updated_at ON concept_hierarchy"
+    )
+
+    op.execute(
+        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_normalized_concept"
+    )
 
     # Drop indexes for parent_concept and abstract_concept
-    op.execute(
-        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_parent_concept"
-    )
-    op.execute(
-        "DROP INDEX IF EXISTS idx_concept_normalization_overrides_abstract_concept"
-    )
+    op.execute("DROP INDEX IF EXISTS idx_concept_hierarchy_parent_concept")
+    op.execute("DROP INDEX IF EXISTS idx_concept_hierarchy_abstract_concept")
 
-    # Drop concept_normalization_overrides table
+    # Drop tables
     op.drop_table("concept_normalization_overrides")
+    op.drop_table("concept_hierarchy")

@@ -28,8 +28,10 @@ def upgrade() -> None:
         "dimension_normalization_overrides",
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
-        sa.Column("member", sa.String(), nullable=False),
-        sa.Column("member_label", sa.String(), nullable=False),
+        sa.Column("member", sa.String(), nullable=False, server_default=sa.text("'*'")),
+        sa.Column(
+            "member_label", sa.String(), nullable=False, server_default=sa.text("'*'")
+        ),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("normalized_axis_label", sa.String(), nullable=False),
         sa.Column("normalized_member_label", sa.String(), nullable=True),
