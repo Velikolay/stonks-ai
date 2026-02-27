@@ -35,20 +35,20 @@ def upgrade() -> None:
                 ff.form_type,
                 ff.concept,
                 ff.label,
-                COALESCE(cno.normalized_label, cn.normalized_label, ff.label) as normalized_label,
+                COALESCE(cn.normalized_label, ff.label) as normalized_label,
                 ff.is_abstract,
                 CASE
-                    WHEN ff.weight * COALESCE(cno.weight, cn.weight, ff.weight) < 0
+                    WHEN ff.weight * COALESCE(ch.weight, ff.weight) < 0
                     THEN -ff.value
                     ELSE ff.value
                 END as value,
                 CASE
-                    WHEN ff.weight * COALESCE(cno.weight, cn.weight, ff.weight) < 0
+                    WHEN ff.weight * COALESCE(ch.weight, ff.weight) < 0
                     THEN -ff.comparative_value
                     ELSE ff.comparative_value
                 END as comparative_value,
-                COALESCE(cno.weight, cn.weight, ff.weight) as weight,
-                COALESCE(cno.unit, cn.unit, ff.unit) as unit,
+                COALESCE(ch.weight, ff.weight) as weight,
+                ff.unit as unit,
                 COALESCE(dn.normalized_axis_label, ff.axis) as axis,
                 COALESCE(dn.normalized_member_label, ff.member_label) as member,
                 ff.statement,
@@ -58,11 +58,11 @@ def upgrade() -> None:
                 ff.position,
 
                 CASE
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
                         ffp.id
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
                         abs(hashtextextended(
-                            ff.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept_source) || '|' ||
+                            ff.statement || '|' || COALESCE(ch.parent_concept, pne.parent_concept_source) || '|' ||
                             ff.filing_id::text || '|' || ff.company_id::text,
                             0
                         ))
@@ -70,18 +70,18 @@ def upgrade() -> None:
                         ff.parent_id
                 END as parent_id,
                 CASE
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
-                    COALESCE(cno.parent_concept, pne.parent_concept_source)
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    COALESCE(ch.parent_concept, pne.parent_concept_source)
                 ELSE
                     NULL
                 END as parent_concept,
 
                 CASE
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
                         ffa.id
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
                         abs(hashtextextended(
-                            ff.statement || '|' || cno.abstract_concept || '|' ||
+                            ff.statement || '|' || ch.abstract_concept || '|' ||
                             ff.filing_id::text || '|' || ff.company_id::text,
                             0
                         ))
@@ -89,8 +89,8 @@ def upgrade() -> None:
                         ff.abstract_id
                 END as abstract_id,
                 CASE
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
-                        cno.abstract_concept
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        ch.abstract_concept
                     ELSE
                         NULL
                 END as abstract_concept,
@@ -98,59 +98,47 @@ def upgrade() -> None:
                 FALSE as is_synthetic
             FROM financial_facts ff
 
+            LEFT JOIN concept_normalization cn
+            ON ff.id = cn.id
+
             LEFT JOIN LATERAL (
                 SELECT
-                    r.company_id,
-                    r.statement,
-                    r.concept,
-                    r.normalized_label,
-                    r.unit,
                     h.weight,
                     h.parent_concept,
                     h.abstract_concept
                 FROM
-                    concept_normalization_overrides r
-                LEFT JOIN concept_hierarchy h
-                    ON h.company_id = r.company_id
-                    AND h.statement = r.statement
-                    AND h.concept = r.concept
+                    concept_hierarchy h
                 WHERE
-                    r.statement = ff.statement
-                    AND r.concept = ff.concept
+                    h.statement = ff.statement
+                    AND h.concept = COALESCE(cn.normalized_concept, ff.concept)
                     AND (
-                        r.company_id = ff.company_id
-                        OR r.is_global = TRUE
+                        h.company_id = ff.company_id
+                        OR h.is_global = TRUE
                     )
                 ORDER BY
-                    (r.company_id = ff.company_id) DESC
+                    (h.company_id = ff.company_id) DESC
                 LIMIT 1
-            ) cno ON TRUE
+            ) ch ON TRUE
 
             LEFT JOIN parent_normalization_expansion_cte pne
             ON
                 pne.company_id = ff.company_id
                 AND pne.statement  = ff.statement
-                AND pne.concept    = ff.concept
+                AND pne.concept    = COALESCE(cn.normalized_concept, ff.concept)
 
             LEFT JOIN financial_facts ffp
             ON
                 ffp.company_id = ff.company_id
                 AND ffp.filing_id  = ff.filing_id
                 AND ffp.statement  = ff.statement
-                AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
+                AND ffp.concept    = COALESCE(ch.parent_concept, pne.parent_concept)
 
             LEFT JOIN financial_facts ffa
             ON
                 ffa.company_id = ff.company_id
                 AND ffa.filing_id  = ff.filing_id
                 AND ffa.statement  = ff.statement
-                AND ffa.concept    = cno.abstract_concept
-
-            LEFT JOIN concept_normalization cn
-            ON
-                ff.company_id = cn.company_id
-                AND ff.statement = cn.statement
-                AND ff.concept = cn.concept
+                AND ffa.concept    = ch.abstract_concept
 
             LEFT JOIN dimension_normalization dn
             ON
@@ -169,28 +157,28 @@ def upgrade() -> None:
                 f.company_id,
                 f.filing_id,
                 f.form_type,
-                cno.concept,
-                cno.normalized_label AS label,
-                cno.normalized_label,
-                (cno.concept LIKE '%Abstract') as is_abstract,
+                new.concept as concept,
+                COALESCE(cno.normalized_label, new.concept) as label,
+                COALESCE(cno.normalized_label, new.concept) as normalized_label,
+                (new.concept LIKE '%Abstract') as is_abstract,
                 0 AS value,
                 0 AS comparative_value,
-                cno.weight,
-                cno.unit,
+                COALESCE(ch.weight, 1) as weight,
+                f.unit as unit,
                 '' AS axis,
                 '' AS member,
-                cno.statement,
+                f.statement,
                 f.period_end,
                 f.comparative_period_end,
                 f.period,
                 99 AS position,
 
                 CASE
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
                         ffp.id
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
                         abs(hashtextextended(
-                            f.statement || '|' || COALESCE(cno.parent_concept, pne.parent_concept_source) || '|' ||
+                            f.statement || '|' || COALESCE(ch.parent_concept, pne.parent_concept_source) || '|' ||
                             f.filing_id::text || '|' || f.company_id::text,
                             0
                         ))
@@ -198,18 +186,18 @@ def upgrade() -> None:
                         NULL
                 END as parent_id,
                 CASE
-                    WHEN COALESCE(cno.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
-                    COALESCE(cno.parent_concept, pne.parent_concept_source)
+                    WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NULL THEN
+                    COALESCE(ch.parent_concept, pne.parent_concept_source)
                 ELSE
                     NULL
                 END as parent_concept,
 
                 CASE
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NOT NULL THEN
                         ffa.id
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
                         abs(hashtextextended(
-                            f.statement || '|' || cno.abstract_concept || '|' ||
+                            f.statement || '|' || ch.abstract_concept || '|' ||
                             f.filing_id::text || '|' || f.company_id::text,
                             0
                         ))
@@ -217,8 +205,8 @@ def upgrade() -> None:
                         NULL
                 END as abstract_id,
                 CASE
-                    WHEN cno.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
-                        cno.abstract_concept
+                    WHEN ch.abstract_concept IS NOT NULL AND ffa.id IS NULL THEN
+                        ch.abstract_concept
                     ELSE
                         NULL
                 END as abstract_concept,
@@ -235,29 +223,38 @@ def upgrade() -> None:
 
             JOIN LATERAL (
                 SELECT
-                    r.company_id,
-                    r.statement,
-                    r.concept,
-                    r.normalized_label,
-                    r.unit,
                     h.weight,
                     h.parent_concept,
                     h.abstract_concept
                 FROM
-                    concept_normalization_overrides r
-                LEFT JOIN concept_hierarchy h
-                    ON h.company_id = r.company_id
-                    AND h.statement = r.statement
-                    AND h.concept = r.concept
+                    concept_hierarchy h
+                WHERE
+                    h.statement = f.statement
+                    AND h.concept = new.concept
+                    AND (
+                        h.company_id = f.company_id
+                        OR h.is_global = TRUE
+                    )
+                ORDER BY
+                    (h.company_id = f.company_id) DESC
+                LIMIT 1
+            ) ch ON TRUE
+
+            LEFT JOIN LATERAL (
+                SELECT
+                    r.normalized_label
+                FROM concept_normalization_overrides r
                 WHERE
                     r.statement = f.statement
                     AND r.concept = new.concept
-                    AND (
-                        r.company_id = f.company_id
-                        OR r.is_global = TRUE
-                    )
+                    AND (r.company_id = f.company_id OR r.is_global = TRUE)
+                    AND r.label = '*'
+                    AND r.form_type = '*'
+                    AND r.from_period = '*'
+                    AND r.to_period = '*'
                 ORDER BY
-                    (r.company_id = f.company_id) DESC
+                    (r.company_id = f.company_id) DESC,
+                    r.updated_at DESC
                 LIMIT 1
             ) cno ON TRUE
 
@@ -270,13 +267,13 @@ def upgrade() -> None:
                 ON ffp.company_id = f.company_id
                 AND ffp.filing_id  = f.filing_id
                 AND ffp.statement  = f.statement
-                AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
+                AND ffp.concept    = COALESCE(ch.parent_concept, pne.parent_concept)
 
             LEFT JOIN financial_facts ffa
                 ON ffa.company_id = f.company_id
                 AND ffa.filing_id  = f.filing_id
                 AND ffa.statement  = f.statement
-                AND ffa.concept    = cno.abstract_concept
+                AND ffa.concept    = ch.abstract_concept
         ),
         synthetic_rollup AS (
             /* ---------------------------------------
