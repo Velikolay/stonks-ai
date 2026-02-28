@@ -56,19 +56,14 @@ def upgrade() -> None:
     # Create normalization rules table
     rules_table = op.create_table(
         "concept_normalization_overrides",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
-        sa.Column("label", sa.String(), nullable=False, server_default=sa.text("'*'")),
-        sa.Column(
-            "form_type", sa.String(), nullable=False, server_default=sa.text("'*'")
-        ),
-        sa.Column(
-            "from_period", sa.String(), nullable=False, server_default=sa.text("'*'")
-        ),
-        sa.Column(
-            "to_period", sa.String(), nullable=False, server_default=sa.text("'*'")
-        ),
+        sa.Column("label", sa.String(), nullable=True),
+        sa.Column("form_type", sa.String(), nullable=True),
+        sa.Column("from_period", sa.String(), nullable=True),
+        sa.Column("to_period", sa.String(), nullable=True),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
@@ -86,15 +81,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint(
-            "company_id",
-            "concept",
-            "statement",
-            "label",
-            "form_type",
-            "from_period",
-            "to_period",
-        ),
+        sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
@@ -125,6 +112,23 @@ def upgrade() -> None:
             COALESCE(normalized_concept, concept),
             statement
         );
+    """
+    )
+
+    # Indexes to speed up rule matching against facts
+    op.execute(
+        """
+        CREATE INDEX idx_concept_normalization_overrides_match_company
+        ON concept_normalization_overrides (
+            company_id,
+            concept,
+            statement,
+            label,
+            form_type,
+            from_period,
+            to_period
+        )
+        WHERE is_global = FALSE;
     """
     )
 
@@ -211,21 +215,23 @@ def upgrade() -> None:
                 statement = row["statement"]
                 is_global = row.get("is_global", "").lower() == "true"
 
-                def _star_default(value: object) -> str:
+                def _str_or_none(value: object) -> str | None:
                     if value is None:
-                        return "*"
+                        return None
                     stripped = str(value).strip()
-                    return stripped if stripped else "*"
+                    if not stripped:
+                        return None
+                    return stripped
 
                 rules_rows.append(
                     {
                         "company_id": company_id,
                         "concept": concept,
                         "statement": statement,
-                        "label": _star_default(row.get("label")),
-                        "form_type": _star_default(row.get("form_type")),
-                        "from_period": _star_default(row.get("from_period")),
-                        "to_period": _star_default(row.get("to_period")),
+                        "label": _str_or_none(row.get("label")),
+                        "form_type": _str_or_none(row.get("form_type")),
+                        "from_period": _str_or_none(row.get("from_period")),
+                        "to_period": _str_or_none(row.get("to_period")),
                         "is_global": is_global,
                         "description": (row.get("description") or "").strip() or None,
                         "unit": (row.get("unit") or "").strip() or None,
@@ -257,6 +263,7 @@ def downgrade() -> None:
     op.execute(
         "DROP INDEX IF EXISTS idx_concept_normalization_overrides_normalized_concept"
     )
+    op.execute("DROP INDEX IF EXISTS idx_concept_normalization_overrides_match_company")
 
     # Drop indexes for parent_concept and abstract_concept
     op.execute("DROP INDEX IF EXISTS idx_concept_hierarchy_parent_concept")

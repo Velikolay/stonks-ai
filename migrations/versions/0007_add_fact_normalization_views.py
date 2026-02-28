@@ -158,8 +158,8 @@ def upgrade() -> None:
                 f.filing_id,
                 f.form_type,
                 new.concept as concept,
-                COALESCE(cno.normalized_label, new.concept) as label,
-                COALESCE(cno.normalized_label, new.concept) as normalized_label,
+                cno.normalized_label as label,
+                cno.normalized_label as normalized_label,
                 (new.concept LIKE '%Abstract') as is_abstract,
                 0 AS value,
                 0 AS comparative_value,
@@ -240,7 +240,7 @@ def upgrade() -> None:
                 LIMIT 1
             ) ch ON TRUE
 
-            LEFT JOIN LATERAL (
+            JOIN LATERAL (
                 SELECT
                     r.normalized_label
                 FROM concept_normalization_overrides r
@@ -248,10 +248,10 @@ def upgrade() -> None:
                     r.statement = f.statement
                     AND r.concept = new.concept
                     AND (r.company_id = f.company_id OR r.is_global = TRUE)
-                    AND r.label = '*'
-                    AND r.form_type = '*'
-                    AND r.from_period = '*'
-                    AND r.to_period = '*'
+                    AND r.label IS NULL
+                    AND r.form_type IS NULL
+                    AND r.from_period IS NULL
+                    AND r.to_period IS NULL
                 ORDER BY
                     (r.company_id = f.company_id) DESC,
                     r.updated_at DESC

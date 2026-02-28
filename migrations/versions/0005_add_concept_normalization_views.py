@@ -50,23 +50,23 @@ def upgrade() -> None:
                 r.statement = ff.statement
                 AND r.concept = ff.concept
                 AND (r.company_id = ff.company_id OR r.is_global = TRUE)
-                AND (r.label = '*' OR r.label = ff.label)
-                AND (r.form_type = '*' OR r.form_type = ff.form_type)
+                AND (r.label IS NULL OR r.label = ff.label)
+                AND (r.form_type IS NULL OR r.form_type = ff.form_type)
                 AND (
-                    NULLIF(r.from_period, '*') IS NULL
-                    OR ff.period_end >= NULLIF(r.from_period, '*')::date
+                    r.from_period IS NULL
+                    OR ff.period_end >= r.from_period::date
                 )
                 AND (
-                    NULLIF(r.to_period, '*') IS NULL
-                    OR ff.period_end <= NULLIF(r.to_period, '*')::date
+                    r.to_period IS NULL
+                    OR ff.period_end <= r.to_period::date
                 )
             ORDER BY
                 (r.company_id = ff.company_id) DESC,
                 (
-                    (r.label <> '*')::int
-                    + (r.form_type <> '*')::int
-                    + (r.from_period <> '*')::int
-                    + (r.to_period <> '*')::int
+                    (r.label IS NOT NULL)::int
+                    + (r.form_type IS NOT NULL)::int
+                    + (r.from_period IS NOT NULL)::int
+                    + (r.to_period IS NOT NULL)::int
                 ) DESC,
                 r.updated_at DESC
             LIMIT 1
@@ -464,88 +464,6 @@ def upgrade() -> None:
         """
     )
 
-    # op.execute(
-    #     """
-    #     CREATE VIEW concept_normalization AS
-
-    #     WITH combined_facts AS (
-    #         SELECT * FROM concept_normalization_combined
-    #     ),
-    #     combined AS (
-    #         SELECT DISTINCT ON (company_id, statement, concept)
-    #             company_id,
-    #             statement,
-    #             concept,
-    #             normalized_label,
-    #             group_id,
-    #             group_max_period_end
-    #         FROM combined_facts
-    #         ORDER BY
-    #             company_id,
-    #             statement,
-    #             concept,
-    #             overridden DESC,
-    #             src_priority,
-    #             group_max_period_end DESC
-    #     ),
-    #     global_group_overrides AS (
-    #       SELECT
-    #         cn.group_id,
-    #         MAX(cno.normalized_label) as normalized_label,
-    #         MAX(ch.weight) as weight,
-    #         MAX(cno.unit) as unit
-    #       FROM combined cn
-    #       JOIN concept_normalization_overrides cno
-    #       ON cn.statement = cno.statement
-    #         AND cn.concept = cno.concept
-    #         AND cno.is_global = TRUE
-    #       LEFT JOIN concept_hierarchy ch
-    #         ON ch.statement = cno.statement
-    #         AND ch.concept = cno.concept
-    #         AND ch.company_id = cno.company_id
-    #       GROUP BY cn.group_id
-    #     ),
-    #     company_group_overrides AS (
-    #       SELECT
-    #         cn.group_id,
-    #         cn.company_id,
-    #         MAX(cno.normalized_label) as normalized_label,
-    #         MAX(ch.weight) as weight,
-    #         MAX(cno.unit) as unit
-    #       FROM combined cn
-    #       JOIN concept_normalization_overrides cno
-    #       ON cn.company_id = cno.company_id
-    #         AND cn.statement = cno.statement
-    #         AND cn.concept = cno.concept
-    #       LEFT JOIN concept_hierarchy ch
-    #         ON ch.company_id = cno.company_id
-    #         AND ch.statement = cno.statement
-    #         AND ch.concept = cno.concept
-    #       GROUP BY
-    #         cn.group_id,
-    #         cn.company_id
-    #     )
-
-    #     SELECT
-    #       cn.company_id,
-    #       cn.statement,
-    #       cn.concept,
-    #       COALESCE(cgo.normalized_label, ggo.normalized_label, cn.normalized_label) as normalized_label,
-    #       -- COALESCE(cgo.weight, ggo.weight, cn.weight) as weight,
-    #       COALESCE(cgo.weight, ggo.weight) as weight,
-    #       -- COALESCE(cgo.unit, ggo.unit, cn.unit) as unit,
-    #       COALESCE(cgo.unit, ggo.unit) as unit,
-    #       cn.group_id,
-    #       COALESCE(cgo.normalized_label, ggo.normalized_label) IS NOT NULL as overridden
-    #     FROM combined cn
-    #     LEFT JOIN company_group_overrides cgo
-    #     ON cn.company_id = cgo.company_id
-    #       AND cn.group_id = cgo.group_id
-    #     LEFT JOIN global_group_overrides ggo
-    #     ON cn.group_id = ggo.group_id
-    #     """
-    # )
-
     op.execute(
         """
         CREATE VIEW parent_normalization_expansion AS
@@ -652,6 +570,5 @@ def downgrade() -> None:
     # Drop the views
     op.execute("DROP VIEW IF EXISTS parent_normalization_expansion")
     op.execute("DROP VIEW IF EXISTS concept_normalization")
-    # op.execute("DROP VIEW IF EXISTS concept_normalization_combined")
     op.execute("DROP VIEW IF EXISTS concept_normalization_chaining")
     op.execute("DROP VIEW IF EXISTS concept_normalization_grouping")
