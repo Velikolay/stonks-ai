@@ -64,6 +64,7 @@ def upgrade() -> None:
         sa.Column("form_type", sa.String(), nullable=True),
         sa.Column("from_period", sa.String(), nullable=True),
         sa.Column("to_period", sa.String(), nullable=True),
+        sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
@@ -213,7 +214,6 @@ def upgrade() -> None:
                 company_id = int(row["company_id"])
                 concept = row["concept"]
                 statement = row["statement"]
-                is_global = row.get("is_global", "").lower() == "true"
 
                 def _str_or_none(value: object) -> str | None:
                     if value is None:
@@ -223,16 +223,29 @@ def upgrade() -> None:
                         return None
                     return stripped
 
+                def _bool_required(value: object, field_name: str) -> bool:
+                    if value is None:
+                        raise ValueError(f"Missing required field: {field_name}")
+                    stripped = str(value).strip().lower()
+                    if stripped == "true":
+                        return True
+                    if stripped == "false":
+                        return False
+                    raise ValueError(f"Invalid boolean for {field_name}: {value!r}")
+
                 rules_rows.append(
                     {
                         "company_id": company_id,
                         "concept": concept,
                         "statement": statement,
+                        "is_abstract": _bool_required(
+                            row.get("is_abstract"), "is_abstract"
+                        ),
                         "label": _str_or_none(row.get("label")),
                         "form_type": _str_or_none(row.get("form_type")),
                         "from_period": _str_or_none(row.get("from_period")),
                         "to_period": _str_or_none(row.get("to_period")),
-                        "is_global": is_global,
+                        "is_global": _bool_required(row.get("is_global"), "is_global"),
                         "description": (row.get("description") or "").strip() or None,
                         "unit": (row.get("unit") or "").strip() or None,
                         "normalized_label": row["normalized_label"],

@@ -153,25 +153,25 @@ def upgrade() -> None:
             * Add missing parent / abstract concept
             * ------------------------------- */
             SELECT
-                new.id AS id,
+                new.id as id,
                 f.company_id,
                 f.filing_id,
                 f.form_type,
-                new.concept as concept,
+                new.concept,
                 cno.normalized_label as label,
                 cno.normalized_label as normalized_label,
-                (new.concept LIKE '%Abstract') as is_abstract,
-                0 AS value,
-                0 AS comparative_value,
+                cno.is_abstract,
+                0 as value,
+                0 as comparative_value,
                 COALESCE(ch.weight, 1) as weight,
                 f.unit as unit,
-                '' AS axis,
-                '' AS member,
+                '' as axis,
+                '' as member,
                 f.statement,
                 f.period_end,
                 f.comparative_period_end,
                 f.period,
-                99 AS position,
+                99 as position,
 
                 CASE
                     WHEN COALESCE(ch.parent_concept, pne.parent_concept) IS NOT NULL AND ffp.id IS NOT NULL THEN
@@ -242,7 +242,8 @@ def upgrade() -> None:
 
             JOIN LATERAL (
                 SELECT
-                    r.normalized_label
+                    r.normalized_label,
+                    r.is_abstract
                 FROM concept_normalization_overrides r
                 WHERE
                     r.statement = f.statement
