@@ -55,17 +55,25 @@ def upgrade() -> None:
             ON
                 ff.company_id = dnoc.company_id
                 AND (
-                    (ff.axis = dnoc.axis AND dnoc.member = '*' AND dnoc.member_label = '*')
-                    OR (ff.axis = dnoc.axis AND ff.member = dnoc.member)
-                    OR (ff.axis = dnoc.axis AND ff.member_label = dnoc.member_label)
+                    (ff.axis = dnoc.axis AND dnoc.member IS NULL AND dnoc.member_label IS NULL)
+                    OR (ff.axis = dnoc.axis AND dnoc.member IS NOT NULL AND ff.member = dnoc.member)
+                    OR (
+                        ff.axis = dnoc.axis
+                        AND dnoc.member_label IS NOT NULL
+                        AND ff.member_label = dnoc.member_label
+                    )
                 )
             LEFT JOIN dimension_normalization_overrides as dnog
             ON
                 dnog.is_global = TRUE
                 AND (
-                    (ff.axis = dnog.axis AND dnog.member = '*' AND dnog.member_label = '*')
-                    OR (ff.axis = dnog.axis AND ff.member = dnog.member)
-                    OR (ff.axis = dnog.axis AND ff.member_label = dnog.member_label)
+                    (ff.axis = dnog.axis AND dnog.member IS NULL AND dnog.member_label IS NULL)
+                    OR (ff.axis = dnog.axis AND dnog.member IS NOT NULL AND ff.member = dnog.member)
+                    OR (
+                        ff.axis = dnog.axis
+                        AND dnog.member_label IS NOT NULL
+                        AND ff.member_label = dnog.member_label
+                    )
                 )
             WHERE
                 ff.axis <> ''

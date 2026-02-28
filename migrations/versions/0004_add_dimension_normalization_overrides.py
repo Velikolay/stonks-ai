@@ -26,12 +26,11 @@ def upgrade() -> None:
     # Create dimension normalization mapping table
     table = op.create_table(
         "dimension_normalization_overrides",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
-        sa.Column("member", sa.String(), nullable=False, server_default=sa.text("'*'")),
-        sa.Column(
-            "member_label", sa.String(), nullable=False, server_default=sa.text("'*'")
-        ),
+        sa.Column("member", sa.String(), nullable=True),
+        sa.Column("member_label", sa.String(), nullable=True),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         sa.Column("normalized_axis_label", sa.String(), nullable=False),
         sa.Column("normalized_member_label", sa.String(), nullable=True),
@@ -48,7 +47,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.PrimaryKeyConstraint("company_id", "axis", "member", "member_label"),
+        sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
@@ -63,6 +62,14 @@ def upgrade() -> None:
         BEFORE UPDATE ON dimension_normalization_overrides
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column();
+    """
+    )
+
+    # Indexes to speed up override matching
+    op.execute(
+        """
+        CREATE INDEX idx_dimension_normalization_overrides_match
+        ON dimension_normalization_overrides (company_id, axis, member, member_label);
     """
     )
 
@@ -81,21 +88,35 @@ def upgrade() -> None:
                 if (
                     not row.get("company_id")
                     or not row.get("axis")
-                    or not row.get("member")
-                    or not row.get("member_label")
                     or not row.get("normalized_axis_label")
                 ):
                     continue
 
-                is_global = row.get("is_global", "").lower() == "true"
+                def _str_or_none(value: object) -> str | None:
+                    if value is None:
+                        return None
+                    stripped = str(value).strip()
+                    if not stripped:
+                        return None
+                    return stripped
+
+                def _bool_required(value: object, field_name: str) -> bool:
+                    if value is None:
+                        raise ValueError(f"Missing required field: {field_name}")
+                    stripped = str(value).strip().lower()
+                    if stripped == "true":
+                        return True
+                    if stripped == "false":
+                        return False
+                    raise ValueError(f"Invalid boolean for {field_name}: {value!r}")
 
                 rows.append(
                     {
                         "company_id": row["company_id"],
                         "axis": row["axis"],
-                        "member": row["member"],
-                        "member_label": row["member_label"],
-                        "is_global": is_global,
+                        "member": _str_or_none(row.get("member")),
+                        "member_label": _str_or_none(row.get("member_label")),
+                        "is_global": _bool_required(row.get("is_global"), "is_global"),
                         "normalized_axis_label": row["normalized_axis_label"],
                         "normalized_member_label": (
                             row["normalized_member_label"]
@@ -118,6 +139,8 @@ def downgrade() -> None:
     op.execute(
         "DROP TRIGGER IF EXISTS update_dimension_normalization_overrides_updated_at ON dimension_normalization_overrides"
     )
+
+    op.execute("DROP INDEX IF EXISTS idx_dimension_normalization_overrides_match")
 
     # Drop dimension_normalization_overrides table
     op.drop_table("dimension_normalization_overrides")
