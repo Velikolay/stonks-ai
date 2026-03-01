@@ -1,7 +1,7 @@
 """Add dimension normalization views
 
-Revision ID: 0006
-Revises: 0005
+Revision ID: 0007
+Revises: 0006
 Create Date: 2024-12-20 12:00:00.000000
 
 """
@@ -9,8 +9,8 @@ Create Date: 2024-12-20 12:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0006"
-down_revision = "0005"
+revision = "0007"
+down_revision = "0006"
 branch_labels = None
 depends_on = None
 
@@ -55,7 +55,7 @@ def upgrade() -> None:
             ON
                 ff.company_id = dnoc.company_id
                 AND (
-                    (ff.axis = dnoc.axis AND dnoc.member = '*' AND dnoc.member_label = '*')
+                    (ff.axis = dnoc.axis AND dnoc.member IS NULL AND dnoc.member_label IS NULL)
                     OR (ff.axis = dnoc.axis AND ff.member = dnoc.member)
                     OR (ff.axis = dnoc.axis AND ff.member_label = dnoc.member_label)
                 )
@@ -63,7 +63,7 @@ def upgrade() -> None:
             ON
                 dnog.is_global = TRUE
                 AND (
-                    (ff.axis = dnog.axis AND dnog.member = '*' AND dnog.member_label = '*')
+                    (ff.axis = dnog.axis AND dnog.member IS NULL AND dnog.member_label IS NULL)
                     OR (ff.axis = dnog.axis AND ff.member = dnog.member)
                     OR (ff.axis = dnog.axis AND ff.member_label = dnog.member_label)
                 )

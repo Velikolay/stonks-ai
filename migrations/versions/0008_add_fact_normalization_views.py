@@ -1,7 +1,7 @@
 """Add fact normalization views
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0008
+Revises: 0007
 Create Date: 2024-12-20 12:00:00.000000
 
 """
@@ -9,8 +9,8 @@ Create Date: 2024-12-20 12:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0007"
-down_revision = "0006"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 

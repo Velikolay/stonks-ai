@@ -109,17 +109,28 @@ def upgrade() -> None:
         reader = csv.DictReader(f)
         for row in reader:
             try:
-                # Skip empty rows
-                if (
-                    not row.get("company_id")
-                    or not row.get("concept")
-                    or not row.get("statement")
-                ):
+                required_fields = [
+                    "company_id",
+                    "concept",
+                    "statement",
+                    "normalized_label",
+                    "is_abstract",
+                    "is_global",
+                ]
+                if not any(row.get(field) for field in required_fields):
                     continue
+                missing_required_fields = [
+                    field for field in required_fields if not row.get(field)
+                ]
+                if missing_required_fields:
+                    raise ValueError(
+                        "Missing required column value(s): "
+                        + ", ".join(missing_required_fields)
+                    )
 
                 # Convert boolean string to boolean
-                is_abstract = row.get("is_abstract", "").lower() == "true"
-                is_global = row.get("is_global", "").lower() == "true"
+                is_abstract = row["is_abstract"].lower() == "true"
+                is_global = row["is_global"].lower() == "true"
 
                 # Convert empty strings to None for nullable fields
                 abstract_concept = row.get("abstract_concept") or None
