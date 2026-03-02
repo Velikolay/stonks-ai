@@ -1,7 +1,7 @@
 """Add concept normalization views
 
-Revision ID: 0006
-Revises: 0005
+Revision ID: 0007
+Revises: 0006
 Create Date: 2024-12-20 12:00:00.000000
 
 """
@@ -9,14 +9,13 @@ Create Date: 2024-12-20 12:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0006"
-down_revision = "0005"
+revision = "0007"
+down_revision = "0006"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-
     # Create view for grouping concept normalization
     op.execute(
         """
@@ -29,7 +28,7 @@ def upgrade() -> None:
             (ARRAY_AGG(label ORDER BY period_end DESC))[1] AS normalized_label,
             md5(company_id || '|' || statement || '|' || concept || '|' || 'grouping') AS group_id,
             MAX(period_end) AS group_max_period_end
-        FROM financial_facts ff
+        FROM financial_facts_overridden ff
         WHERE axis = ''
         GROUP BY
             company_id,
@@ -47,7 +46,11 @@ def upgrade() -> None:
         """
         CREATE VIEW concept_normalization_chaining AS
 
-        WITH RECURSIVE facts AS (
+        WITH RECURSIVE financial_facts_overridden_cte AS (
+            SELECT * FROM financial_facts_overridden
+        ),
+
+        facts AS (
           SELECT
             ff.*,
             -- apply the grouping normalization so it is part of the chaining algorithm
@@ -55,7 +58,7 @@ def upgrade() -> None:
             COALESCE(cng.normalized_label, ff.label) as normalized_label,
             ff.value * ff.weight as normalized_value,
             ff.comparative_value * ff.weight as normalized_comparative_value
-          FROM financial_facts ff
+          FROM financial_facts_overridden_cte ff
           LEFT JOIN concept_normalization_grouping cng
             ON ff.company_id = cng.company_id
             AND ff.statement = cng.statement
@@ -88,7 +91,7 @@ def upgrade() -> None:
             AND f1.period_end > f2.period_end
             AND NOT EXISTS (
                 SELECT 1
-                FROM financial_facts fx
+                FROM financial_facts_overridden_cte fx
                 WHERE fx.company_id = f1.company_id
                     AND fx.statement = f1.statement
                     AND fx.period_end = f1.period_end
@@ -96,7 +99,7 @@ def upgrade() -> None:
             )
             AND NOT EXISTS (
                 SELECT 1
-                FROM financial_facts fx
+                FROM financial_facts_overridden_cte fx
                 WHERE fx.company_id = f2.company_id
                     AND fx.statement = f2.statement
                     AND fx.period_end = f2.period_end

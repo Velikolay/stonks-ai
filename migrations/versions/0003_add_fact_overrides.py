@@ -1,7 +1,7 @@
 """Add fact overrides table
 
-Revision ID: 0005
-Revises: 0004
+Revision ID: 0003
+Revises: 0002
 Create Date: 2026-03-01 10:00:00.000000
 
 """
@@ -16,8 +16,8 @@ from alembic import op
 logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
-revision = "0005"
-down_revision = "0004"
+revision = "0003"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 
@@ -25,7 +25,7 @@ depends_on = None
 def upgrade() -> None:
     # Create rewrite rules table
     table = op.create_table(
-        "fact_overrides",
+        "financial_facts_overrides",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
@@ -57,13 +57,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
-            name="fk_fact_overrides_company_id",
+            name="fk_financial_facts_overrides_company_id",
         ),
     )
 
     op.create_index(
-        "ix_fact_overrides_match",
-        "fact_overrides",
+        "ix_financial_facts_overrides_match",
+        "financial_facts_overrides",
         [
             "company_id",
             "concept",
@@ -80,8 +80,8 @@ def upgrade() -> None:
     # Create trigger to update updated_at timestamp
     op.execute(
         """
-        CREATE TRIGGER update_fact_overrides_updated_at
-        BEFORE UPDATE ON fact_overrides
+        CREATE TRIGGER update_financial_facts_overrides_updated_at
+        BEFORE UPDATE ON financial_facts_overrides
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column();
     """
@@ -121,8 +121,16 @@ def upgrade() -> None:
                         "company_id": row["company_id"],
                         "concept": row["concept"],
                         "statement": row["statement"],
-                        "axis": row.get("axis") or None,
-                        "member": row.get("member") or None,
+                        "axis": (
+                            ""
+                            if row.get("axis") in {'""'}
+                            else (row.get("axis") or None)
+                        ),
+                        "member": (
+                            ""
+                            if row.get("member") in {'""'}
+                            else (row.get("member") or None)
+                        ),
                         "label": row.get("label") or None,
                         "form_type": row.get("form_type") or None,
                         "from_period": row.get("from_period") or None,
@@ -143,7 +151,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "DROP TRIGGER IF EXISTS update_fact_overrides_updated_at ON fact_overrides"
+        "DROP TRIGGER IF EXISTS update_financial_facts_overrides_updated_at ON financial_facts_overrides"
     )
-    op.drop_index("ix_fact_overrides_match", table_name="fact_overrides")
-    op.drop_table("fact_overrides")
+    op.drop_index(
+        "ix_financial_facts_overrides_match", table_name="financial_facts_overrides"
+    )
+    op.drop_table("financial_facts_overrides")

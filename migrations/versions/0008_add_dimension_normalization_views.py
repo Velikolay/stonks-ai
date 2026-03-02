@@ -1,7 +1,7 @@
 """Add dimension normalization views
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0008
+Revises: 0007
 Create Date: 2024-12-20 12:00:00.000000
 
 """
@@ -9,8 +9,8 @@ Create Date: 2024-12-20 12:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0007"
-down_revision = "0006"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 
@@ -50,7 +50,7 @@ def upgrade() -> None:
                     ELSE NULL
                 END as override_level,
                 md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label, '') || '|' || COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label, '') || '|' || 'grouping') as id
-            FROM financial_facts ff
+            FROM financial_facts_overridden ff
             LEFT JOIN dimension_normalization_overrides as dnoc
             ON
                 ff.company_id = dnoc.company_id
@@ -184,7 +184,7 @@ def upgrade() -> None:
             COALESCE(dng.overridden, FALSE) as overridden,
             dng.override_priority,
             dng.override_level
-          FROM financial_facts ff
+          FROM financial_facts_overridden ff
           LEFT JOIN concept_normalization cn
             USING (company_id, statement, concept)
           LEFT JOIN concept_normalization_overrides cnoc

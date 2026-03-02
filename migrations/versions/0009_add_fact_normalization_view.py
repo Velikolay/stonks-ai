@@ -1,7 +1,7 @@
 """Add fact normalization views
 
-Revision ID: 0008
-Revises: 0007
+Revision ID: 0009
+Revises: 0008
 Create Date: 2024-12-20 12:00:00.000000
 
 """
@@ -9,8 +9,8 @@ Create Date: 2024-12-20 12:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0008"
-down_revision = "0007"
+revision = "0009"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 
@@ -21,7 +21,10 @@ def upgrade() -> None:
         """
         CREATE VIEW financial_facts_normalized AS
 
-        WITH RECURSIVE parent_normalization_expansion_cte AS (
+        WITH RECURSIVE financial_facts_overridden_cte AS (
+            SELECT * FROM financial_facts_overridden
+        ),
+        parent_normalization_expansion_cte AS (
             SELECT * FROM parent_normalization_expansion
         ),
         normalized_facts AS (
@@ -96,7 +99,7 @@ def upgrade() -> None:
                 END as abstract_concept,
 
                 FALSE as is_synthetic
-            FROM financial_facts ff
+            FROM financial_facts_overridden_cte ff
 
             LEFT JOIN LATERAL (
                 SELECT
@@ -121,14 +124,14 @@ def upgrade() -> None:
                 AND pne.statement  = ff.statement
                 AND pne.concept    = ff.concept
 
-            LEFT JOIN financial_facts ffp
+            LEFT JOIN financial_facts_overridden_cte ffp
             ON
                 ffp.company_id = ff.company_id
                 AND ffp.filing_id  = ff.filing_id
                 AND ffp.statement  = ff.statement
                 AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
 
-            LEFT JOIN financial_facts ffa
+            LEFT JOIN financial_facts_overridden_cte ffa
             ON
                 ffa.company_id = ff.company_id
                 AND ffa.filing_id  = ff.filing_id
@@ -244,13 +247,13 @@ def upgrade() -> None:
                 AND pne.statement  = f.statement
                 AND pne.concept    = new.concept
 
-            LEFT JOIN financial_facts ffp
+            LEFT JOIN financial_facts_overridden_cte ffp
                 ON ffp.company_id = f.company_id
                 AND ffp.filing_id  = f.filing_id
                 AND ffp.statement  = f.statement
                 AND ffp.concept    = COALESCE(cno.parent_concept, pne.parent_concept)
 
-            LEFT JOIN financial_facts ffa
+            LEFT JOIN financial_facts_overridden_cte ffa
                 ON ffa.company_id = f.company_id
                 AND ffa.filing_id  = f.filing_id
                 AND ffa.statement  = f.statement
