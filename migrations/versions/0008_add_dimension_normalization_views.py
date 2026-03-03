@@ -28,45 +28,47 @@ def upgrade() -> None:
                 ff.axis,
                 ff.member,
                 ff.member_label,
-                COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label),
-                COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label)
+                dno.normalized_axis_label,
+                dno.normalized_member_label
             )
                 ff.company_id,
                 ff.axis,
                 ff.member,
                 ff.member_label,
-                COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label) as normalized_axis_label,
-                COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label) as normalized_member_label,
+                dno.normalized_axis_label as normalized_axis_label,
+                dno.normalized_member_label as normalized_member_label,
                 ff.period_end,
-                (COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label) IS NOT NULL) AS overridden,
+                (dno.id IS NOT NULL) AS overridden,
                 CASE
-                    WHEN COALESCE(dnoc.is_global, dnog.is_global) = FALSE THEN 'company'
-                    WHEN COALESCE(dnoc.is_global, dnog.is_global) = TRUE THEN 'global'
+                    WHEN dno.is_global = FALSE THEN 'company'
+                    WHEN dno.is_global = TRUE THEN 'global'
                     ELSE NULL
                 END as override_priority,
                 CASE
-                    WHEN COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label) IS NOT NULL THEN 'member'
-                    WHEN COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label) IS NOT NULL THEN 'axis'
+                    WHEN dno.normalized_member_label IS NOT NULL THEN 'member'
+                    WHEN dno.normalized_axis_label IS NOT NULL THEN 'axis'
                     ELSE NULL
                 END as override_level,
-                md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label, '') || '|' || COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label, '') || '|' || 'grouping') as id
+                md5(ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label || '|' || COALESCE(dno.normalized_axis_label, '') || '|' || COALESCE(dno.normalized_member_label, '') || '|' || 'grouping') as id
             FROM financial_facts_overridden ff
-            LEFT JOIN dimension_normalization_overrides as dnoc
-            ON
-                ff.company_id = dnoc.company_id
-                AND (
-                    (ff.axis = dnoc.axis AND dnoc.member IS NULL AND dnoc.member_label IS NULL)
-                    OR (ff.axis = dnoc.axis AND ff.member = dnoc.member)
-                    OR (ff.axis = dnoc.axis AND ff.member_label = dnoc.member_label)
-                )
-            LEFT JOIN dimension_normalization_overrides as dnog
-            ON
-                dnog.is_global = TRUE
-                AND (
-                    (ff.axis = dnog.axis AND dnog.member IS NULL AND dnog.member_label IS NULL)
-                    OR (ff.axis = dnog.axis AND ff.member = dnog.member)
-                    OR (ff.axis = dnog.axis AND ff.member_label = dnog.member_label)
-                )
+            LEFT JOIN LATERAL (
+                SELECT dno.*
+                FROM dimension_normalization_overrides dno
+                WHERE
+                    dno.axis = ff.axis
+                    AND (dno.company_id = ff.company_id OR dno.is_global = TRUE)
+                    AND (dno.member IS NULL OR dno.member = ff.member)
+                    AND (
+                        dno.member_label IS NULL
+                        OR dno.member_label = ff.member_label
+                    )
+                ORDER BY
+                    (dno.company_id = ff.company_id) DESC,
+                    (dno.member IS NOT NULL) DESC,
+                    (dno.member_label IS NOT NULL) DESC,
+                    dno.updated_at DESC
+                LIMIT 1
+            ) dno ON TRUE
             WHERE
                 ff.axis <> ''
             ORDER BY
@@ -74,8 +76,8 @@ def upgrade() -> None:
                 ff.axis,
                 ff.member,
                 ff.member_label,
-                COALESCE(dnoc.normalized_axis_label, dnog.normalized_axis_label),
-                COALESCE(dnoc.normalized_member_label, dnog.normalized_member_label),
+                dno.normalized_axis_label,
+                dno.normalized_member_label,
                 ff.period_end DESC
         ),
         exploded AS (
