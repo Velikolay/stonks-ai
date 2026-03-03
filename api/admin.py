@@ -3,7 +3,7 @@
 import csv
 import io
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -26,6 +26,10 @@ from filings.models.concept_normalization_override import (
 from filings.models.dimension_normalization_override import (
     DimensionNormalizationOverrideCreate,
     DimensionNormalizationOverrideUpdate,
+)
+from filings.models.financial_facts_override import (
+    FinancialFactsOverrideCreate,
+    FinancialFactsOverrideUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,6 +113,27 @@ class DimensionNormalizationOverrideResponse(BaseModel):
     normalized_axis_label: str
     normalized_member_label: Optional[str] = None
     tags: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FinancialFactsOverrideResponse(BaseModel):
+    """Response model for financial facts override."""
+
+    id: int
+    company_id: int
+    concept: str
+    statement: str
+    axis: Optional[str] = None
+    member: Optional[str] = None
+    label: Optional[str] = None
+    form_type: Optional[str] = None
+    from_period: Optional[date] = None
+    to_period: Optional[date] = None
+    to_concept: str
+    to_axis: Optional[str] = None
+    to_member: Optional[str] = None
+    is_global: bool
     created_at: datetime
     updated_at: datetime
 
@@ -1143,6 +1168,345 @@ async def import_dimension_normalization_overrides_from_csv(
 
     except Exception as e:
         logger.error(f"Error importing dimension normalization overrides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/financial-facts-overrides",
+    response_model=List[FinancialFactsOverrideResponse],
+)
+async def list_financial_facts_overrides(
+    company_id: Optional[int] = Query(None, description="Company ID"),
+    statement: Optional[str] = Query(None, description="Filter by statement"),
+    concept: Optional[str] = Query(None, description="Filter by concept"),
+) -> List[FinancialFactsOverrideResponse]:
+    """List all financial facts overrides, optionally filtered."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        overrides = filings_db.financial_facts_overrides.list_all(
+            company_id=company_id, statement=statement, concept=concept
+        )
+        return [
+            FinancialFactsOverrideResponse(
+                id=o.id,
+                company_id=o.company_id,
+                concept=o.concept,
+                statement=o.statement,
+                axis=o.axis,
+                member=o.member,
+                label=o.label,
+                form_type=o.form_type,
+                from_period=o.from_period,
+                to_period=o.to_period,
+                to_concept=o.to_concept,
+                to_axis=o.to_axis,
+                to_member=o.to_member,
+                is_global=o.is_global,
+                created_at=o.created_at,
+                updated_at=o.updated_at,
+            )
+            for o in overrides
+        ]
+    except Exception as e:
+        logger.error("Error listing financial facts overrides: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/financial-facts-overrides",
+    response_model=FinancialFactsOverrideResponse,
+    status_code=201,
+)
+async def create_financial_facts_override(
+    override: FinancialFactsOverrideCreate,
+) -> FinancialFactsOverrideResponse:
+    """Create a new financial facts override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        created = filings_db.financial_facts_overrides.create(override)
+        return FinancialFactsOverrideResponse(
+            id=created.id,
+            company_id=created.company_id,
+            concept=created.concept,
+            statement=created.statement,
+            axis=created.axis,
+            member=created.member,
+            label=created.label,
+            form_type=created.form_type,
+            from_period=created.from_period,
+            to_period=created.to_period,
+            to_concept=created.to_concept,
+            to_axis=created.to_axis,
+            to_member=created.to_member,
+            is_global=created.is_global,
+            created_at=created.created_at,
+            updated_at=created.updated_at,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error creating financial facts override: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put(
+    "/financial-facts-overrides/{override_id}",
+    response_model=FinancialFactsOverrideResponse,
+)
+async def update_financial_facts_override(
+    override_id: int = Path(..., description="Override ID"),
+    override_update: FinancialFactsOverrideUpdate = ...,
+) -> FinancialFactsOverrideResponse:
+    """Update an existing financial facts override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        updated = filings_db.financial_facts_overrides.update(
+            override_id, override_update
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Override not found")
+        return FinancialFactsOverrideResponse(
+            id=updated.id,
+            company_id=updated.company_id,
+            concept=updated.concept,
+            statement=updated.statement,
+            axis=updated.axis,
+            member=updated.member,
+            label=updated.label,
+            form_type=updated.form_type,
+            from_period=updated.from_period,
+            to_period=updated.to_period,
+            to_concept=updated.to_concept,
+            to_axis=updated.to_axis,
+            to_member=updated.to_member,
+            is_global=updated.is_global,
+            created_at=updated.created_at,
+            updated_at=updated.updated_at,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "Error updating financial facts override id=%s: %s", override_id, e
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/financial-facts-overrides/{override_id}", status_code=204)
+async def delete_financial_facts_override(
+    override_id: int = Path(..., description="Override ID"),
+) -> None:
+    """Delete a financial facts override."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        deleted = filings_db.financial_facts_overrides.delete(override_id=override_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Override not found")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "Error deleting financial facts override id=%s: %s", override_id, e
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/financial-facts-overrides/export")
+async def export_financial_facts_overrides_to_csv(
+    company_id: Optional[int] = Query(None, description="Company ID"),
+    statement: Optional[str] = Query(None, description="Filter by statement"),
+    concept: Optional[str] = Query(None, description="Filter by concept"),
+) -> StreamingResponse:
+    """Export financial facts overrides to CSV."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    try:
+        overrides = filings_db.financial_facts_overrides.list_all(
+            company_id=company_id, statement=statement, concept=concept
+        )
+
+        output = io.StringIO()
+        fieldnames = [
+            "id",
+            "company_id",
+            "concept",
+            "statement",
+            "axis",
+            "member",
+            "label",
+            "form_type",
+            "from_period",
+            "to_period",
+            "to_concept",
+            "to_axis",
+            "to_member",
+            "is_global",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for o in overrides:
+            writer.writerow(
+                {
+                    "id": str(o.id),
+                    "company_id": str(o.company_id),
+                    "concept": o.concept,
+                    "statement": o.statement,
+                    "axis": o.axis if o.axis is not None else "",
+                    "member": o.member if o.member is not None else "",
+                    "label": o.label or "",
+                    "form_type": o.form_type or "",
+                    "from_period": str(o.from_period) if o.from_period else "",
+                    "to_period": str(o.to_period) if o.to_period else "",
+                    "to_concept": o.to_concept,
+                    "to_axis": o.to_axis or "",
+                    "to_member": o.to_member or "",
+                    "is_global": str(o.is_global),
+                }
+            )
+
+        output.seek(0)
+        filename = "financial_facts_overrides.csv"
+        if statement:
+            filename = f"financial_facts_overrides_{statement.replace(' ', '_')}.csv"
+        if concept:
+            filename = filename.replace(".csv", f"_{concept.replace(':', '_')}.csv")
+        if company_id is not None:
+            filename = filename.replace(".csv", f"_company_{company_id}.csv")
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        logger.error("Error exporting financial facts overrides: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/financial-facts-overrides/import", response_model=ImportResponse)
+async def import_financial_facts_overrides_from_csv(
+    file: UploadFile = File(..., description="CSV file to import"),
+    update_existing: bool = Query(
+        False, description="Update existing records if they exist (requires id)"
+    ),
+) -> ImportResponse:
+    """Import financial facts overrides from CSV."""
+    if not filings_db:
+        raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
+
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV file")
+
+    created = 0
+    updated = 0
+    errors: List[str] = []
+
+    try:
+        content = await file.read()
+        csv_file = io.StringIO(content.decode("utf-8"))
+        reader = csv.DictReader(csv_file)
+
+        required_fields = ["company_id", "concept", "statement", "to_concept"]
+
+        def _parse_empty_token(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            raw = value.strip()
+            if raw == "":
+                return None
+            if raw == '""':
+                return ""
+            return raw
+
+        for row_num, row in enumerate(reader, start=2):
+            try:
+                missing_fields = [f for f in required_fields if not row.get(f)]
+                if missing_fields:
+                    errors.append(
+                        f"Row {row_num}: Missing required fields: {', '.join(missing_fields)}"
+                    )
+                    continue
+
+                try:
+                    row_company_id = int(row["company_id"].strip())
+                except (ValueError, Exception):
+                    errors.append(
+                        f"Row {row_num}: Invalid company_id value: {row.get('company_id')}"
+                    )
+                    continue
+
+                override_create = FinancialFactsOverrideCreate(
+                    company_id=row_company_id,
+                    concept=row["concept"].strip(),
+                    statement=row["statement"].strip(),
+                    axis=_parse_empty_token(row.get("axis")),
+                    member=_parse_empty_token(row.get("member")),
+                    label=(row.get("label", "").strip() or None),
+                    form_type=(row.get("form_type", "").strip() or None),
+                    from_period=(row.get("from_period", "").strip() or None),
+                    to_period=(row.get("to_period", "").strip() or None),
+                    to_concept=row["to_concept"].strip(),
+                    to_axis=(row.get("to_axis", "").strip() or None),
+                    to_member=(row.get("to_member", "").strip() or None),
+                )
+
+                override_id_str = (row.get("id") or "").strip()
+                override_id = int(override_id_str) if override_id_str else None
+
+                if update_existing and override_id is not None:
+                    override_update = FinancialFactsOverrideUpdate(
+                        axis=override_create.axis,
+                        member=override_create.member,
+                        label=override_create.label,
+                        form_type=override_create.form_type,
+                        from_period=override_create.from_period,
+                        to_period=override_create.to_period,
+                        to_concept=override_create.to_concept,
+                        to_axis=override_create.to_axis,
+                        to_member=override_create.to_member,
+                    )
+                    updated_obj = filings_db.financial_facts_overrides.update(
+                        override_id, override_update
+                    )
+                    if updated_obj is None:
+                        errors.append(
+                            f"Row {row_num}: Override id not found for update: {override_id}"
+                        )
+                    else:
+                        updated += 1
+                else:
+                    filings_db.financial_facts_overrides.create(override_create)
+                    created += 1
+
+            except ValueError as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+            except Exception as e:
+                errors.append(f"Row {row_num}: Unexpected error: {str(e)}")
+                logger.error("Error processing row %s: %s", row_num, e)
+
+        message = f"Import completed: {created} created, {updated} updated"
+        if errors:
+            message += f", {len(errors)} errors"
+        return ImportResponse(
+            message=message, created=created, updated=updated, errors=errors
+        )
+
+    except Exception as e:
+        logger.error("Error importing financial facts overrides: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -6,6 +6,7 @@ from .concept_normalization_overrides import ConceptNormalizationOverridesOperat
 from .dimension_normalization_overrides import DimensionNormalizationOverridesOperations
 from .filings import FilingOperations
 from .financial_facts import FinancialFactOperations
+from .financial_facts_overrides import FinancialFactsOverridesOperations
 from .quarterly_financials import QuarterlyFinancialsOperations
 from .yearly_financials import YearlyFinancialsOperations
 
@@ -26,6 +27,9 @@ class FilingsDatabase:
         )
         self.dimension_normalization_overrides = (
             DimensionNormalizationOverridesOperations(self.manager.engine)
+        )
+        self.financial_facts_overrides = FinancialFactsOverridesOperations(
+            self.manager.engine
         )
 
     def close(self) -> None:

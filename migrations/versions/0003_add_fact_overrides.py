@@ -89,7 +89,7 @@ def upgrade() -> None:
 
     # Insert initial rewrite rules from CSV file
     migration_dir = Path(__file__).parent
-    csv_path = migration_dir.parent / "data" / "fact-overrides.csv"
+    csv_path = migration_dir.parent / "data" / "financial-facts-overrides.csv"
 
     connection = op.get_bind()
 
