@@ -1,4 +1,6 @@
 company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_concept,parent_concept,description,unit,weight
+5,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Income Statement,Net income attributable to common stockholders,False,False,,,,usd,
+5,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Comprehensive Income,Net income attributable to common stockholders,False,False,,,,usd,
 5,us-gaap:OperatingLeasesIncomeStatementLeaseRevenue,Income Statement,Automotive Lease Revenue,False,False,,,,usd,
 5,tsla:CostOfAutomotiveLeasing,Income Statement,Cost of Automotive Leasing Revenue,False,False,,,,usd,
 5,tsla:CostOfRevenuesAutomotive,Income Statement,Cost of Automotive Revenue,False,False,,,,usd,
@@ -17,6 +19,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:DeferredIncomeTaxAssetsNet,Balance Sheet,Deferred income taxes,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
 0,us-gaap:OtherLongTermInvestments,Balance Sheet,Non-marketable securities,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1
 0,us-gaap:NetIncomeLoss,Income Statement,Net Income,False,True,,,,usd,
+0,us-gaap:NetIncomeLoss,Comprehensive Income,Net Income,False,True,,,,usd,
 0,us-gaap:ProfitLoss,Income Statement,Net Income,False,True,,,,usd,
 0,us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes,Income Statement,Net Income,False,True,,,,usd,
 0,us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest,Income Statement,Income Before Tax from Continuing Operations,False,True,,,,usd,

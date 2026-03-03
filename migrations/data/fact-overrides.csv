@@ -1,1 +1,3 @@
 company_id,concept,statement,axis,member,label,form_type,from_period,to_period,is_global,to_concept,to_axis,to_member
+5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,False,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,
+5,us-gaap:NetIncomeLoss,Comprehensive Income,,,,,2016-12-31,,False,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,

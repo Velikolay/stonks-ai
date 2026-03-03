@@ -57,11 +57,11 @@ def upgrade() -> None:
                 AND (r.form_type IS NULL OR r.form_type = ff.form_type)
                 AND (
                     r.from_period IS NULL
-                    OR ff.period_end >= r.from_period::date
+                    OR ff.period_end >= r.from_period
                 )
                 AND (
                     r.to_period IS NULL
-                    OR ff.period_end <= r.to_period::date
+                    OR ff.period_end <= r.to_period
                 )
             ORDER BY
                 (r.company_id = ff.company_id) DESC,

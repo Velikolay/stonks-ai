@@ -34,8 +34,8 @@ def upgrade() -> None:
         sa.Column("member", sa.String(), nullable=True),
         sa.Column("label", sa.String(), nullable=True),
         sa.Column("form_type", sa.String(), nullable=True),
-        sa.Column("from_period", sa.String(), nullable=True),
-        sa.Column("to_period", sa.String(), nullable=True),
+        sa.Column("from_period", sa.Date(), nullable=True),
+        sa.Column("to_period", sa.Date(), nullable=True),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         # override target
         sa.Column("to_concept", sa.String(), nullable=False),
