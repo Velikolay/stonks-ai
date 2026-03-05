@@ -108,6 +108,12 @@ def test_engine(test_db_url: str) -> Engine:
     # Cleanup - truncate all tables (don't drop views/tables since they're managed by migrations)
     try:
         with engine.connect() as conn:
+            conn.execute(text("TRUNCATE TABLE yearly_financials CASCADE"))
+            conn.execute(text("TRUNCATE TABLE quarterly_financials CASCADE"))
+            conn.execute(text("TRUNCATE TABLE financial_facts_normalized CASCADE"))
+            conn.execute(text("TRUNCATE TABLE dimension_normalization CASCADE"))
+            conn.execute(text("TRUNCATE TABLE hierarchy_normalization CASCADE"))
+            conn.execute(text("TRUNCATE TABLE concept_normalization CASCADE"))
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))
@@ -129,8 +135,12 @@ def clean_tables(test_engine: Engine):
     # Clean tables before each test
     try:
         with test_engine.connect() as conn:
-            # Views that depend on the data need to be dropped/recreated or just left as-is
-            # since they're just queries over the data
+            conn.execute(text("TRUNCATE TABLE yearly_financials CASCADE"))
+            conn.execute(text("TRUNCATE TABLE quarterly_financials CASCADE"))
+            conn.execute(text("TRUNCATE TABLE financial_facts_normalized CASCADE"))
+            conn.execute(text("TRUNCATE TABLE dimension_normalization CASCADE"))
+            conn.execute(text("TRUNCATE TABLE hierarchy_normalization CASCADE"))
+            conn.execute(text("TRUNCATE TABLE concept_normalization CASCADE"))
             conn.execute(text("TRUNCATE TABLE financial_facts CASCADE"))
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))

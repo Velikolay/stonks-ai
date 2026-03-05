@@ -1,5 +1,7 @@
 """Database operations package."""
 
+from sqlalchemy import text
+
 from .base import DatabaseManager
 from .companies import CompanyOperations
 from .concept_normalization_overrides import ConceptNormalizationOverridesOperations
@@ -35,6 +37,17 @@ class FilingsDatabase:
     def close(self) -> None:
         """Close database connection."""
         self.manager.close()
+
+    def refresh_financials_for_companies(self, company_ids: list[int]) -> None:
+        """Recompute normalization + quarterly/yearly financials for companies."""
+        if not company_ids:
+            return
+        with self.manager.engine.connect() as conn:
+            conn.execute(
+                text("CALL refresh_financials(:company_ids)"),
+                {"company_ids": company_ids},
+            )
+            conn.commit()
 
     def __enter__(self):
         """Context manager entry."""

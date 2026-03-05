@@ -250,9 +250,8 @@ filter_params = YearlyFinancialsFilter(
 )
 range_metrics = db.yearly_financials.get_yearly_financials(filter_params)
 
-# Refresh materialized views after new data is loaded
-db.yearly_financials.refresh_view()
-db.quarterly_financials.refresh_view()
+# Recompute derived financials after new data is loaded
+db.refresh_financials_for_companies([1])
 ```
 
 ### API Endpoints

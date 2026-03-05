@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, func, or_, select, text
+from sqlalchemy import MetaData, Table, and_, func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -224,17 +224,6 @@ class YearlyFinancialsOperations:
             )
             return []
 
-    def refresh_view(self) -> None:
-        """Refresh the yearly financials materialized view."""
-        try:
-            with self.engine.connect() as conn:
-                conn.execute("REFRESH MATERIALIZED VIEW yearly_financials")
-                conn.commit()
-                logger.info("Successfully refreshed yearly_financials view")
-        except SQLAlchemyError as e:
-            logger.error(f"Error refreshing yearly_financials view: {e}")
-            raise
-
     def get_normalized_labels(
         self, company_id: int, statement: Optional[str] = None
     ) -> List[dict]:
@@ -297,15 +286,3 @@ class YearlyFinancialsOperations:
                 f"Error retrieving normalized labels for yearly financials: {e}"
             )
             return []
-
-    def refresh_materialized_view(self, concurrent: bool = False) -> None:
-        """Refresh the yearly_financials materialized view."""
-        view_name = "yearly_financials"
-        with self.engine.connect() as conn:
-            if concurrent:
-                sql = text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name}")
-            else:
-                sql = text(f"REFRESH MATERIALIZED VIEW {view_name}")
-
-            conn.execute(sql)
-            conn.commit()
