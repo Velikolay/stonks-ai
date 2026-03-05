@@ -67,6 +67,15 @@ BEGIN
         '10-K' AS source_type
     FROM all_filings_data;
 
+    DELETE FROM yearly_financials yf
+    WHERE
+        yf.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_yearly_financials_new t
+            WHERE t.id = yf.id
+        );
+
     INSERT INTO yearly_financials (
         id,
         parent_id,
@@ -132,14 +141,5 @@ BEGIN
         is_abstract = EXCLUDED.is_abstract,
         is_synthetic = EXCLUDED.is_synthetic,
         source_type = EXCLUDED.source_type;
-
-    DELETE FROM yearly_financials yf
-    WHERE
-        yf.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_yearly_financials_new t
-            WHERE t.id = yf.id
-        );
 END;
 $$;

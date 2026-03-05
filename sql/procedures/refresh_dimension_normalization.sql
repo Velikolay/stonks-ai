@@ -533,6 +533,19 @@ BEGIN
         gm.member_label,
         gc.component_id;
 
+    DELETE FROM dimension_normalization dn
+    WHERE
+        dn.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_dimension_normalization_new t
+            WHERE
+                t.company_id = dn.company_id
+                AND t.axis = dn.axis
+                AND t.member = dn.member
+                AND t.member_label = dn.member_label
+        );
+
     INSERT INTO dimension_normalization (
         company_id,
         axis,
@@ -571,18 +584,5 @@ BEGIN
         overridden = EXCLUDED.overridden,
         override_priority = EXCLUDED.override_priority,
         override_level = EXCLUDED.override_level;
-
-    DELETE FROM dimension_normalization dn
-    WHERE
-        dn.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_dimension_normalization_new t
-            WHERE
-                t.company_id = dn.company_id
-                AND t.axis = dn.axis
-                AND t.member = dn.member
-                AND t.member_label = dn.member_label
-        );
 END;
 $$;

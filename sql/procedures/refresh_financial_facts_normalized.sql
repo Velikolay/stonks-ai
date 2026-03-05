@@ -331,6 +331,15 @@ BEGIN
         nf.member,
         nf.period_end;
 
+    DELETE FROM financial_facts_normalized ff
+    WHERE
+        ff.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_financial_facts_normalized_new t
+            WHERE t.id = ff.id
+        );
+
     INSERT INTO financial_facts_normalized (
         id,
         company_id,
@@ -402,14 +411,5 @@ BEGIN
         parent_id = EXCLUDED.parent_id,
         abstract_id = EXCLUDED.abstract_id,
         is_synthetic = EXCLUDED.is_synthetic;
-
-    DELETE FROM financial_facts_normalized ff
-    WHERE
-        ff.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_financial_facts_normalized_new t
-            WHERE t.id = ff.id
-        );
 END;
 $$;

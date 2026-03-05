@@ -44,6 +44,15 @@ BEGIN
     ) r ON TRUE
     WHERE ff.company_id = ANY(company_ids);
 
+    DELETE FROM financial_facts_overridden ffo
+    WHERE
+        ffo.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_financial_facts_overridden_new t
+            WHERE t.id = ffo.id
+        );
+
     INSERT INTO financial_facts_overridden (
         id,
         company_id,
@@ -70,14 +79,5 @@ BEGIN
         axis = EXCLUDED.axis,
         member = EXCLUDED.member,
         fact_override_id = EXCLUDED.fact_override_id;
-
-    DELETE FROM financial_facts_overridden ffo
-    WHERE
-        ffo.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_financial_facts_overridden_new t
-            WHERE t.id = ffo.id
-        );
 END;
 $$;

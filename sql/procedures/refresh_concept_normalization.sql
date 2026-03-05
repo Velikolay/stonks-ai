@@ -285,6 +285,18 @@ BEGIN
         ON cn.group_id = ggo.group_id
     WHERE cn.company_id = ANY(company_ids);
 
+    DELETE FROM concept_normalization cn
+    WHERE
+        cn.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_concept_normalization_new t
+            WHERE
+                t.company_id = cn.company_id
+                AND t.statement = cn.statement
+                AND t.concept = cn.concept
+        );
+
     INSERT INTO concept_normalization (
         company_id,
         statement,
@@ -315,17 +327,5 @@ BEGIN
         group_id = EXCLUDED.group_id,
         source = EXCLUDED.source,
         overridden = EXCLUDED.overridden;
-
-    DELETE FROM concept_normalization cn
-    WHERE
-        cn.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_concept_normalization_new t
-            WHERE
-                t.company_id = cn.company_id
-                AND t.statement = cn.statement
-                AND t.concept = cn.concept
-        );
 END;
 $$;

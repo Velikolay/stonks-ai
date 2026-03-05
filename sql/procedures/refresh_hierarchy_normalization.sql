@@ -116,6 +116,19 @@ BEGIN
         concept,
         parent_concept;
 
+    DELETE FROM hierarchy_normalization hn
+    WHERE
+        hn.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_hierarchy_normalization_new t
+            WHERE
+                t.company_id = hn.company_id
+                AND t.statement = hn.statement
+                AND t.concept = hn.concept
+                AND t.parent_concept = hn.parent_concept
+        );
+
     INSERT INTO hierarchy_normalization (
         company_id,
         statement,
@@ -136,18 +149,5 @@ BEGIN
     SET
         concept_source = EXCLUDED.concept_source,
         parent_concept_source = EXCLUDED.parent_concept_source;
-
-    DELETE FROM hierarchy_normalization hn
-    WHERE
-        hn.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_hierarchy_normalization_new t
-            WHERE
-                t.company_id = hn.company_id
-                AND t.statement = hn.statement
-                AND t.concept = hn.concept
-                AND t.parent_concept = hn.parent_concept
-        );
 END;
 $$;

@@ -310,6 +310,15 @@ BEGIN
         source_type
     FROM missing_quarters;
 
+    DELETE FROM quarterly_financials qf
+    WHERE
+        qf.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_quarterly_financials_new t
+            WHERE t.id = qf.id
+        );
+
     INSERT INTO quarterly_financials (
         id,
         parent_id,
@@ -378,14 +387,5 @@ BEGIN
         is_abstract = EXCLUDED.is_abstract,
         is_synthetic = EXCLUDED.is_synthetic,
         source_type = EXCLUDED.source_type;
-
-    DELETE FROM quarterly_financials qf
-    WHERE
-        qf.company_id = ANY(company_ids)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM tmp_quarterly_financials_new t
-            WHERE t.id = qf.id
-        );
 END;
 $$;
