@@ -22,6 +22,23 @@ def upgrade() -> None:
     period_type = postgresql.ENUM("YTD", "Q", name="period_type", create_type=False)
 
     op.create_table(
+        "financial_facts_overridden",
+        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("concept", sa.String(), nullable=False),
+        sa.Column("axis", sa.String(), nullable=False),
+        sa.Column("member", sa.String(), nullable=False),
+        sa.Column("fact_override_id", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_financial_facts_overridden_company_id",
+        "financial_facts_overridden",
+        ["company_id"],
+    )
+
+    op.create_table(
         "concept_normalization",
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("statement", sa.String(), nullable=False),
@@ -224,3 +241,8 @@ def downgrade() -> None:
     op.drop_table("dimension_normalization")
     op.drop_table("hierarchy_normalization")
     op.drop_table("concept_normalization")
+    op.drop_index(
+        "ix_financial_facts_overridden_company_id",
+        table_name="financial_facts_overridden",
+    )
+    op.drop_table("financial_facts_overridden")

@@ -8,8 +8,34 @@ BEGIN
 
     CREATE TEMP TABLE tmp_dimension_normalization_new ON COMMIT DROP AS
     WITH RECURSIVE financial_facts_overridden_cte AS (
-        SELECT *
-        FROM financial_facts_overridden(company_ids)
+        SELECT
+            ff.id,
+            ff.filing_id,
+            ff.company_id,
+            ff.form_type,
+            COALESCE(ffo.concept, ff.concept) AS concept,
+            ff.label,
+            ff.is_abstract,
+            ff.value,
+            ff.comparative_value,
+            ff.weight,
+            ff.unit,
+            COALESCE(ffo.axis, ff.axis) AS axis,
+            COALESCE(ffo.member, ff.member) AS member,
+            ff.member_label,
+            ff.statement,
+            ff.period_end,
+            ff.comparative_period_end,
+            ff.period,
+            ff.position,
+            ff.parent_id,
+            ff.abstract_id,
+            ffo.fact_override_id
+        FROM financial_facts ff
+        LEFT JOIN financial_facts_overridden ffo
+            ON ffo.id = ff.id
+            AND ffo.company_id = ff.company_id
+        WHERE ff.company_id = ANY(company_ids)
     ),
     dimension_normalized_base AS (
         SELECT DISTINCT ON (

@@ -1,56 +1,22 @@
-CREATE OR REPLACE FUNCTION financial_facts_overridden(company_ids int[])
-RETURNS TABLE (
-    id bigint,
-    filing_id int,
-    company_id int,
-    form_type text,
-    concept text,
-    label text,
-    is_abstract boolean,
-    value numeric,
-    comparative_value numeric,
-    weight numeric,
-    unit text,
-    axis text,
-    member text,
-    member_label text,
-    statement text,
-    period_end date,
-    comparative_period_end date,
-    period period_type,
-    "position" int,
-    parent_id bigint,
-    abstract_id bigint,
-    fact_override_id int
-)
-LANGUAGE sql
-STABLE
+CREATE OR REPLACE PROCEDURE refresh_financial_facts_overridden(company_ids int[])
+LANGUAGE plpgsql
 AS $$
+BEGIN
+    IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
+        RETURN;
+    END IF;
+
+    CREATE TEMP TABLE tmp_financial_facts_overridden_new ON COMMIT DROP AS
     SELECT
         ff.id,
-        ff.filing_id,
         ff.company_id,
-        ff.form_type,
+        ff.statement,
         COALESCE(r.to_concept, ff.concept) AS concept,
-        ff.label,
-        ff.is_abstract,
-        ff.value,
-        ff.comparative_value,
-        ff.weight,
-        ff.unit,
         COALESCE(r.to_axis, ff.axis) AS axis,
         COALESCE(r.to_member, ff.member) AS member,
-        ff.member_label,
-        ff.statement,
-        ff.period_end,
-        ff.comparative_period_end,
-        ff.period,
-        ff.position,
-        ff.parent_id,
-        ff.abstract_id,
         r.id AS fact_override_id
     FROM financial_facts ff
-    LEFT JOIN LATERAL (
+    JOIN LATERAL (
         SELECT r.*
         FROM financial_facts_overrides r
         WHERE
@@ -77,4 +43,41 @@ AS $$
         LIMIT 1
     ) r ON TRUE
     WHERE ff.company_id = ANY(company_ids);
+
+    INSERT INTO financial_facts_overridden (
+        id,
+        company_id,
+        statement,
+        concept,
+        axis,
+        member,
+        fact_override_id
+    )
+    SELECT
+        id,
+        company_id,
+        statement,
+        concept,
+        axis,
+        member,
+        fact_override_id
+    FROM tmp_financial_facts_overridden_new
+    ON CONFLICT (id) DO UPDATE
+    SET
+        company_id = EXCLUDED.company_id,
+        statement = EXCLUDED.statement,
+        concept = EXCLUDED.concept,
+        axis = EXCLUDED.axis,
+        member = EXCLUDED.member,
+        fact_override_id = EXCLUDED.fact_override_id;
+
+    DELETE FROM financial_facts_overridden ffo
+    WHERE
+        ffo.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_financial_facts_overridden_new t
+            WHERE t.id = ffo.id
+        );
+END;
 $$;

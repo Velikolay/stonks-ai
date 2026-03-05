@@ -6,6 +6,7 @@ BEGIN
         RETURN;
     END IF;
 
+    CALL refresh_financial_facts_overridden(company_ids);
     CALL refresh_concept_normalization(company_ids);
     CALL refresh_hierarchy_normalization(company_ids);
     CALL refresh_dimension_normalization(company_ids);

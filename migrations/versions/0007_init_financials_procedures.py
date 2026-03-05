@@ -27,7 +27,7 @@ def _read_sql(relative_path: str) -> str:
 
 
 def upgrade() -> None:
-    op.execute(_read_sql("sql/functions/financial_facts_overridden.sql"))
+    op.execute(_read_sql("sql/procedures/refresh_financial_facts_overridden.sql"))
     op.execute(_read_sql("sql/procedures/refresh_concept_normalization.sql"))
     op.execute(_read_sql("sql/procedures/refresh_hierarchy_normalization.sql"))
     op.execute(_read_sql("sql/procedures/refresh_dimension_normalization.sql"))
@@ -45,4 +45,4 @@ def downgrade() -> None:
     op.execute("DROP PROCEDURE IF EXISTS refresh_dimension_normalization(int[]);")
     op.execute("DROP PROCEDURE IF EXISTS refresh_hierarchy_normalization(int[]);")
     op.execute("DROP PROCEDURE IF EXISTS refresh_concept_normalization(int[]);")
-    op.execute("DROP FUNCTION IF EXISTS financial_facts_overridden(int[]);")
+    op.execute("DROP PROCEDURE IF EXISTS refresh_financial_facts_overridden(int[]);")
