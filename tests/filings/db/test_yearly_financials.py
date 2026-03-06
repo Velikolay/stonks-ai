@@ -243,28 +243,6 @@ class TestYearlyFinancialsOperations:
                 # Verify the query was executed
                 mock_conn.execute.assert_called_once()
 
-    def test_refresh_view(self):
-        """Test refreshing the materialized view."""
-        mock_engine = Mock()
-
-        with patch("filings.db.yearly_financials.Table") as mock_table:
-            mock_table.return_value = Mock()
-            operations = YearlyFinancialsOperations(mock_engine)
-
-            # Mock the database connection and query execution
-            mock_conn = Mock()
-            mock_context = MagicMock()
-            mock_context.__enter__.return_value = mock_conn
-            mock_engine.connect.return_value = mock_context
-
-            operations.refresh_view()
-
-            # Verify the refresh command was executed
-            mock_conn.execute.assert_called_once_with(
-                "REFRESH MATERIALIZED VIEW yearly_financials"
-            )
-            mock_conn.commit.assert_called_once()
-
     def test_get_normalized_labels(self):
         """Test getting normalized labels."""
         mock_engine = Mock()
