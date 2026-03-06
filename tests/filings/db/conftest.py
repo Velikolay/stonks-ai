@@ -8,13 +8,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
-from filings import (
-    CompanyCreate,
-    FilingCreate,
-    FilingsDatabase,
-    FinancialFact,
-    PeriodType,
-)
+from filings import CompanyCreate, FilingCreate, FinancialFact, PeriodType
+from filings.db import AsyncFilingsDatabase
 
 
 def create_test_database_if_not_exists():
@@ -119,7 +114,7 @@ def test_engine(test_db_url: str) -> Engine:
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))
             conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
-            conn.execute(text("TRUNCATE TABLE companies CASCADE"))
+            conn.execute(text("TRUNCATE TABLE companies RESTART IDENTITY CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
             conn.commit()
@@ -147,16 +142,27 @@ def clean_tables(test_engine: Engine):
             conn.execute(text("TRUNCATE TABLE filings CASCADE"))
             conn.execute(text("TRUNCATE TABLE filing_entities CASCADE"))
             conn.execute(text("TRUNCATE TABLE tickers CASCADE"))
-            conn.execute(text("TRUNCATE TABLE companies CASCADE"))
+            conn.execute(text("TRUNCATE TABLE companies RESTART IDENTITY CASCADE"))
             conn.execute(text("TRUNCATE TABLE documents CASCADE"))
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
-            # Recreate the dummy "global" company row that migrations insert (id=0).
-            # Many tests use company_id=0 for global overrides and rely on this FK target.
+            conn.execute(text("TRUNCATE TABLE financial_facts_overrides CASCADE"))
+            # Recreate company rows that migrations and override CSVs reference.
+            # company_id=0: global overrides; 2, 5: concept/financial-facts override CSVs.
+            for cid, name in [(0, "0"), (2, "Seed company 2"), (5, "Seed company")]:
+                conn.execute(
+                    text(
+                        "INSERT INTO companies (id, name, industry) "
+                        f"VALUES ({cid}, '{name}', NULL) "
+                        "ON CONFLICT (id) DO NOTHING"
+                    )
+                )
+            # Reset sequence so next insert gets id > max(0,2,5), avoiding duplicate key.
+            # Seed ids are 0, 2, 5; setval(seq, 5, true) makes next nextval() return 6.
             conn.execute(
                 text(
-                    "INSERT INTO companies (id, name, industry) "
-                    "VALUES (0, '0', NULL) "
-                    "ON CONFLICT (id) DO NOTHING"
+                    "SELECT setval("
+                    "COALESCE(pg_get_serial_sequence('companies', 'id'), 'companies_id_seq'), "
+                    "5, true)"
                 )
             )
             conn.commit()
@@ -165,12 +171,15 @@ def clean_tables(test_engine: Engine):
         pass
 
 
-@pytest.fixture(scope="function")
-def db(test_engine: Engine) -> FilingsDatabase:
-    """Test database instance."""
-    return FilingsDatabase(
-        "postgresql://rag_user:rag_password@localhost:5432/rag_db_test"
-    )
+@pytest.fixture
+async def db(test_db_url: str) -> AsyncFilingsDatabase:
+    """Async test database instance."""
+    database = AsyncFilingsDatabase(test_db_url)
+    await database.initialize()
+    try:
+        yield database
+    finally:
+        await database.aclose()
 
 
 @pytest.fixture(scope="function")

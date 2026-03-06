@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from filings.db import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 from filings.models.quarterly_financials import QuarterlyFinancialsFilter
 from filings.models.yearly_financials import YearlyFinancialsFilter
 
@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/financials", tags=["financials"])
 
 # Global database instance (will be set during app initialization)
-filings_db: Optional[FilingsDatabase] = None
+filings_db: Optional[AsyncFilingsDatabase] = None
 
 
-def set_filings_db(db: FilingsDatabase) -> None:
+def set_filings_db(db: AsyncFilingsDatabase) -> None:
     """Set the global filings database instance."""
     global filings_db
     filings_db = db
@@ -210,7 +210,7 @@ async def get_financials(
 
     try:
         # Get company by ticker
-        company = filings_db.companies.get_company_by_ticker(ticker)
+        company = await filings_db.companies.get_company_by_ticker(ticker)
         if not company:
             raise HTTPException(
                 status_code=404, detail=f"Company with ticker '{ticker}' not found"
@@ -241,12 +241,14 @@ async def get_financials(
         # Get financial data based on granularity
         if granularity == "quarterly":
             filter_params = QuarterlyFinancialsFilter(**filter_kwargs)
-            rows = filings_db.quarterly_financials.get_quarterly_financials(
+            rows = await filings_db.quarterly_financials.get_quarterly_financials(
                 filter_params
             )
         else:  # yearly
             filter_params = YearlyFinancialsFilter(**filter_kwargs)
-            rows = filings_db.yearly_financials.get_yearly_financials(filter_params)
+            rows = await filings_db.yearly_financials.get_yearly_financials(
+                filter_params
+            )
 
         metric_rows = [
             fact for fact in rows if not fact.is_abstract and fact.value is not None
@@ -355,7 +357,7 @@ async def get_normalized_labels(
 
     try:
         # Convert ticker to company_id
-        company = filings_db.companies.get_company_by_ticker(ticker)
+        company = await filings_db.companies.get_company_by_ticker(ticker)
         if not company:
             raise HTTPException(
                 status_code=404, detail=f"Company with ticker '{ticker}' not found"
@@ -364,11 +366,11 @@ async def get_normalized_labels(
 
         # Get normalized labels from the database
         if granularity == "quarterly":
-            labels_data = filings_db.quarterly_financials.get_normalized_labels(
+            labels_data = await filings_db.quarterly_financials.get_normalized_labels(
                 company_id, statement
             )
         else:  # yearly
-            labels_data = filings_db.yearly_financials.get_normalized_labels(
+            labels_data = await filings_db.yearly_financials.get_normalized_labels(
                 company_id, statement
             )
 
@@ -411,14 +413,14 @@ async def get_filings(
 
     try:
         # Get company by ticker
-        company = filings_db.companies.get_company_by_ticker(ticker)
+        company = await filings_db.companies.get_company_by_ticker(ticker)
         if not company:
             raise HTTPException(
                 status_code=404, detail=f"Company with ticker '{ticker}' not found"
             )
 
         # Get filings for the company, optionally filtered by form_type
-        filings = filings_db.filings.get_filings_by_company(company.id, form_type)
+        filings = await filings_db.filings.get_filings_by_company(company.id, form_type)
 
         # Convert to response format
         response_filings = []

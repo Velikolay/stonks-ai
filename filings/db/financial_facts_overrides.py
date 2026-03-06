@@ -1,13 +1,13 @@
-"""Financial facts overrides database operations."""
+"""Financial facts overrides async database operations."""
 
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, delete, insert, select, update
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..models.financial_facts_override import (
+from filings.models.financial_facts_override import (
     FinancialFactsOverride,
     FinancialFactsOverrideCreate,
     FinancialFactsOverrideUpdate,
@@ -16,18 +16,15 @@ from ..models.financial_facts_override import (
 logger = logging.getLogger(__name__)
 
 
-class FinancialFactsOverridesOperations:
-    """Financial facts overrides database operations."""
+class FinancialFactsOverridesOperationsAsync:
+    """Financial facts overrides async database operations."""
 
-    def __init__(self, engine: Engine):
-        """Initialize with database engine."""
+    def __init__(self, engine: AsyncEngine, metadata: MetaData):
+        """Initialize with async engine and metadata."""
         self.engine = engine
-        metadata = MetaData()
-        self.overrides_table = Table(
-            "financial_facts_overrides", metadata, autoload_with=engine
-        )
+        self.overrides_table = metadata.tables["financial_facts_overrides"]
 
-    def list_all(
+    async def list_all(
         self,
         *,
         company_id: Optional[int] = None,
@@ -36,7 +33,7 @@ class FinancialFactsOverridesOperations:
     ) -> List[FinancialFactsOverride]:
         """List overrides optionally filtered by company/statement/concept."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
                 if company_id is not None:
                     stmt = stmt.where(self.overrides_table.c.company_id == company_id)
@@ -45,7 +42,8 @@ class FinancialFactsOverridesOperations:
                 if concept is not None:
                     stmt = stmt.where(self.overrides_table.c.concept == concept)
                 stmt = stmt.order_by(self.overrides_table.c.updated_at.desc())
-                rows = conn.execute(stmt).fetchall()
+                result = await conn.execute(stmt)
+                rows = result.fetchall()
 
                 return [
                     FinancialFactsOverride(
@@ -73,44 +71,12 @@ class FinancialFactsOverridesOperations:
             logger.error("Error listing financial facts overrides: %s", e)
             raise
 
-    def get_by_id(self, *, override_id: int) -> Optional[FinancialFactsOverride]:
-        """Get an override by primary key id."""
-        try:
-            with self.engine.connect() as conn:
-                stmt = select(self.overrides_table).where(
-                    self.overrides_table.c.id == override_id
-                )
-                row = conn.execute(stmt).fetchone()
-                if not row:
-                    return None
-                return FinancialFactsOverride(
-                    id=row.id,
-                    company_id=row.company_id,
-                    concept=row.concept,
-                    statement=row.statement,
-                    axis=row.axis,
-                    member=row.member,
-                    label=row.label,
-                    form_type=row.form_type,
-                    from_period=row.from_period,
-                    to_period=row.to_period,
-                    to_concept=row.to_concept,
-                    to_axis=row.to_axis,
-                    to_member=row.to_member,
-                    is_global=row.is_global,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                )
-        except SQLAlchemyError as e:
-            logger.error(
-                "Error getting financial facts override id=%s: %s", override_id, e
-            )
-            raise
-
-    def create(self, override: FinancialFactsOverrideCreate) -> FinancialFactsOverride:
+    async def create(
+        self, override: FinancialFactsOverrideCreate
+    ) -> FinancialFactsOverride:
         """Create a new override."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     insert(self.overrides_table)
                     .values(
@@ -130,8 +96,9 @@ class FinancialFactsOverridesOperations:
                     )
                     .returning(self.overrides_table)
                 )
-                row = conn.execute(stmt).fetchone()
-                conn.commit()
+                result = await conn.execute(stmt)
+                row = result.fetchone()
+                await conn.commit()
 
                 return FinancialFactsOverride(
                     id=row.id,
@@ -154,19 +121,17 @@ class FinancialFactsOverridesOperations:
 
         except IntegrityError as e:
             logger.error("Integrity error creating financial facts override: %s", e)
-            conn.rollback()
             raise ValueError(f"Constraint violation: {e}")
         except SQLAlchemyError as e:
             logger.error("Error creating financial facts override: %s", e)
-            conn.rollback()
             raise
 
-    def update(
+    async def update(
         self, override_id: int, override_update: FinancialFactsOverrideUpdate
     ) -> Optional[FinancialFactsOverride]:
         """Update an override by id."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 update_values = {}
                 for field in [
                     "axis",
@@ -184,7 +149,7 @@ class FinancialFactsOverridesOperations:
                         update_values[field] = value
 
                 if not update_values:
-                    return self.get_by_id(override_id=override_id)
+                    return await self.get_by_id(override_id=override_id)
 
                 stmt = (
                     update(self.overrides_table)
@@ -192,8 +157,9 @@ class FinancialFactsOverridesOperations:
                     .values(**update_values)
                     .returning(self.overrides_table)
                 )
-                row = conn.execute(stmt).fetchone()
-                conn.commit()
+                result = await conn.execute(stmt)
+                row = result.fetchone()
+                await conn.commit()
                 if not row:
                     return None
 
@@ -218,29 +184,26 @@ class FinancialFactsOverridesOperations:
 
         except IntegrityError as e:
             logger.error("Integrity error updating financial facts override: %s", e)
-            conn.rollback()
             raise ValueError(f"Constraint violation: {e}")
         except SQLAlchemyError as e:
             logger.error(
                 "Error updating financial facts override id=%s: %s", override_id, e
             )
-            conn.rollback()
             raise
 
-    def delete(self, *, override_id: int) -> bool:
+    async def delete(self, *, override_id: int) -> bool:
         """Delete an override by id."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = delete(self.overrides_table).where(
                     self.overrides_table.c.id == override_id
                 )
-                result = conn.execute(stmt)
-                conn.commit()
+                result = await conn.execute(stmt)
+                await conn.commit()
                 return result.rowcount > 0
 
         except IntegrityError as e:
             logger.error("Integrity error deleting financial facts override: %s", e)
-            conn.rollback()
             raise ValueError(
                 f"Cannot delete: record is referenced by other records: {e}"
             )
@@ -248,5 +211,39 @@ class FinancialFactsOverridesOperations:
             logger.error(
                 "Error deleting financial facts override id=%s: %s", override_id, e
             )
-            conn.rollback()
+            raise
+
+    async def get_by_id(self, *, override_id: int) -> Optional[FinancialFactsOverride]:
+        """Get an override by primary key id."""
+        try:
+            async with self.engine.connect() as conn:
+                stmt = select(self.overrides_table).where(
+                    self.overrides_table.c.id == override_id
+                )
+                result = await conn.execute(stmt)
+                row = result.fetchone()
+                if not row:
+                    return None
+                return FinancialFactsOverride(
+                    id=row.id,
+                    company_id=row.company_id,
+                    concept=row.concept,
+                    statement=row.statement,
+                    axis=row.axis,
+                    member=row.member,
+                    label=row.label,
+                    form_type=row.form_type,
+                    from_period=row.from_period,
+                    to_period=row.to_period,
+                    to_concept=row.to_concept,
+                    to_axis=row.to_axis,
+                    to_member=row.to_member,
+                    is_global=row.is_global,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error getting financial facts override id=%s: %s", override_id, e
+            )
             raise

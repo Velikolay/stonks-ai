@@ -1,34 +1,30 @@
-"""Financial facts database operations."""
+"""Async financial facts database operations."""
 
 import logging
 from typing import Optional
 
-from sqlalchemy import MetaData, Table, insert, select, update
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, insert, select, update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..models import FinancialFact, FinancialFactCreate, PeriodType
+from filings.models import FinancialFact, FinancialFactCreate, PeriodType
 
 logger = logging.getLogger(__name__)
 
 
-class FinancialFactOperations:
-    """Financial facts database operations."""
+class FinancialFactOperationsAsync:
+    """Async financial facts database operations."""
 
-    def __init__(self, engine: Engine):
-        """Initialize with database engine."""
+    def __init__(self, engine: AsyncEngine, metadata: MetaData):
+        """Initialize with async engine and metadata."""
         self.engine = engine
-        # Create table metadata
-        metadata = MetaData()
-        self.financial_facts_table = Table(
-            "financial_facts", metadata, autoload_with=engine
-        )
-        self.filings_table = Table("filings", metadata, autoload_with=engine)
+        self.financial_facts_table = metadata.tables["financial_facts"]
+        self.filings_table = metadata.tables["filings"]
 
-    def insert_financial_fact(self, fact: FinancialFact) -> Optional[int]:
+    async def insert_financial_fact(self, fact: FinancialFact) -> Optional[int]:
         """Insert a new financial fact and return its ID."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     insert(self.financial_facts_table)
                     .values(
@@ -58,22 +54,26 @@ class FinancialFactOperations:
                     .returning(self.financial_facts_table.c.id)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 fact_id = result.scalar()
-                conn.commit()
+                if fact_id is None:
+                    await conn.rollback()
+                    return None
 
+                await conn.commit()
+                logger.info(f"Inserted financial fact with ID: {fact_id}")
                 return fact_id
 
         except SQLAlchemyError as e:
-            logger.error(f"Error inserting financial fact ${fact}: {e}")
+            logger.error(f"Error inserting financial fact: {e}")
             return None
 
-    def insert_financial_facts_batch(
+    async def insert_financial_facts_batch(
         self, facts: list[FinancialFactCreate]
     ) -> list[int]:
         """Insert multiple financial facts and return their IDs."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 fact_ids = []
                 key_id_map = {}
                 for fact in facts:
@@ -110,24 +110,24 @@ class FinancialFactOperations:
                         .returning(self.financial_facts_table.c.id)
                     )
 
-                    result = conn.execute(stmt)
+                    result = await conn.execute(stmt)
                     fact_id = result.scalar()
                     fact_ids.append(fact_id)
                     key_id_map[fact.key] = fact_id
 
                 for fact in facts:
                     if fact.abstract_key or fact.parent_key:
-                        id = key_id_map.get(fact.key)
+                        id_val = key_id_map.get(fact.key)
                         parent_id = key_id_map.get(fact.parent_key)
                         abstract_id = key_id_map.get(fact.abstract_key)
 
-                        conn.execute(
+                        await conn.execute(
                             update(self.financial_facts_table)
-                            .where(self.financial_facts_table.c.id == id)
+                            .where(self.financial_facts_table.c.id == id_val)
                             .values(parent_id=parent_id, abstract_id=abstract_id)
                         )
 
-                conn.commit()
+                await conn.commit()
                 logger.info(f"Inserted {len(fact_ids)} financial facts")
                 return fact_ids
 
@@ -135,15 +135,17 @@ class FinancialFactOperations:
             logger.error(f"Error inserting financial facts batch: {e}")
             return []
 
-    def get_financial_facts_by_filing(self, filing_id: int) -> list[FinancialFact]:
+    async def get_financial_facts_by_filing(
+        self, filing_id: int
+    ) -> list[FinancialFact]:
         """Get all financial facts for a filing."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.financial_facts_table).where(
                     self.financial_facts_table.c.filing_id == filing_id
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
 
                 facts = []
                 for row in result:
@@ -182,12 +184,12 @@ class FinancialFactOperations:
             logger.error(f"Error getting financial facts by filing: {e}")
             return []
 
-    def get_financial_facts_by_concept(
+    async def get_financial_facts_by_concept(
         self, company_id: int, concept: str, limit: int = 10
     ) -> list[FinancialFact]:
         """Get financial facts by company and concept."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     select(self.financial_facts_table)
                     .join(
@@ -203,7 +205,7 @@ class FinancialFactOperations:
                     .limit(limit)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
 
                 facts = []
                 for row in result:
@@ -242,14 +244,16 @@ class FinancialFactOperations:
             logger.error(f"Error getting financial facts by concept: {e}")
             return []
 
-    def get_financial_facts_by_filing_id(self, filing_id: int) -> list[FinancialFact]:
+    async def get_financial_facts_by_filing_id(
+        self, filing_id: int
+    ) -> list[FinancialFact]:
         """Get all financial facts for a specific filing."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.financial_facts_table).where(
                     self.financial_facts_table.c.filing_id == filing_id
                 )
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 rows = result.fetchall()
 
                 facts = []
@@ -292,23 +296,16 @@ class FinancialFactOperations:
             )
             return []
 
-    def delete_facts_by_filing_id(self, filing_id: int) -> bool:
-        """Delete all financial facts for a specific filing.
-
-        Args:
-            filing_id: ID of the filing whose facts should be deleted
-
-        Returns:
-            True if deletion was successful, False otherwise
-        """
+    async def delete_facts_by_filing_id(self, filing_id: int) -> bool:
+        """Delete all financial facts for a specific filing."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = self.financial_facts_table.delete().where(
                     self.financial_facts_table.c.filing_id == filing_id
                 )
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 deleted_count = result.rowcount
-                conn.commit()
+                await conn.commit()
 
                 logger.info(
                     f"Deleted {deleted_count} financial facts for filing {filing_id}"

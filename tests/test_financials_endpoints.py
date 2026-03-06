@@ -1,7 +1,7 @@
 """Tests for financials endpoints."""
 
 from datetime import date
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -261,7 +261,9 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+        mock_filings_db.companies.get_company_by_ticker = AsyncMock(
+            return_value=mock_company
+        )
 
         # Mock filings
         from filings.models.filing import Filing
@@ -292,10 +294,9 @@ class TestGetFilingsEndpoint:
             fiscal_quarter=4,
             public_url="https://example.com/filing2",
         )
-        mock_filings_db.filings.get_filings_by_company.return_value = [
-            mock_filing1,
-            mock_filing2,
-        ]
+        mock_filings_db.filings.get_filings_by_company = AsyncMock(
+            return_value=[mock_filing1, mock_filing2]
+        )
 
         response = client.get("/financials/filings?ticker=AAPL")
 
@@ -317,7 +318,9 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+        mock_filings_db.companies.get_company_by_ticker = AsyncMock(
+            return_value=mock_company
+        )
 
         # Mock filings filtered by form_type
         from filings.models.filing import Filing
@@ -335,7 +338,9 @@ class TestGetFilingsEndpoint:
             fiscal_quarter=4,
             public_url="https://example.com/filing1",
         )
-        mock_filings_db.filings.get_filings_by_company.return_value = [mock_filing]
+        mock_filings_db.filings.get_filings_by_company = AsyncMock(
+            return_value=[mock_filing]
+        )
 
         response = client.get("/financials/filings?ticker=AAPL&form_type=10-Q")
 
@@ -356,7 +361,7 @@ class TestGetFilingsEndpoint:
     @patch("api.financials.filings_db")
     def test_get_filings_company_not_found(self, mock_filings_db, client):
         """Test getting filings when company is not found."""
-        mock_filings_db.companies.get_company_by_ticker.return_value = None
+        mock_filings_db.companies.get_company_by_ticker = AsyncMock(return_value=None)
 
         response = client.get("/financials/filings?ticker=INVALID")
 
@@ -381,10 +386,12 @@ class TestGetFilingsEndpoint:
         # Mock company
         mock_company = Mock()
         mock_company.id = 1
-        mock_filings_db.companies.get_company_by_ticker.return_value = mock_company
+        mock_filings_db.companies.get_company_by_ticker = AsyncMock(
+            return_value=mock_company
+        )
 
         # Mock empty filings list
-        mock_filings_db.filings.get_filings_by_company.return_value = []
+        mock_filings_db.filings.get_filings_by_company = AsyncMock(return_value=[])
 
         response = client.get("/financials/filings?ticker=AAPL")
 

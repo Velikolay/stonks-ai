@@ -16,7 +16,7 @@ from api.companies import router as companies_router
 from api.companies import set_filings_db as set_companies_filings_db
 from api.financials import router as financials_router
 from api.financials import set_filings_db
-from filings.db import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 from rag_system import RAGSystem
 
 # Configure logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize systems
 rag_system: Optional[RAGSystem] = None
-filings_db: Optional[FilingsDatabase] = None
+filings_db: Optional[AsyncFilingsDatabase] = None
 
 
 @asynccontextmanager
@@ -36,12 +36,13 @@ async def lifespan(app: FastAPI):
         # Initialize RAG system
         rag_system = RAGSystem()
 
-        # Initialize FilingsDatabase
+        # Initialize native async FilingsDatabase (SQLAlchemy + asyncpg)
         database_url = os.getenv("DATABASE_URL")
         if not database_url:
             raise ValueError("DATABASE_URL environment variable is required")
 
-        filings_db = FilingsDatabase(database_url)
+        filings_db = AsyncFilingsDatabase(database_url)
+        await filings_db.initialize()
 
         # Set the database instance in the financials and admin modules
         set_filings_db(filings_db)
@@ -60,7 +61,7 @@ async def lifespan(app: FastAPI):
     if rag_system:
         logger.info("Shutting down RAG system")
     if filings_db:
-        filings_db.close()
+        await filings_db.aclose()
         logger.info("FilingsDatabase connection closed")
 
 

@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from filings.db import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/companies", tags=["companies"])
 
 # Global database instance (will be set during app initialization)
-filings_db: Optional[FilingsDatabase] = None
+filings_db: Optional[AsyncFilingsDatabase] = None
+
+
+def set_filings_db(db: AsyncFilingsDatabase) -> None:
+    """Set the global filings database instance."""
+    global filings_db
+    filings_db = db
 
 
 class CompanySearchResponse(BaseModel):
@@ -33,12 +39,6 @@ class CompanyResponse(BaseModel):
     ticker: str
 
 
-def set_filings_db(db: FilingsDatabase) -> None:
-    """Set the global filings database instance."""
-    global filings_db
-    filings_db = db
-
-
 @router.get(
     "/search",
     response_model=List[CompanySearchResponse],
@@ -53,7 +53,7 @@ async def search_companies(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        rows = filings_db.companies.search_companies_by_prefix(
+        rows = await filings_db.companies.search_companies_by_prefix(
             prefix=prefix, limit=limit
         )
         return [
@@ -78,7 +78,7 @@ async def get_company_by_ticker(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        company = filings_db.companies.get_company_by_ticker(
+        company = await filings_db.companies.get_company_by_ticker(
             ticker=ticker, exchange=exchange
         )
         if company is None:

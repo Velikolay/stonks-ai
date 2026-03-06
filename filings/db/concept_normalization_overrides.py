@@ -1,14 +1,14 @@
-"""Concept normalization overrides database operations."""
+"""Concept normalization overrides async database operations."""
 
 import logging
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, delete, insert, select, update
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, and_, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..models.concept_normalization_override import (
+from filings.models.concept_normalization_override import (
     ConceptNormalizationOverride,
     ConceptNormalizationOverrideCreate,
     ConceptNormalizationOverrideUpdate,
@@ -20,18 +20,13 @@ logger = logging.getLogger(__name__)
 def validate_override_constraints(
     is_abstract: bool,
     parent_concept: Optional[str],
-    unit: Optional[str],
+    unit: Optional[Decimal],
     weight: Optional[Decimal],
 ) -> None:
     """Validate override constraints.
 
     Raises:
         ValueError: If constraints are violated.
-
-    Constraints:
-    - If parent_concept is set: must not be abstract and must have weight
-    - If not abstract: must have unit
-    - If abstract: must not have parent_concept, weight, or unit
     """
     if parent_concept is not None:
         if is_abstract:
@@ -58,31 +53,27 @@ def validate_override_constraints(
             raise ValueError("Abstract records (is_abstract=True) cannot have a unit")
 
 
-class ConceptNormalizationOverridesOperations:
-    """Concept normalization overrides database operations."""
+class ConceptNormalizationOverridesOperationsAsync:
+    """Concept normalization overrides async database operations."""
 
-    def __init__(self, engine: Engine):
-        """Initialize with database engine."""
+    def __init__(self, engine: AsyncEngine, metadata: MetaData):
+        """Initialize with async engine and metadata."""
         self.engine = engine
-        # Create table metadata
-        metadata = MetaData()
-        self.overrides_table = Table(
-            "concept_normalization_overrides", metadata, autoload_with=engine
-        )
+        self.overrides_table = metadata.tables["concept_normalization_overrides"]
 
-    def list_all(
+    async def list_all(
         self, *, company_id: Optional[int] = None, statement: Optional[str] = None
     ) -> List[ConceptNormalizationOverride]:
-        """Get concept normalization overrides, optionally filtered by company/statement."""
+        """Get concept normalization overrides, optionally filtered."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
                 if statement is not None:
                     stmt = stmt.where(self.overrides_table.c.statement == statement)
                 if company_id is not None:
                     stmt = stmt.where(self.overrides_table.c.company_id == company_id)
                 stmt = stmt.order_by(self.overrides_table.c.updated_at.desc())
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 rows = result.fetchall()
 
                 overrides = []
@@ -115,12 +106,12 @@ class ConceptNormalizationOverridesOperations:
             logger.error(f"Error retrieving concept normalization overrides: {e}")
             raise
 
-    def get_by_key(
+    async def get_by_key(
         self, *, concept: str, statement: str, company_id: int
     ) -> Optional[ConceptNormalizationOverride]:
         """Get a concept normalization override by (concept, statement, company_id)."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.concept == concept,
@@ -128,7 +119,7 @@ class ConceptNormalizationOverridesOperations:
                         self.overrides_table.c.company_id == company_id,
                     )
                 )
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
 
                 if row:
@@ -159,11 +150,10 @@ class ConceptNormalizationOverridesOperations:
             )
             raise
 
-    def create(
+    async def create(
         self, override: ConceptNormalizationOverrideCreate
     ) -> ConceptNormalizationOverride:
         """Create a new concept normalization override."""
-        # Validate constraints
         validate_override_constraints(
             is_abstract=override.is_abstract,
             parent_concept=override.parent_concept,
@@ -172,7 +162,7 @@ class ConceptNormalizationOverridesOperations:
         )
 
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     insert(self.overrides_table)
                     .values(
@@ -191,9 +181,9 @@ class ConceptNormalizationOverridesOperations:
                     .returning(self.overrides_table)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
-                conn.commit()
+                await conn.commit()
 
                 logger.info(
                     "Created concept normalization override: (%s, %s, %s)",
@@ -222,16 +212,14 @@ class ConceptNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error creating concept normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(
                 f"Concept normalization override already exists or invalid abstract_concept/parent_concept: {e}"
             )
         except SQLAlchemyError as e:
             logger.error(f"Error creating concept normalization override: {e}")
-            conn.rollback()
             raise
 
-    def update(
+    async def update(
         self,
         company_id: int,
         concept: str,
@@ -239,14 +227,12 @@ class ConceptNormalizationOverridesOperations:
         override_update: ConceptNormalizationOverrideUpdate,
     ) -> Optional[ConceptNormalizationOverride]:
         """Update an existing concept normalization override."""
-        # Get existing record to merge with update for validation
-        existing = self.get_by_key(
+        existing = await self.get_by_key(
             concept=concept, statement=statement, company_id=company_id
         )
         if not existing:
             return None
 
-        # Merge existing values with update values for validation
         final_is_abstract = (
             override_update.is_abstract
             if override_update.is_abstract is not None
@@ -266,7 +252,6 @@ class ConceptNormalizationOverridesOperations:
             else existing.weight
         )
 
-        # Validate constraints with merged values
         validate_override_constraints(
             is_abstract=final_is_abstract,
             parent_concept=final_parent_concept,
@@ -275,8 +260,7 @@ class ConceptNormalizationOverridesOperations:
         )
 
         try:
-            with self.engine.connect() as conn:
-                # Build update values from non-None fields
+            async with self.engine.connect() as conn:
                 update_values = {}
                 if override_update.normalized_label is not None:
                     update_values["normalized_label"] = override_update.normalized_label
@@ -294,7 +278,6 @@ class ConceptNormalizationOverridesOperations:
                     update_values["weight"] = override_update.weight
 
                 if not update_values:
-                    # No fields to update, return existing record
                     return existing
 
                 stmt = (
@@ -310,9 +293,9 @@ class ConceptNormalizationOverridesOperations:
                     .returning(self.overrides_table)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
-                conn.commit()
+                await conn.commit()
 
                 if row:
                     logger.info(
@@ -342,19 +325,17 @@ class ConceptNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error updating concept normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(
                 f"Invalid abstract_concept/parent_concept or constraint violation: {e}"
             )
         except SQLAlchemyError as e:
             logger.error(f"Error updating concept normalization override: {e}")
-            conn.rollback()
             raise
 
-    def delete(self, *, company_id: int, concept: str, statement: str) -> bool:
+    async def delete(self, *, company_id: int, concept: str, statement: str) -> bool:
         """Delete a concept normalization override."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = delete(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.concept == concept,
@@ -362,8 +343,8 @@ class ConceptNormalizationOverridesOperations:
                         self.overrides_table.c.company_id == company_id,
                     )
                 )
-                result = conn.execute(stmt)
-                conn.commit()
+                result = await conn.execute(stmt)
+                await conn.commit()
 
                 deleted = result.rowcount > 0
                 if deleted:
@@ -387,11 +368,9 @@ class ConceptNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error deleting concept normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(
                 f"Cannot delete: record is referenced by other records: {e}"
             )
         except SQLAlchemyError as e:
             logger.error(f"Error deleting concept normalization override: {e}")
-            conn.rollback()
             raise

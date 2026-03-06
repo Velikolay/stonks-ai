@@ -2,14 +2,17 @@
 
 from datetime import date
 
+import pytest
+
 from filings import Filing, FilingCreate
 
 
+@pytest.mark.asyncio
 class TestFilingOperations:
     """Test filing database operations."""
 
-    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
-        filing_entity_id = db.companies.get_or_create_filing_entities_id(
+    async def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = await db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
@@ -18,17 +21,17 @@ class TestFilingOperations:
         assert filing_entity_id is not None
         return int(filing_entity_id)
 
-    def test_insert_filing(self, db, sample_company, sample_filing):
+    async def test_insert_filing(self, db, sample_company, sample_filing):
         """Test inserting a new filing."""
         # Create company first
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
 
         # Insert filing
-        filing_id = db.filings.insert_filing(sample_filing)
+        filing_id = await db.filings.insert_filing(sample_filing)
 
         # Verify filing was inserted
         assert filing_id is not None
@@ -36,7 +39,7 @@ class TestFilingOperations:
         assert filing_id > 0
 
         # Retrieve and verify filing data
-        filing = db.filings.get_filing_by_id(filing_id)
+        filing = await db.filings.get_filing_by_id(filing_id)
         assert filing is not None
         assert filing.id == filing_id
         assert filing.company_id == company.id
@@ -49,18 +52,18 @@ class TestFilingOperations:
         assert filing.fiscal_quarter == sample_filing.fiscal_quarter
         assert filing.public_url == sample_filing.public_url
 
-    def test_get_filing_by_id(self, db, sample_company, sample_filing):
+    async def test_get_filing_by_id(self, db, sample_company, sample_filing):
         """Test retrieving filing by ID."""
         # Create company and filing first
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing_id = db.filings.insert_filing(sample_filing)
+        filing_id = await db.filings.insert_filing(sample_filing)
 
         # Retrieve filing
-        filing = db.filings.get_filing_by_id(filing_id)
+        filing = await db.filings.get_filing_by_id(filing_id)
 
         # Verify filing data
         assert filing is not None
@@ -69,16 +72,18 @@ class TestFilingOperations:
         assert filing.registry == sample_filing.registry
         assert filing.number == sample_filing.number
 
-    def test_get_filing_by_id_not_found(self, db):
+    async def test_get_filing_by_id_not_found(self, db):
         """Test retrieving non-existent filing by ID."""
-        filing = db.filings.get_filing_by_id(99999)
+        filing = await db.filings.get_filing_by_id(99999)
         assert filing is None
 
-    def test_get_filings_by_company(self, db, sample_company):
+    async def test_get_filings_by_company(self, db, sample_company):
         """Test retrieving filings by company."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        company = await db.companies.get_or_create_company(sample_company)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Create multiple filings
         filing1 = FilingCreate(
@@ -107,22 +112,24 @@ class TestFilingOperations:
             public_url="https://example.com/2",
         )
 
-        db.filings.insert_filing(filing1)
-        db.filings.insert_filing(filing2)
+        await db.filings.insert_filing(filing1)
+        await db.filings.insert_filing(filing2)
 
         # Retrieve all filings for company
-        filings = db.filings.get_filings_by_company(company.id)
+        filings = await db.filings.get_filings_by_company(company.id)
 
         # Verify results
         assert len(filings) >= 2
         assert any(f.form_type == "10-Q" for f in filings)
         assert any(f.form_type == "10-K" for f in filings)
 
-    def test_get_filings_by_company_and_form_type(self, db, sample_company):
+    async def test_get_filings_by_company_and_form_type(self, db, sample_company):
         """Test retrieving filings by company and form type."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        company = await db.companies.get_or_create_company(sample_company)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Create filings with different form types
         filing1 = FilingCreate(
@@ -149,21 +156,23 @@ class TestFilingOperations:
             fiscal_quarter=0,
         )
 
-        db.filings.insert_filing(filing1)
-        db.filings.insert_filing(filing2)
+        await db.filings.insert_filing(filing1)
+        await db.filings.insert_filing(filing2)
 
         # Retrieve only 10-Q filings
-        filings = db.filings.get_filings_by_company(company.id, "10-Q")
+        filings = await db.filings.get_filings_by_company(company.id, "10-Q")
 
         # Verify results
         assert len(filings) >= 1
         assert all(f.form_type == "10-Q" for f in filings)
 
-    def test_get_latest_filing(self, db, sample_company):
+    async def test_get_latest_filing(self, db, sample_company):
         """Test retrieving latest filing for company and form type."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        company = await db.companies.get_or_create_company(sample_company)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Create multiple filings with different dates
         filing1 = FilingCreate(
@@ -190,29 +199,29 @@ class TestFilingOperations:
             fiscal_quarter=4,
         )
 
-        db.filings.insert_filing(filing1)
-        latest_filing_id = db.filings.insert_filing(filing2)
+        await db.filings.insert_filing(filing1)
+        latest_filing_id = await db.filings.insert_filing(filing2)
 
         # Retrieve latest filing
-        latest_filing = db.filings.get_latest_filing(company.id, "10-Q")
+        latest_filing = await db.filings.get_latest_filing(company.id, "10-Q")
 
         # Verify results
         assert latest_filing is not None
         assert latest_filing.id == latest_filing_id
         assert latest_filing.filing_date == date(2024, 12, 19)
 
-    def test_get_filing_by_number(self, db, sample_company, sample_filing):
+    async def test_get_filing_by_number(self, db, sample_company, sample_filing):
         """Test retrieving filing by source and filing number."""
         # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing_id = db.filings.insert_filing(sample_filing)
+        filing_id = await db.filings.insert_filing(sample_filing)
 
         # Retrieve filing by number
-        filing = db.filings.get_filing_by_number(
+        filing = await db.filings.get_filing_by_number(
             sample_filing.registry, sample_filing.number
         )
 
@@ -222,22 +231,22 @@ class TestFilingOperations:
         assert filing.registry == sample_filing.registry
         assert filing.number == sample_filing.number
 
-    def test_get_filing_by_number_not_found(self, db):
+    async def test_get_filing_by_number_not_found(self, db):
         """Test retrieving non-existent filing by number."""
-        filing = db.filings.get_filing_by_number("SEC", "INVALID")
+        filing = await db.filings.get_filing_by_number("SEC", "INVALID")
         assert filing is None
 
-    def test_get_or_create_filing_new(self, db, sample_company, sample_filing):
+    async def test_get_or_create_filing_new(self, db, sample_company, sample_filing):
         """Test get_or_create_filing with new filing."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
 
         # Get or create filing
-        filing = db.filings.get_or_create_filing(sample_filing)
+        filing = await db.filings.get_or_create_filing(sample_filing)
 
         # Verify filing was created
         assert filing is not None
@@ -246,24 +255,30 @@ class TestFilingOperations:
         assert filing.number == sample_filing.number
         assert filing.id > 0
 
-    def test_get_or_create_filing_existing(self, db, sample_company, sample_filing):
+    async def test_get_or_create_filing_existing(
+        self, db, sample_company, sample_filing
+    ):
         """Test get_or_create_filing with existing filing."""
         # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        original_filing = db.filings.get_or_create_filing(sample_filing)
+        original_filing = await db.filings.get_or_create_filing(sample_filing)
 
         # Try to get or create the same filing again
-        retrieved_filing = db.filings.get_or_create_filing(sample_filing)
+        retrieved_filing = await db.filings.get_or_create_filing(sample_filing)
 
         # Verify same filing was returned
         assert retrieved_filing is not None
         assert retrieved_filing.id == original_filing.id
         assert retrieved_filing.registry == original_filing.registry
         assert retrieved_filing.number == original_filing.number
+
+
+class TestFilingModelValidation:
+    """Sync tests for filing model validation (no asyncio)."""
 
     def test_filing_model_validation(self):
         """Test filing model validation."""

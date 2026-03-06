@@ -7,7 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from edgar import Company
 
-from filings import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 from filings.models.company import CompanyCreate
 from filings.models.filing import FilingCreate
 from filings.parsers.sec_xbrl import SECXBRLParser
@@ -20,17 +20,17 @@ load_dotenv()
 class SECXBRLFilingsLoader:
     """Loader for downloading and persisting SEC XBRL filings."""
 
-    def __init__(self, database: FilingsDatabase, parser: SECXBRLParser = None):
+    def __init__(self, database: AsyncFilingsDatabase, parser: SECXBRLParser = None):
         """Initialize the XBRL filings loader.
 
         Args:
-            database: FilingsDatabase instance to use for database operations
+            database: AsyncFilingsDatabase instance to use for database operations
             parser: Parser instance for extracting financial facts from filings
         """
         self.database = database
         self.parser = parser or SECXBRLParser()
 
-    def load_company_filings(
+    async def load_company_filings(
         self,
         ticker: str,
         form: str = "10-Q",
@@ -58,7 +58,7 @@ class SECXBRLFilingsLoader:
             edgar_company = Company(ticker)
 
             # Get or create company
-            company = self._get_or_create_company(edgar_company)
+            company = await self._get_or_create_company(edgar_company)
             if not company:
                 return {"error": f"Failed to get or create company for ticker {ticker}"}
 
@@ -67,18 +67,22 @@ class SECXBRLFilingsLoader:
                 return {
                     "error": f"Failed to determine CIK for ticker {ticker} (required for filing_entities)"
                 }
-            filing_entity_id = self.database.companies.get_or_create_filing_entities_id(
-                company_id=company.id,
-                registry="SEC",
-                number=str(cik),
-                status="active",
+            filing_entity_id = (
+                await self.database.companies.get_or_create_filing_entities_id(
+                    company_id=company.id,
+                    registry="SEC",
+                    number=str(cik),
+                    status="active",
+                )
             )
             if filing_entity_id is None:
                 return {
                     "error": f"Failed to get or create filing_entities for ticker {ticker}"
                 }
-            filing_entities = self.database.companies.get_filing_entities_by_company_id(
-                company_id=company.id, registry="SEC", status=status
+            filing_entities = (
+                await self.database.companies.get_filing_entities_by_company_id(
+                    company_id=company.id, registry="SEC", status=status
+                )
             )
             if not filing_entities:
                 filing_entities = []
@@ -100,7 +104,7 @@ class SECXBRLFilingsLoader:
                         break
 
                     try:
-                        facts_count, was_updated = self._load_single_filing(
+                        facts_count, was_updated = await self._load_single_filing(
                             filing, company.id, filing_entity.id, override
                         )
                         if facts_count <= 0:
@@ -140,7 +144,7 @@ class SECXBRLFilingsLoader:
             logger.error(f"Error loading filings for {ticker}: {e}")
             return {"error": f"Failed to load filings for {ticker}: {str(e)}"}
 
-    def _get_or_create_company(self, edgar_company: Company):
+    async def _get_or_create_company(self, edgar_company: Company):
         """Get existing company or create new one from the edgar Company object.
 
         Args:
@@ -183,7 +187,7 @@ class SECXBRLFilingsLoader:
 
             # 1) Try to resolve existing company by any returned ticker
             for ticker in tickers:
-                existing = self.database.companies.get_company_by_ticker(
+                existing = await self.database.companies.get_company_by_ticker(
                     ticker, exchange
                 )
                 if existing:
@@ -197,14 +201,14 @@ class SECXBRLFilingsLoader:
             # 2) Create new company, then attach all tickers to it (explicit create flow)
             name_for_create = company_name or tickers[0]
             industry_for_create = edgar_company.data.sic_description
-            company_id = self.database.companies.insert_company(
+            company_id = await self.database.companies.insert_company(
                 CompanyCreate(name=name_for_create, industry=industry_for_create)
             )
             if not company_id:
                 logger.error("Failed to insert company for edgar tickers %s", tickers)
                 return None
 
-            company = self.database.companies.get_company_by_id(company_id)
+            company = await self.database.companies.get_company_by_id(company_id)
             if not company:
                 logger.error(
                     "Inserted company id=%s but could not reload it; tickers=%s",
@@ -214,7 +218,7 @@ class SECXBRLFilingsLoader:
                 return None
 
             for ticker in tickers:
-                ok = self.database.companies.upsert_ticker(
+                ok = await self.database.companies.upsert_ticker(
                     company_id=company.id,
                     ticker=ticker,
                     exchange=exchange,
@@ -272,7 +276,7 @@ class SECXBRLFilingsLoader:
             logger.warning(f"Invalid month {month} for fiscal quarter calculation")
             return None
 
-    def _load_single_filing(
+    async def _load_single_filing(
         self, filing, company_id: int, filing_entity_id: int, override: bool
     ) -> tuple[int, bool]:
         """Load a single filing and persist its data.
@@ -287,7 +291,7 @@ class SECXBRLFilingsLoader:
         """
         try:
             # Check if filing already exists
-            existing_filing = self.database.filings.get_filing_by_number(
+            existing_filing = await self.database.filings.get_filing_by_number(
                 "SEC", filing.accession_number
             )
 
@@ -301,11 +305,11 @@ class SECXBRLFilingsLoader:
             if existing_filing and override:
                 logger.info(f"Overriding existing filing {filing.accession_number}")
                 # Delete existing financial facts first (due to foreign key constraint)
-                self.database.financial_facts.delete_facts_by_filing_id(
+                await self.database.financial_facts.delete_facts_by_filing_id(
                     existing_filing.id
                 )
                 # Delete the filing
-                self.database.filings.delete_filing(existing_filing.id)
+                await self.database.filings.delete_filing(existing_filing.id)
                 logger.info(
                     f"Deleted existing filing {filing.accession_number} and its facts"
                 )
@@ -331,7 +335,7 @@ class SECXBRLFilingsLoader:
                 public_url=filing.url,
             )
 
-            filing_id = self.database.filings.insert_filing(filing_data)
+            filing_id = await self.database.filings.insert_filing(filing_data)
 
             if not filing_id:
                 logger.error(f"Failed to insert filing {filing.accession_number}")
@@ -365,8 +369,10 @@ class SECXBRLFilingsLoader:
                 fact.form_type = filing_data.form_type
 
             # Insert facts in batch
-            inserted_facts = self.database.financial_facts.insert_financial_facts_batch(
-                valid_facts
+            inserted_facts = (
+                await self.database.financial_facts.insert_financial_facts_batch(
+                    valid_facts
+                )
             )
 
             if inserted_facts:

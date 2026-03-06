@@ -11,7 +11,7 @@ from fastapi import APIRouter, File, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from filings.db import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 from filings.models import (
     CompanyUpdate,
     FilingEntityCreate,
@@ -38,10 +38,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Global database instance (will be set during app initialization)
-filings_db: Optional[FilingsDatabase] = None
+filings_db: Optional[AsyncFilingsDatabase] = None
 
 
-def set_filings_db(db: FilingsDatabase) -> None:
+def set_filings_db(db: AsyncFilingsDatabase) -> None:
     """Set the global filings database instance."""
     global filings_db
     filings_db = db
@@ -153,16 +153,16 @@ async def list_companies() -> List[CompanyResponse]:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        companies = filings_db.companies.get_all_companies()
+        companies = await filings_db.companies.get_all_companies()
         if not companies:
             return []
 
         company_ids = [c.id for c in companies]
-        tickers_by_company_id = filings_db.companies.get_tickers_by_company_ids(
+        tickers_by_company_id = await filings_db.companies.get_tickers_by_company_ids(
             company_ids=company_ids
         )
         filing_entities_by_company_id = (
-            filings_db.companies.get_filing_entities_by_company_ids(
+            await filings_db.companies.get_filing_entities_by_company_ids(
                 company_ids=company_ids
             )
         )
@@ -212,14 +212,16 @@ async def update_company(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        updated = filings_db.companies.update_company(
+        updated = await filings_db.companies.update_company(
             company_id=company_id, company=company_update
         )
         if updated is None:
             raise HTTPException(status_code=404, detail="Company not found")
 
-        tickers = filings_db.companies.get_tickers_by_company_id(company_id=company_id)
-        filing_entities = filings_db.companies.get_filing_entities_by_company_id(
+        tickers = await filings_db.companies.get_tickers_by_company_id(
+            company_id=company_id
+        )
+        filing_entities = await filings_db.companies.get_filing_entities_by_company_id(
             company_id=company_id
         )
         return CompanyResponse(
@@ -265,11 +267,13 @@ async def add_company_ticker(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    company = filings_db.companies.get_company_by_id(company_id)
+    company = await filings_db.companies.get_company_by_id(company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    created = filings_db.companies.create_ticker(company_id=company_id, ticker=ticker)
+    created = await filings_db.companies.create_ticker(
+        company_id=company_id, ticker=ticker
+    )
     if created is None:
         raise HTTPException(status_code=400, detail="Failed to create ticker")
     return TickerResponse(
@@ -293,7 +297,7 @@ async def update_company_ticker(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    updated = filings_db.companies.update_ticker(
+    updated = await filings_db.companies.update_ticker(
         company_id=company_id, ticker_id=ticker_id, ticker=ticker_update
     )
     if updated is None:
@@ -318,7 +322,7 @@ async def delete_company_ticker(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    deleted = filings_db.companies.delete_ticker(
+    deleted = await filings_db.companies.delete_ticker(
         company_id=company_id, ticker_id=ticker_id
     )
     if not deleted:
@@ -338,11 +342,11 @@ async def add_company_filing_entity(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    company = filings_db.companies.get_company_by_id(company_id)
+    company = await filings_db.companies.get_company_by_id(company_id)
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    created = filings_db.companies.create_filing_entity(
+    created = await filings_db.companies.create_filing_entity(
         company_id=company_id, filing_entity=filing_entity
     )
     if created is None:
@@ -368,7 +372,7 @@ async def update_company_filing_entity(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    updated = filings_db.companies.update_filing_entity(
+    updated = await filings_db.companies.update_filing_entity(
         company_id=company_id,
         filing_entity_id=filing_entity_id,
         filing_entity=filing_entity_update,
@@ -395,7 +399,7 @@ async def delete_company_filing_entity(
     if not filings_db:
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
-    deleted = filings_db.companies.delete_filing_entity(
+    deleted = await filings_db.companies.delete_filing_entity(
         company_id=company_id, filing_entity_id=filing_entity_id
     )
     if deleted:
@@ -403,7 +407,7 @@ async def delete_company_filing_entity(
 
     existing_ids = {
         fe.id
-        for fe in filings_db.companies.get_filing_entities_by_company_id(
+        for fe in await filings_db.companies.get_filing_entities_by_company_id(
             company_id=company_id
         )
     }
@@ -428,7 +432,7 @@ async def list_concept_normalization_overrides(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.concept_normalization_overrides.list_all(
+        overrides = await filings_db.concept_normalization_overrides.list_all(
             company_id=company_id, statement=statement
         )
         return [
@@ -467,7 +471,9 @@ async def create_concept_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        created_override = filings_db.concept_normalization_overrides.create(override)
+        created_override = await filings_db.concept_normalization_overrides.create(
+            override
+        )
         return ConceptNormalizationOverrideResponse(
             company_id=created_override.company_id,
             concept=created_override.concept,
@@ -509,7 +515,7 @@ async def update_concept_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        updated_override = filings_db.concept_normalization_overrides.update(
+        updated_override = await filings_db.concept_normalization_overrides.update(
             company_id, concept, statement, override_update
         )
         if not updated_override:
@@ -562,7 +568,7 @@ async def delete_concept_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        deleted = filings_db.concept_normalization_overrides.delete(
+        deleted = await filings_db.concept_normalization_overrides.delete(
             company_id=company_id, concept=concept, statement=statement
         )
         if not deleted:
@@ -592,7 +598,7 @@ async def export_concept_normalization_overrides_to_csv(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.concept_normalization_overrides.list_all(
+        overrides = await filings_db.concept_normalization_overrides.list_all(
             company_id=company_id, statement=statement
         )
 
@@ -724,6 +730,21 @@ async def import_concept_normalization_overrides_from_csv(
                     )
                     continue
 
+                # Validate is_global matches company_id (global overrides use company_id=0)
+                row_company_id_str = row["company_id"].strip()
+                try:
+                    row_company_id = int(row_company_id_str)
+                except (ValueError, Exception):
+                    errors.append(
+                        f"Row {row_num}: Invalid company_id value: {row_company_id_str}"
+                    )
+                    continue
+                if is_global != (row_company_id == 0):
+                    errors.append(
+                        f"Row {row_num}: is_global must match company_id (global=company_id 0)"
+                    )
+                    continue
+
                 # Parse weight (convert to Decimal if present)
                 weight_str = row.get("weight", "").strip()
                 weight = None
@@ -736,23 +757,13 @@ async def import_concept_normalization_overrides_from_csv(
                         )
                         continue
 
-                row_company_id_str = row["company_id"].strip()
-                try:
-                    row_company_id = int(row_company_id_str)
-                except (ValueError, Exception):
-                    errors.append(
-                        f"Row {row_num}: Invalid company_id value: {row_company_id_str}"
-                    )
-                    continue
-
-                # Create override object
+                # Create override object (ConceptNormalizationOverrideCreate has no is_global)
                 override_create = ConceptNormalizationOverrideCreate(
                     company_id=row_company_id,
                     concept=row["concept"].strip(),
                     statement=row["statement"].strip(),
                     normalized_label=row["normalized_label"].strip(),
                     is_abstract=is_abstract,
-                    is_global=is_global,
                     abstract_concept=row.get("abstract_concept", "").strip() or None,
                     parent_concept=row.get("parent_concept", "").strip() or None,
                     description=row.get("description", "").strip() or None,
@@ -761,7 +772,7 @@ async def import_concept_normalization_overrides_from_csv(
                 )
 
                 # Check if record exists
-                existing = filings_db.concept_normalization_overrides.get_by_key(
+                existing = await filings_db.concept_normalization_overrides.get_by_key(
                     concept=override_create.concept,
                     statement=override_create.statement,
                     company_id=override_create.company_id,
@@ -779,7 +790,7 @@ async def import_concept_normalization_overrides_from_csv(
                             unit=override_create.unit,
                             weight=override_create.weight,
                         )
-                        filings_db.concept_normalization_overrides.update(
+                        await filings_db.concept_normalization_overrides.update(
                             override_create.company_id,
                             override_create.concept,
                             override_create.statement,
@@ -794,7 +805,7 @@ async def import_concept_normalization_overrides_from_csv(
                         )
                 else:
                     # Create new record (validation happens in DB layer)
-                    filings_db.concept_normalization_overrides.create(
+                    await filings_db.concept_normalization_overrides.create(
                         override_create.model_copy(
                             update={"company_id": row_company_id}
                         )
@@ -833,7 +844,7 @@ async def list_dimension_normalization_overrides(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.dimension_normalization_overrides.list_all(
+        overrides = await filings_db.dimension_normalization_overrides.list_all(
             company_id=company_id, axis=axis
         )
         return [
@@ -869,7 +880,9 @@ async def create_dimension_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        created_override = filings_db.dimension_normalization_overrides.create(override)
+        created_override = await filings_db.dimension_normalization_overrides.create(
+            override
+        )
         return DimensionNormalizationOverrideResponse(
             company_id=created_override.company_id,
             axis=created_override.axis,
@@ -905,7 +918,7 @@ async def update_dimension_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        updated_override = filings_db.dimension_normalization_overrides.update(
+        updated_override = await filings_db.dimension_normalization_overrides.update(
             company_id, axis, member, member_label, override_update
         )
         if not updated_override:
@@ -949,7 +962,7 @@ async def delete_dimension_normalization_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        deleted = filings_db.dimension_normalization_overrides.delete(
+        deleted = await filings_db.dimension_normalization_overrides.delete(
             company_id, axis, member, member_label
         )
         if not deleted:
@@ -976,7 +989,7 @@ async def export_dimension_normalization_overrides_to_csv(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.dimension_normalization_overrides.list_all(
+        overrides = await filings_db.dimension_normalization_overrides.list_all(
             company_id=company_id, axis=axis
         )
 
@@ -1117,11 +1130,13 @@ async def import_dimension_normalization_overrides_from_csv(
                 )
 
                 # Check if record exists
-                existing = filings_db.dimension_normalization_overrides.get_by_key(
-                    company_id=override_create.company_id,
-                    axis=override_create.axis,
-                    member=override_create.member,
-                    member_label=override_create.member_label,
+                existing = (
+                    await filings_db.dimension_normalization_overrides.get_by_key(
+                        company_id=override_create.company_id,
+                        axis=override_create.axis,
+                        member=override_create.member,
+                        member_label=override_create.member_label,
+                    )
                 )
 
                 if existing:
@@ -1132,7 +1147,7 @@ async def import_dimension_normalization_overrides_from_csv(
                             normalized_member_label=override_create.normalized_member_label,
                             tags=override_create.tags,
                         )
-                        filings_db.dimension_normalization_overrides.update(
+                        await filings_db.dimension_normalization_overrides.update(
                             override_create.company_id,
                             override_create.axis,
                             override_create.member,
@@ -1148,7 +1163,9 @@ async def import_dimension_normalization_overrides_from_csv(
                         )
                 else:
                     # Create new record
-                    filings_db.dimension_normalization_overrides.create(override_create)
+                    await filings_db.dimension_normalization_overrides.create(
+                        override_create
+                    )
                     created += 1
 
             except ValueError as e:
@@ -1184,7 +1201,7 @@ async def list_financial_facts_overrides(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.financial_facts_overrides.list_all(
+        overrides = await filings_db.financial_facts_overrides.list_all(
             company_id=company_id, statement=statement, concept=concept
         )
         return [
@@ -1226,7 +1243,7 @@ async def create_financial_facts_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        created = filings_db.financial_facts_overrides.create(override)
+        created = await filings_db.financial_facts_overrides.create(override)
         return FinancialFactsOverrideResponse(
             id=created.id,
             company_id=created.company_id,
@@ -1265,7 +1282,7 @@ async def update_financial_facts_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        updated = filings_db.financial_facts_overrides.update(
+        updated = await filings_db.financial_facts_overrides.update(
             override_id, override_update
         )
         if not updated:
@@ -1308,7 +1325,9 @@ async def delete_financial_facts_override(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        deleted = filings_db.financial_facts_overrides.delete(override_id=override_id)
+        deleted = await filings_db.financial_facts_overrides.delete(
+            override_id=override_id
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="Override not found")
     except HTTPException:
@@ -1333,7 +1352,7 @@ async def export_financial_facts_overrides_to_csv(
         raise HTTPException(status_code=500, detail="FilingsDatabase not initialized")
 
     try:
-        overrides = filings_db.financial_facts_overrides.list_all(
+        overrides = await filings_db.financial_facts_overrides.list_all(
             company_id=company_id, statement=statement, concept=concept
         )
 
@@ -1478,7 +1497,7 @@ async def import_financial_facts_overrides_from_csv(
                         to_axis=override_create.to_axis,
                         to_member=override_create.to_member,
                     )
-                    updated_obj = filings_db.financial_facts_overrides.update(
+                    updated_obj = await filings_db.financial_facts_overrides.update(
                         override_id, override_update
                     )
                     if updated_obj is None:
@@ -1488,7 +1507,7 @@ async def import_financial_facts_overrides_from_csv(
                     else:
                         updated += 1
                 else:
-                    filings_db.financial_facts_overrides.create(override_create)
+                    await filings_db.financial_facts_overrides.create(override_create)
                     created += 1
 
             except ValueError as e:
@@ -1533,10 +1552,10 @@ async def refresh_financials(
     try:
         ids = company_ids
         if not ids:
-            companies = filings_db.companies.get_all_companies()
+            companies = await filings_db.companies.get_all_companies()
             ids = [c.id for c in companies]
 
-        filings_db.refresh_financials_for_companies(ids)
+        await filings_db.refresh_financials_for_companies(ids)
 
         return [
             FinancialsRefreshResponse(

@@ -1,13 +1,13 @@
-"""Dimension normalization overrides database operations."""
+"""Dimension normalization overrides async database operations."""
 
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, delete, insert, select, update
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, and_, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..models.dimension_normalization_override import (
+from filings.models.dimension_normalization_override import (
     DimensionNormalizationOverride,
     DimensionNormalizationOverrideCreate,
     DimensionNormalizationOverrideUpdate,
@@ -16,31 +16,27 @@ from ..models.dimension_normalization_override import (
 logger = logging.getLogger(__name__)
 
 
-class DimensionNormalizationOverridesOperations:
-    """Dimension normalization overrides database operations."""
+class DimensionNormalizationOverridesOperationsAsync:
+    """Dimension normalization overrides async database operations."""
 
-    def __init__(self, engine: Engine):
-        """Initialize with database engine."""
+    def __init__(self, engine: AsyncEngine, metadata: MetaData):
+        """Initialize with async engine and metadata."""
         self.engine = engine
-        # Create table metadata
-        metadata = MetaData()
-        self.overrides_table = Table(
-            "dimension_normalization_overrides", metadata, autoload_with=engine
-        )
+        self.overrides_table = metadata.tables["dimension_normalization_overrides"]
 
-    def list_all(
+    async def list_all(
         self, *, company_id: Optional[int] = None, axis: Optional[str] = None
     ) -> List[DimensionNormalizationOverride]:
-        """Get dimension normalization overrides filtered by company and (optionally) axis."""
+        """Get dimension normalization overrides filtered by company and axis."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.overrides_table)
                 if axis is not None:
                     stmt = stmt.where(self.overrides_table.c.axis == axis)
                 if company_id is not None:
                     stmt = stmt.where(self.overrides_table.c.company_id == company_id)
                 stmt = stmt.order_by(self.overrides_table.c.updated_at.desc())
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 rows = result.fetchall()
 
                 overrides = []
@@ -70,12 +66,12 @@ class DimensionNormalizationOverridesOperations:
             logger.error(f"Error retrieving dimension normalization overrides: {e}")
             raise
 
-    def get_by_key(
+    async def get_by_key(
         self, *, company_id: int, axis: str, member: str, member_label: str
     ) -> Optional[DimensionNormalizationOverride]:
-        """Get a dimension normalization override by (axis, member, member_label, company_id)."""
+        """Get a dimension normalization override by key."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = select(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.company_id == company_id,
@@ -84,7 +80,7 @@ class DimensionNormalizationOverridesOperations:
                         self.overrides_table.c.member_label == member_label,
                     )
                 )
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
 
                 if row:
@@ -113,12 +109,12 @@ class DimensionNormalizationOverridesOperations:
             )
             raise
 
-    def create(
+    async def create(
         self, override: DimensionNormalizationOverrideCreate
     ) -> DimensionNormalizationOverride:
         """Create a new dimension normalization override."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     insert(self.overrides_table)
                     .values(
@@ -134,9 +130,9 @@ class DimensionNormalizationOverridesOperations:
                     .returning(self.overrides_table)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
-                conn.commit()
+                await conn.commit()
 
                 logger.info(
                     "Created dimension normalization override: (%s, %s, %s, %s)",
@@ -163,14 +159,12 @@ class DimensionNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error creating dimension normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(f"Dimension normalization override already exists: {e}")
         except SQLAlchemyError as e:
             logger.error(f"Error creating dimension normalization override: {e}")
-            conn.rollback()
             raise
 
-    def update(
+    async def update(
         self,
         company_id: int,
         axis: str,
@@ -180,8 +174,7 @@ class DimensionNormalizationOverridesOperations:
     ) -> Optional[DimensionNormalizationOverride]:
         """Update an existing dimension normalization override."""
         try:
-            with self.engine.connect() as conn:
-                # Build update values from non-None fields
+            async with self.engine.connect() as conn:
                 update_values = {}
                 if override_update.normalized_axis_label is not None:
                     update_values["normalized_axis_label"] = (
@@ -195,8 +188,7 @@ class DimensionNormalizationOverridesOperations:
                     update_values["tags"] = override_update.tags
 
                 if not update_values:
-                    # No fields to update, return existing record
-                    return self.get_by_key(
+                    return await self.get_by_key(
                         company_id=company_id,
                         axis=axis,
                         member=member,
@@ -217,9 +209,9 @@ class DimensionNormalizationOverridesOperations:
                     .returning(self.overrides_table)
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 row = result.fetchone()
-                conn.commit()
+                await conn.commit()
 
                 if row:
                     logger.info(
@@ -247,14 +239,12 @@ class DimensionNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error updating dimension normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(f"Constraint violation: {e}")
         except SQLAlchemyError as e:
             logger.error(f"Error updating dimension normalization override: {e}")
-            conn.rollback()
             raise
 
-    def delete(
+    async def delete(
         self,
         company_id: int,
         axis: str,
@@ -263,7 +253,7 @@ class DimensionNormalizationOverridesOperations:
     ) -> bool:
         """Delete a dimension normalization override."""
         try:
-            with self.engine.connect() as conn:
+            async with self.engine.connect() as conn:
                 stmt = delete(self.overrides_table).where(
                     and_(
                         self.overrides_table.c.company_id == company_id,
@@ -272,8 +262,8 @@ class DimensionNormalizationOverridesOperations:
                         self.overrides_table.c.member_label == member_label,
                     )
                 )
-                result = conn.execute(stmt)
-                conn.commit()
+                result = await conn.execute(stmt)
+                await conn.commit()
 
                 deleted = result.rowcount > 0
                 if deleted:
@@ -299,11 +289,9 @@ class DimensionNormalizationOverridesOperations:
             logger.error(
                 f"Integrity error deleting dimension normalization override: {e}"
             )
-            conn.rollback()
             raise ValueError(
                 f"Cannot delete: record is referenced by other records: {e}"
             )
         except SQLAlchemyError as e:
             logger.error(f"Error deleting dimension normalization override: {e}")
-            conn.rollback()
             raise

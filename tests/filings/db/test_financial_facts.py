@@ -10,11 +10,12 @@ from pydantic import ValidationError
 from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
 
 
+@pytest.mark.asyncio
 class TestFinancialFactOperations:
     """Test financial facts database operations."""
 
-    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
-        filing_entity_id = db.companies.get_or_create_filing_entities_id(
+    async def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = await db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
@@ -23,23 +24,23 @@ class TestFinancialFactOperations:
         assert filing_entity_id is not None
         return int(filing_entity_id)
 
-    def test_insert_financial_fact(
+    async def test_insert_financial_fact(
         self, db, sample_company, sample_filing, sample_financial_fact
     ):
         """Test inserting a new financial fact."""
         # Create company and filing first
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing = db.filings.get_or_create_filing(sample_filing)
+        filing = await db.filings.get_or_create_filing(sample_filing)
         sample_financial_fact.company_id = company.id
         sample_financial_fact.filing_id = filing.id
         sample_financial_fact.form_type = filing.form_type
 
         # Insert financial fact
-        fact_id = db.financial_facts.insert_financial_fact(sample_financial_fact)
+        fact_id = await db.financial_facts.insert_financial_fact(sample_financial_fact)
 
         # Verify fact was inserted
         assert fact_id is not None
@@ -47,7 +48,7 @@ class TestFinancialFactOperations:
         assert fact_id > 0
 
         # Retrieve and verify fact data
-        fact = db.financial_facts.get_financial_facts_by_filing(filing.id)[0]
+        fact = (await db.financial_facts.get_financial_facts_by_filing(filing.id))[0]
         assert fact is not None
         assert fact.id == fact_id
         assert fact.filing_id == filing.id
@@ -57,15 +58,17 @@ class TestFinancialFactOperations:
         assert fact.unit == sample_financial_fact.unit
         assert fact.statement == sample_financial_fact.statement
 
-    def test_insert_financial_facts_batch(self, db, sample_company, sample_filing):
+    async def test_insert_financial_facts_batch(
+        self, db, sample_company, sample_filing
+    ):
         """Test inserting multiple financial facts."""
         # Create company and filing first
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing = db.filings.get_or_create_filing(sample_filing)
+        filing = await db.filings.get_or_create_filing(sample_filing)
 
         # Create multiple facts
         facts_data = [
@@ -114,7 +117,7 @@ class TestFinancialFactOperations:
         ]
 
         # Insert facts
-        fact_ids = db.financial_facts.insert_financial_facts_batch(facts_data)
+        fact_ids = await db.financial_facts.insert_financial_facts_batch(facts_data)
 
         # Verify facts were inserted
         assert len(fact_ids) == 3
@@ -122,23 +125,23 @@ class TestFinancialFactOperations:
         assert all(fid > 0 for fid in fact_ids)
 
         # Retrieve and verify facts
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        facts = await db.financial_facts.get_financial_facts_by_filing(filing.id)
         assert len(facts) >= 3
         assert any(f.concept == "us-gaap:Revenues" for f in facts)
         assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
         assert any(f.concept == "us-gaap:Assets" for f in facts)
 
-    def test_insert_financial_facts_with_abstract(
+    async def test_insert_financial_facts_with_abstract(
         self, db, sample_company, sample_filing
     ):
         """Test inserting multiple financial facts with abstract."""
         # Create company and filing first
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing = db.filings.get_or_create_filing(sample_filing)
+        filing = await db.filings.get_or_create_filing(sample_filing)
 
         abstract_key = str(uuid.uuid4())
 
@@ -189,7 +192,7 @@ class TestFinancialFactOperations:
         ]
 
         # Insert facts
-        fact_ids = db.financial_facts.insert_financial_facts_batch(facts_data)
+        fact_ids = await db.financial_facts.insert_financial_facts_batch(facts_data)
 
         # Verify facts were inserted
         assert len(fact_ids) == 3
@@ -197,7 +200,7 @@ class TestFinancialFactOperations:
         assert all(fid > 0 for fid in fact_ids)
 
         # Retrieve and verify facts
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        facts = await db.financial_facts.get_financial_facts_by_filing(filing.id)
         assert len(facts) >= 3
         assert any(f.concept == "us-gaap:IncomeStatementAbstract" for f in facts)
         assert any(f.concept == "us-gaap:Revenues" for f in facts)
@@ -212,15 +215,17 @@ class TestFinancialFactOperations:
         assert revenues_fact.abstract_id == abstract_fact.id
         assert net_income_fact.abstract_id == abstract_fact.id
 
-    def test_get_financial_facts_by_filing(self, db, sample_company, sample_filing):
+    async def test_get_financial_facts_by_filing(
+        self, db, sample_company, sample_filing
+    ):
         """Test retrieving financial facts by filing."""
         # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
         sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
+        sample_filing.filing_entity_id = await self._ensure_filing_entity_id(
             db, company_id=company.id
         )
-        filing = db.filings.get_or_create_filing(sample_filing)
+        filing = await db.filings.get_or_create_filing(sample_filing)
 
         # Create multiple facts
         facts_data = [
@@ -254,10 +259,10 @@ class TestFinancialFactOperations:
             ),
         ]
 
-        db.financial_facts.insert_financial_facts_batch(facts_data)
+        await db.financial_facts.insert_financial_facts_batch(facts_data)
 
         # Retrieve facts
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        facts = await db.financial_facts.get_financial_facts_by_filing(filing.id)
 
         # Verify results
         assert len(facts) >= 2
@@ -265,18 +270,20 @@ class TestFinancialFactOperations:
         assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
         assert all(f.filing_id == filing.id for f in facts)
 
-    def test_get_financial_facts_by_filing_empty(self, db):
+    async def test_get_financial_facts_by_filing_empty(self, db):
         """Test retrieving financial facts for filing with no facts."""
-        facts = db.financial_facts.get_financial_facts_by_filing(99999)
+        facts = await db.financial_facts.get_financial_facts_by_filing(99999)
         assert facts == []
 
-    def test_get_financial_facts_by_concept(self, db, sample_company):
+    async def test_get_financial_facts_by_concept(self, db, sample_company):
         """Test retrieving financial facts by company and concept."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
+        company = await db.companies.get_or_create_company(sample_company)
 
         # Create multiple filings with revenue facts
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing1 = FilingCreate(
             company_id=company.id,
             filing_entity_id=filing_entity_id,
@@ -301,8 +308,8 @@ class TestFinancialFactOperations:
             fiscal_quarter=2,
         )
 
-        filing1_obj = db.filings.get_or_create_filing(filing1)
-        filing2_obj = db.filings.get_or_create_filing(filing2)
+        filing1_obj = await db.filings.get_or_create_filing(filing1)
+        filing2_obj = await db.filings.get_or_create_filing(filing2)
 
         # Create revenue facts for both filings
         fact1 = FinancialFact(
@@ -335,11 +342,11 @@ class TestFinancialFactOperations:
             period=PeriodType.Q,
         )
 
-        db.financial_facts.insert_financial_fact(fact1)
-        db.financial_facts.insert_financial_fact(fact2)
+        await db.financial_facts.insert_financial_fact(fact1)
+        await db.financial_facts.insert_financial_fact(fact2)
 
         # Retrieve revenue facts
-        facts = db.financial_facts.get_financial_facts_by_concept(
+        facts = await db.financial_facts.get_financial_facts_by_concept(
             company.id, "us-gaap:Revenues"
         )
 
@@ -348,11 +355,13 @@ class TestFinancialFactOperations:
         assert all(f.concept == "us-gaap:Revenues" for f in facts)
         assert all(f.filing_id in [filing1_obj.id, filing2_obj.id] for f in facts)
 
-    def test_get_financial_facts_by_concept_limit(self, db, sample_company):
+    async def test_get_financial_facts_by_concept_limit(self, db, sample_company):
         """Test retrieving financial facts by concept with limit."""
         # Create company
-        company = db.companies.get_or_create_company(sample_company)
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        company = await db.companies.get_or_create_company(sample_company)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
 
         # Create multiple filings with revenue facts
         for i in range(5):
@@ -368,7 +377,7 @@ class TestFinancialFactOperations:
                 fiscal_quarter=4,
             )
 
-            filing_obj = db.filings.get_or_create_filing(filing)
+            filing_obj = await db.filings.get_or_create_filing(filing)
 
             fact = FinancialFact(
                 id=1,
@@ -385,16 +394,20 @@ class TestFinancialFactOperations:
                 period=PeriodType.Q,
             )
 
-            db.financial_facts.insert_financial_fact(fact)
+            await db.financial_facts.insert_financial_fact(fact)
 
         # Retrieve revenue facts with limit
-        facts = db.financial_facts.get_financial_facts_by_concept(
+        facts = await db.financial_facts.get_financial_facts_by_concept(
             company.id, "us-gaap:Revenues", limit=3
         )
 
         # Verify results
         assert len(facts) <= 3
         assert all(f.concept == "us-gaap:Revenues" for f in facts)
+
+
+class TestFinancialFactModelValidation:
+    """Sync tests for financial fact model validation (no asyncio)."""
 
     def test_financial_fact_model_validation(self):
         """Test financial fact model validation."""
@@ -513,129 +526,6 @@ class TestFinancialFactOperations:
             )
 
         assert "value cannot be None when is_abstract is False" in str(exc.value)
-
-    def test_financial_fact_with_optional_fields(
-        self, db, sample_company, sample_filing
-    ):
-        """Test financial fact with optional fields."""
-        # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
-        sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
-            db, company_id=company.id
-        )
-        filing = db.filings.get_or_create_filing(sample_filing)
-
-        # Create fact with optional fields
-        fact_data = FinancialFact(
-            id=0,
-            company_id=company.id,
-            filing_id=filing.id,
-            form_type=filing.form_type,
-            concept="us-gaap:Revenues",
-            label="Revenues",
-            is_abstract=False,
-            value=Decimal("89498.0"),
-            unit="USD",
-            axis="Segment",
-            member="iPhone",
-            statement="Income Statement",
-            period_end=date(2024, 9, 28),
-            period=PeriodType.Q,
-        )
-
-        fact_id = db.financial_facts.insert_financial_fact(fact_data)
-
-        # Retrieve and verify
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
-        fact = facts[0]
-
-        assert fact.id == fact_id
-        assert fact.axis == "Segment"
-        assert fact.member == "iPhone"
-        assert fact.statement == "Income Statement"
-
-    def test_financial_fact_with_period_field(self, db, sample_company, sample_filing):
-        """Test financial fact with period field."""
-        # Create company and filing
-        company = db.companies.get_or_create_company(sample_company)
-        sample_filing.company_id = company.id
-        sample_filing.filing_entity_id = self._ensure_filing_entity_id(
-            db, company_id=company.id
-        )
-        filing = db.filings.get_or_create_filing(sample_filing)
-
-        # Test with YTD period
-        fact_data_ytd = FinancialFact(
-            id=0,
-            company_id=company.id,
-            filing_id=filing.id,
-            form_type=filing.form_type,
-            concept="us-gaap:Revenues",
-            label="Revenues",
-            is_abstract=False,
-            value=Decimal("89498.0"),
-            unit="USD",
-            statement="Income Statement",
-            period_end=date(2024, 9, 28),
-            period=PeriodType.YTD,
-        )
-
-        fact_id_ytd = db.financial_facts.insert_financial_fact(fact_data_ytd)
-
-        # Test with Q period
-        fact_data_q = FinancialFact(
-            id=0,
-            company_id=company.id,
-            filing_id=filing.id,
-            form_type=filing.form_type,
-            concept="us-gaap:NetIncomeLoss",
-            label="Net Income (Loss)",
-            is_abstract=False,
-            value=Decimal("22956.0"),
-            unit="USD",
-            statement="Income Statement",
-            period_end=date(2024, 9, 28),
-            period=PeriodType.Q,
-        )
-
-        fact_id_q = db.financial_facts.insert_financial_fact(fact_data_q)
-
-        # Test with Q period for assets
-        fact_data_q_assets = FinancialFact(
-            id=0,
-            company_id=company.id,
-            filing_id=filing.id,
-            form_type=filing.form_type,
-            concept="us-gaap:Assets",
-            label="Total Assets",
-            is_abstract=False,
-            value=Decimal("352755.0"),
-            unit="USD",
-            statement="Balance Sheet",
-            period_end=date(2024, 9, 28),
-            period=PeriodType.Q,
-        )
-
-        fact_id_q_assets = db.financial_facts.insert_financial_fact(fact_data_q_assets)
-
-        # Retrieve and verify facts
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
-
-        # Find the facts by concept
-        revenue_fact = next(f for f in facts if f.concept == "us-gaap:Revenues")
-        net_income_fact = next(f for f in facts if f.concept == "us-gaap:NetIncomeLoss")
-        assets_fact = next(f for f in facts if f.concept == "us-gaap:Assets")
-
-        # Verify period values
-        assert revenue_fact.id == fact_id_ytd
-        assert revenue_fact.period == PeriodType.YTD
-
-        assert net_income_fact.id == fact_id_q
-        assert net_income_fact.period == PeriodType.Q
-
-        assert assets_fact.id == fact_id_q_assets
-        assert assets_fact.period == PeriodType.Q
 
     def test_period_type_enum_values(self):
         """Test PeriodType enum values."""

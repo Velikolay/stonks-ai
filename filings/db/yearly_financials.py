@@ -1,45 +1,38 @@
-"""Yearly financial metrics database operations."""
+"""Async yearly financial metrics database operations."""
 
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, Table, and_, func, or_, select
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..models.yearly_financials import YearlyFinancial, YearlyFinancialsFilter
+from filings.models.yearly_financials import YearlyFinancial, YearlyFinancialsFilter
 
 logger = logging.getLogger(__name__)
 
 
-class YearlyFinancialsOperations:
-    """Yearly financial metrics database operations."""
+class YearlyFinancialsOperationsAsync:
+    """Async yearly financial metrics database operations."""
 
-    def __init__(self, engine: Engine):
-        """Initialize with database engine."""
+    def __init__(self, engine: AsyncEngine, metadata: MetaData):
+        """Initialize with async engine and metadata."""
         self.engine = engine
-        # Create table metadata
-        metadata = MetaData()
-        self.yearly_financials_view = Table(
-            "yearly_financials", metadata, autoload_with=engine
-        )
+        self.yearly_financials_view = metadata.tables["yearly_financials"]
 
-    def get_yearly_financials(
+    async def get_yearly_financials(
         self, filter_params: YearlyFinancialsFilter
     ) -> List[YearlyFinancial]:
         """Get yearly financial metrics based on filter parameters."""
         try:
-            with self.engine.connect() as conn:
-                # Build the query with filters
+            async with self.engine.connect() as conn:
                 stmt = select(self.yearly_financials_view)
                 conditions = []
 
-                # Company ID is mandatory
                 conditions.append(
                     self.yearly_financials_view.c.company_id == filter_params.company_id
                 )
 
-                # Handle fiscal year range
                 if filter_params.fiscal_year_start is not None:
                     conditions.append(
                         self.yearly_financials_view.c.fiscal_year
@@ -79,14 +72,11 @@ class YearlyFinancialsOperations:
                         == filter_params.statement
                     )
 
-                # Handle axis filter
                 if filter_params.axis is not None:
-                    # Specific axis value
                     conditions.append(
                         self.yearly_financials_view.c.axis == filter_params.axis
                     )
                 else:
-                    # If axis filter is not provided, only return records where axis is empty
                     conditions.append(self.yearly_financials_view.c.axis == "")
 
                 stmt = stmt.where(and_(*conditions)).order_by(
@@ -96,7 +86,7 @@ class YearlyFinancialsOperations:
                     self.yearly_financials_view.c.period_end.desc(),
                 )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 rows = result.fetchall()
 
                 financials = []
@@ -130,107 +120,12 @@ class YearlyFinancialsOperations:
             logger.error(f"Error retrieving yearly metrics: {e}")
             return []
 
-    def get_metrics_by_company(self, company_id: int) -> List[YearlyFinancial]:
-        """Get yearly metrics for a specific company."""
-        filter_params = YearlyFinancialsFilter(company_id=company_id)
-        return self.get_yearly_financials(filter_params)
-
-    def get_metrics_by_company_and_year(
-        self, company_id: int, fiscal_year: int
-    ) -> List[YearlyFinancial]:
-        """Get yearly metrics for a specific company and fiscal year."""
-        filter_params = YearlyFinancialsFilter(
-            company_id=company_id,
-            fiscal_year_start=fiscal_year,
-            fiscal_year_end=fiscal_year,
-        )
-        return self.get_yearly_financials(filter_params)
-
-    def get_metrics_by_label(
-        self, company_id: int, label: str
-    ) -> List[YearlyFinancial]:
-        """Get yearly metrics by label (metric name) for a specific company."""
-        filter_params = YearlyFinancialsFilter(company_id=company_id, labels=[label])
-        return self.get_yearly_financials(filter_params)
-
-    def get_metrics_by_statement(
-        self, company_id: int, statement: str
-    ) -> List[YearlyFinancial]:
-        """Get yearly metrics by financial statement for a specific company."""
-        filter_params = YearlyFinancialsFilter(
-            company_id=company_id, statement=statement
-        )
-        return self.get_yearly_financials(filter_params)
-
-    def get_metrics_by_normalized_label(
-        self, company_id: int, normalized_label: str
-    ) -> List[YearlyFinancial]:
-        """Get yearly metrics by normalized label for a specific company."""
-        filter_params = YearlyFinancialsFilter(
-            company_id=company_id, normalized_labels=[normalized_label]
-        )
-        return self.get_yearly_financials(filter_params)
-
-    def get_latest_metrics_by_company(
-        self, company_id: int, limit: int = 20
-    ) -> List[YearlyFinancial]:
-        """Get the latest yearly metrics for a specific company."""
-        try:
-            with self.engine.connect() as conn:
-                stmt = (
-                    select(self.yearly_financials_view)
-                    .where(
-                        self.yearly_financials_view.c.company_id == company_id,
-                    )
-                    .order_by(
-                        self.yearly_financials_view.c.period_end.desc(),
-                        self.yearly_financials_view.c.label,
-                    )
-                    .limit(limit)
-                )
-
-                result = conn.execute(stmt)
-                rows = result.fetchall()
-
-                metrics = []
-                for row in rows:
-                    metric = YearlyFinancial(
-                        id=row.id,
-                        company_id=row.company_id,
-                        filing_id=row.filing_id,
-                        fiscal_year=row.fiscal_year,
-                        label=row.label,
-                        normalized_label=row.normalized_label,
-                        value=row.value,
-                        weight=row.weight,
-                        unit=row.unit,
-                        statement=row.statement if row.statement else None,
-                        period_end=row.period_end,
-                        abstract_id=row.abstract_id,
-                        is_abstract=row.is_abstract,
-                        is_synthetic=row.is_synthetic,
-                        source_type=row.source_type,
-                    )
-                    metrics.append(metric)
-
-                logger.info(
-                    f"Retrieved {len(metrics)} latest yearly metrics for company {company_id}"
-                )
-                return metrics
-
-        except SQLAlchemyError as e:
-            logger.error(
-                f"Error retrieving latest yearly metrics for company {company_id}: {e}"
-            )
-            return []
-
-    def get_normalized_labels(
+    async def get_normalized_labels(
         self, company_id: int, statement: Optional[str] = None
     ) -> List[dict]:
         """Get all normalized labels and their counts for yearly financials."""
         try:
-            with self.engine.connect() as conn:
-                # Build query using SQLAlchemy
+            async with self.engine.connect() as conn:
                 stmt = (
                     select(
                         self.yearly_financials_view.c.normalized_label,
@@ -256,13 +151,12 @@ class YearlyFinancialsOperations:
                     )
                 )
 
-                # Add statement filter if provided
                 if statement:
                     stmt = stmt.where(
                         self.yearly_financials_view.c.statement == statement
                     )
 
-                result = conn.execute(stmt)
+                result = await conn.execute(stmt)
                 rows = result.fetchall()
 
                 labels = []
@@ -286,3 +180,83 @@ class YearlyFinancialsOperations:
                 f"Error retrieving normalized labels for yearly financials: {e}"
             )
             return []
+
+    async def get_metrics_by_company(self, company_id: int) -> List[YearlyFinancial]:
+        """Get all yearly metrics for a company."""
+        return await self.get_yearly_financials(
+            YearlyFinancialsFilter(company_id=company_id)
+        )
+
+    async def get_metrics_by_company_and_year(
+        self, company_id: int, fiscal_year: int
+    ) -> List[YearlyFinancial]:
+        """Get yearly metrics for a company in a specific year."""
+        return await self.get_yearly_financials(
+            YearlyFinancialsFilter(
+                company_id=company_id,
+                fiscal_year_start=fiscal_year,
+                fiscal_year_end=fiscal_year,
+            )
+        )
+
+    async def get_metrics_by_label(
+        self, company_id: int, label: str
+    ) -> List[YearlyFinancial]:
+        """Get yearly metrics for a company filtered by label."""
+        return await self.get_yearly_financials(
+            YearlyFinancialsFilter(company_id=company_id, labels=[label])
+        )
+
+    async def get_metrics_by_statement(
+        self, company_id: int, statement: str
+    ) -> List[YearlyFinancial]:
+        """Get yearly metrics for a company filtered by statement."""
+        return await self.get_yearly_financials(
+            YearlyFinancialsFilter(company_id=company_id, statement=statement)
+        )
+
+    async def get_latest_metrics_by_company(
+        self, company_id: int, limit: int = 10
+    ) -> List[YearlyFinancial]:
+        """Get latest yearly metrics for a company by period_end."""
+        try:
+            async with self.engine.connect() as conn:
+                stmt = (
+                    select(self.yearly_financials_view)
+                    .where(self.yearly_financials_view.c.company_id == company_id)
+                    .order_by(self.yearly_financials_view.c.period_end.desc())
+                    .limit(limit * 50)
+                )
+                result = await conn.execute(stmt)
+                rows = result.fetchall()
+                financials = []
+                for row in rows:
+                    financial = YearlyFinancial(
+                        id=row.id,
+                        company_id=row.company_id,
+                        filing_id=row.filing_id,
+                        label=row.label,
+                        normalized_label=row.normalized_label,
+                        value=row.value,
+                        weight=row.weight,
+                        unit=row.unit,
+                        statement=row.statement if row.statement else None,
+                        axis=row.axis if row.axis else None,
+                        member=row.member if row.member else None,
+                        abstract_id=row.abstract_id,
+                        is_abstract=row.is_abstract,
+                        is_synthetic=row.is_synthetic,
+                        period_end=row.period_end,
+                        fiscal_year=row.fiscal_year,
+                        source_type=row.source_type,
+                        concept=getattr(row, "concept", None),
+                    )
+                    financials.append(financial)
+                return financials[: limit * 50]
+        except SQLAlchemyError as e:
+            logger.error(f"Error retrieving latest yearly metrics: {e}")
+            return []
+
+
+# Alias for backward compatibility
+YearlyFinancialsOperations = YearlyFinancialsOperationsAsync

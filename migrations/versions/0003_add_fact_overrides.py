@@ -93,6 +93,15 @@ def upgrade() -> None:
 
     connection = op.get_bind()
 
+    # Ensure company 5 exists (referenced by financial-facts-overrides.csv)
+    connection.execute(
+        sa.text(
+            "INSERT INTO companies (id, name, industry) "
+            "VALUES (5, 'Seed company', NULL) "
+            "ON CONFLICT (id) DO NOTHING"
+        )
+    )
+
     rows: list[dict[str, object]] = []
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)

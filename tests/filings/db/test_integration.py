@@ -4,15 +4,18 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from filings import FilingCreate, FinancialFact, FinancialFactCreate, PeriodType
 from filings.models.company import CompanyCreate
 
 
+@pytest.mark.asyncio
 class TestDatabaseIntegration:
     """Integration tests for database operations."""
 
-    def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
-        filing_entity_id = db.companies.get_or_create_filing_entities_id(
+    async def _ensure_filing_entity_id(self, db, *, company_id: int) -> int:
+        filing_entity_id = await db.companies.get_or_create_filing_entities_id(
             company_id=company_id,
             registry="SEC",
             number=str(company_id).zfill(10),  # CIK (unique per company for tests)
@@ -21,17 +24,17 @@ class TestDatabaseIntegration:
         assert filing_entity_id is not None
         return int(filing_entity_id)
 
-    def _get_or_create_company_by_ticker(
+    async def _get_or_create_company_by_ticker(
         self, db, *, ticker: str, exchange: str, name: str
     ):
-        existing = db.companies.get_company_by_ticker(ticker, exchange)
+        existing = await db.companies.get_company_by_ticker(ticker, exchange)
         if existing:
             return existing
-        company_id = db.companies.insert_company(CompanyCreate(name=name))
+        company_id = await db.companies.insert_company(CompanyCreate(name=name))
         assert company_id is not None
-        company = db.companies.get_company_by_id(company_id)
+        company = await db.companies.get_company_by_id(company_id)
         assert company is not None
-        assert db.companies.upsert_ticker(
+        assert await db.companies.upsert_ticker(
             company_id=company.id,
             ticker=ticker,
             exchange=exchange,
@@ -39,16 +42,18 @@ class TestDatabaseIntegration:
         )
         return company
 
-    def test_full_workflow(self, db):
+    async def test_full_workflow(self, db):
         """Test complete workflow: company -> filing -> financial facts."""
         # 1. Create company
-        company = self._get_or_create_company_by_ticker(
+        company = await self._get_or_create_company_by_ticker(
             db, ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
         )
         assert company is not None
 
         # 2. Create filing
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
         filing_data = FilingCreate(
             company_id=company.id,
             filing_entity_id=filing_entity_id,
@@ -61,7 +66,7 @@ class TestDatabaseIntegration:
             fiscal_quarter=4,
             public_url="https://example.com",
         )
-        filing = db.filings.get_or_create_filing(filing_data)
+        filing = await db.filings.get_or_create_filing(filing_data)
         assert filing is not None
         assert filing.company_id == company.id
         assert filing.form_type == "10-Q"
@@ -97,39 +102,39 @@ class TestDatabaseIntegration:
                 period=PeriodType.Q,
             ),
         ]
-        fact_ids = db.financial_facts.insert_financial_facts_batch(facts_data)
+        fact_ids = await db.financial_facts.insert_financial_facts_batch(facts_data)
         assert len(fact_ids) == 2
 
         # 4. Verify relationships
         # Get company filings
-        filings = db.filings.get_filings_by_company(company.id)
+        filings = await db.filings.get_filings_by_company(company.id)
         assert len(filings) >= 1
         assert any(f.id == filing.id for f in filings)
 
         # Get filing facts
-        facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        facts = await db.financial_facts.get_financial_facts_by_filing(filing.id)
         assert len(facts) >= 2
         assert any(f.concept == "us-gaap:Revenues" for f in facts)
         assert any(f.concept == "us-gaap:NetIncomeLoss" for f in facts)
 
         # Get facts by concept
-        revenue_facts = db.financial_facts.get_financial_facts_by_concept(
+        revenue_facts = await db.financial_facts.get_financial_facts_by_concept(
             company.id, "us-gaap:Revenues"
         )
         assert len(revenue_facts) >= 1
         assert all(f.concept == "us-gaap:Revenues" for f in revenue_facts)
 
-    def test_multiple_companies_and_filings(self, db):
+    async def test_multiple_companies_and_filings(self, db):
         """Test working with multiple companies and filings."""
         # Create multiple companies
         companies = [
-            self._get_or_create_company_by_ticker(
+            await self._get_or_create_company_by_ticker(
                 db, ticker="AAPL", exchange="NASDAQ", name="Apple Inc."
             ),
-            self._get_or_create_company_by_ticker(
+            await self._get_or_create_company_by_ticker(
                 db, ticker="MSFT", exchange="NASDAQ", name="Microsoft Corp."
             ),
-            self._get_or_create_company_by_ticker(
+            await self._get_or_create_company_by_ticker(
                 db, ticker="GOOGL", exchange="NASDAQ", name="Alphabet Inc."
             ),
         ]
@@ -138,7 +143,9 @@ class TestDatabaseIntegration:
         # Create filings for each company
         filings = []
         for i, company in enumerate(companies):
-            filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
+            filing_entity_id = await self._ensure_filing_entity_id(
+                db, company_id=company.id
+            )
             filing_data = FilingCreate(
                 company_id=company.id,
                 filing_entity_id=filing_entity_id,
@@ -150,7 +157,7 @@ class TestDatabaseIntegration:
                 fiscal_year=2024,
                 fiscal_quarter=4,
             )
-            filing = db.filings.get_or_create_filing(filing_data)
+            filing = await db.filings.get_or_create_filing(filing_data)
             filings.append(filing)
 
         # Create financial facts for each filing
@@ -171,10 +178,10 @@ class TestDatabaseIntegration:
                 period_end=date(2024, 9, 28),
                 period=PeriodType.Q,
             )
-            db.financial_facts.insert_financial_fact(fact_data)
+            await db.financial_facts.insert_financial_fact(fact_data)
 
         # Verify all companies exist
-        all_companies = db.companies.get_all_companies()
+        all_companies = await db.companies.get_all_companies()
         assert len(all_companies) >= 3
         assert any(c.name == "Apple Inc." for c in all_companies)
         assert any(c.name == "Microsoft Corp." for c in all_companies)
@@ -182,28 +189,30 @@ class TestDatabaseIntegration:
 
         # Verify filings for each company
         for company in companies:
-            company_filings = db.filings.get_filings_by_company(company.id)
+            company_filings = await db.filings.get_filings_by_company(company.id)
             assert len(company_filings) >= 1
             assert all(f.company_id == company.id for f in company_filings)
 
-    def test_get_or_create_operations(self, db):
+    async def test_get_or_create_operations(self, db):
         """Test get_or_create operations work correctly."""
         # Test company get_or_create
         # First call should create
-        company1 = self._get_or_create_company_by_ticker(
+        company1 = await self._get_or_create_company_by_ticker(
             db, ticker="TSLA", exchange="NASDAQ", name="Tesla Inc."
         )
         assert company1 is not None
 
         # Second call should retrieve existing
-        company2 = self._get_or_create_company_by_ticker(
+        company2 = await self._get_or_create_company_by_ticker(
             db, ticker="TSLA", exchange="NASDAQ", name="Tesla Inc."
         )
         assert company2 is not None
         assert company2.id == company1.id
 
         # Test filing get_or_create
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company1.id)
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company1.id
+        )
         filing_data = FilingCreate(
             company_id=company1.id,
             filing_entity_id=filing_entity_id,
@@ -217,25 +226,27 @@ class TestDatabaseIntegration:
         )
 
         # First call should create
-        filing1 = db.filings.get_or_create_filing(filing_data)
+        filing1 = await db.filings.get_or_create_filing(filing_data)
         assert filing1 is not None
         assert filing1.number == "0000320193-25-000073"
 
         # Second call should retrieve existing
-        filing2 = db.filings.get_or_create_filing(filing_data)
+        filing2 = await db.filings.get_or_create_filing(filing_data)
         assert filing2 is not None
         assert filing2.id == filing1.id
 
-    def test_data_consistency(self, db):
+    async def test_data_consistency(self, db):
         """Test data consistency across operations."""
         # Create company
-        company = self._get_or_create_company_by_ticker(
+        company = await self._get_or_create_company_by_ticker(
             db, ticker="NVDA", exchange="NASDAQ", name="NVIDIA Corp."
         )
 
         # Create filing
-        filing_entity_id = self._ensure_filing_entity_id(db, company_id=company.id)
-        filing = db.filings.get_or_create_filing(
+        filing_entity_id = await self._ensure_filing_entity_id(
+            db, company_id=company.id
+        )
+        filing = await db.filings.get_or_create_filing(
             FilingCreate(
                 company_id=company.id,
                 filing_entity_id=filing_entity_id,
@@ -250,7 +261,7 @@ class TestDatabaseIntegration:
         )
 
         # Create financial fact
-        fact_id = db.financial_facts.insert_financial_fact(
+        fact_id = await db.financial_facts.insert_financial_fact(
             FinancialFact(
                 id=0,
                 company_id=company.id,
@@ -268,18 +279,20 @@ class TestDatabaseIntegration:
         )
 
         # Verify data consistency
-        retrieved_company = db.companies.get_company_by_id(company.id)
+        retrieved_company = await db.companies.get_company_by_id(company.id)
         assert retrieved_company.name == "NVIDIA Corp."
 
-        retrieved_filing = db.filings.get_filing_by_id(filing.id)
+        retrieved_filing = await db.filings.get_filing_by_id(filing.id)
         assert retrieved_filing.company_id == company.id
         assert retrieved_filing.form_type == "10-Q"
 
-        retrieved_facts = db.financial_facts.get_financial_facts_by_filing(filing.id)
+        retrieved_facts = await db.financial_facts.get_financial_facts_by_filing(
+            filing.id
+        )
         assert len(retrieved_facts) >= 1
         assert any(f.id == fact_id for f in retrieved_facts)
 
-    def test_error_handling(self, db):
+    async def test_error_handling(self, db):
         """Test error handling for invalid operations."""
         # Test inserting filing with non-existent company
         filing_data = FilingCreate(
@@ -295,7 +308,7 @@ class TestDatabaseIntegration:
         )
 
         # This should fail due to foreign key constraint
-        filing_id = db.filings.insert_filing(filing_data)
+        filing_id = await db.filings.insert_filing(filing_data)
         assert filing_id is None
 
         # Test inserting financial fact with non-existent filing
@@ -315,5 +328,5 @@ class TestDatabaseIntegration:
         )
 
         # This should fail due to foreign key constraint
-        fact_id = db.financial_facts.insert_financial_fact(fact_data)
+        fact_id = await db.financial_facts.insert_financial_fact(fact_data)
         assert fact_id is None

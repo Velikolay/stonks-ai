@@ -1,6 +1,6 @@
 """Database models package."""
 
-from .db import FilingsDatabase
+from .db import AsyncFilingsDatabase
 from .models import (
     Company,
     CompanyBase,
@@ -18,7 +18,7 @@ from .models import (
 from .sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 __all__ = [
-    "FilingsDatabase",
+    "AsyncFilingsDatabase",
     "CompanyBase",
     "CompanyCreate",
     "Company",

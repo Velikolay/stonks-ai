@@ -1,8 +1,9 @@
 """Example usage of the XBRLFilingsLoader to download and persist SEC XBRL filings."""
 
+import asyncio
 import logging
 
-from filings import FilingsDatabase
+from filings.db import AsyncFilingsDatabase
 from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 # Set up logging
@@ -13,17 +14,16 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = "postgresql://rag_user:rag_password@localhost:5432/rag_db"
 
 
-def example_load_filings():
+async def example_load_filings():
     """Example: Load 10-Q/K XBRL filings."""
     logger.info("Loading 10-Q/K XBRL filings...")
 
-    # Initialize database and loader
-    database = FilingsDatabase(DATABASE_URL)
+    database = AsyncFilingsDatabase(DATABASE_URL)
+    await database.initialize()
     loader = SECXBRLFilingsLoader(database)
 
     try:
-        # Process filings
-        result = loader.load_company_filings(
+        result = await loader.load_company_filings(
             ticker="GOOGL",
             form="10-K",
             limit=20,
@@ -36,25 +36,23 @@ def example_load_filings():
             logger.info(f"Total facts extracted: {result['total_facts']}")
             logger.info(f"Company ID: {result['company_id']}")
     finally:
-        # Close database connection
-        database.close()
+        await database.aclose()
 
 
-def example_load_with_override():
+async def example_load_with_override():
     """Example: Load XBRL filings with override to replace existing data."""
     logger.info("Loading 10-Q/K XBRL filings with override...")
 
-    # Initialize database and loader
-    database = FilingsDatabase(DATABASE_URL)
+    database = AsyncFilingsDatabase(DATABASE_URL)
+    await database.initialize()
     loader = SECXBRLFilingsLoader(database)
 
     try:
-        # Process filings with override
-        result = loader.load_company_filings(
+        result = await loader.load_company_filings(
             ticker="AAPL",
             form="10-Q",
             limit=2,
-            override=True,  # Override existing data
+            override=True,
         )
 
         if "error" in result:
@@ -66,12 +64,9 @@ def example_load_with_override():
             logger.info(f"Override mode: {result['override_mode']}")
             logger.info(f"Company ID: {result['company_id']}")
     finally:
-        # Close database connection
-        database.close()
+        await database.aclose()
 
 
 if __name__ == "__main__":
-    # Run examples
-    example_load_filings()
-    # print("\n" + "=" * 50 + "\n")
-    # example_load_with_override()
+    asyncio.run(example_load_filings())
+    # asyncio.run(example_load_with_override())

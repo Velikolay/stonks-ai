@@ -3,7 +3,7 @@
 import csv
 import io
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -64,7 +64,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_list_overrides_empty(self, mock_filings_db, client):
         """Test listing overrides when database is empty."""
-        mock_filings_db.concept_normalization_overrides.list_all.return_value = []
+        mock_filings_db.concept_normalization_overrides.list_all = AsyncMock(
+            return_value=[]
+        )
 
         response = client.get("/admin/concept-normalization-overrides?company_id=0")
 
@@ -74,9 +76,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_list_overrides_with_data(self, mock_filings_db, client, mock_override):
         """Test listing overrides with data."""
-        mock_filings_db.concept_normalization_overrides.list_all.return_value = [
-            mock_override
-        ]
+        mock_filings_db.concept_normalization_overrides.list_all = AsyncMock(
+            return_value=[mock_override]
+        )
 
         response = client.get("/admin/concept-normalization-overrides?company_id=0")
 
@@ -90,7 +92,13 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_list_companies_empty(self, mock_filings_db, client):
         """Test listing companies when none exist."""
-        mock_filings_db.companies.get_all_companies.return_value = []
+        mock_filings_db.companies.get_all_companies = AsyncMock(return_value=[])
+        mock_filings_db.companies.get_tickers_by_company_ids = AsyncMock(
+            return_value={}
+        )
+        mock_filings_db.companies.get_filing_entities_by_company_ids = AsyncMock(
+            return_value={}
+        )
 
         response = client.get("/admin/companies")
 
@@ -100,31 +108,35 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_list_companies_with_relations(self, mock_filings_db, client):
         """Test listing companies including tickers and filing entities."""
-        mock_filings_db.companies.get_all_companies.return_value = [
-            Company(id=1, name="Apple Inc.", industry="Technology")
-        ]
-        mock_filings_db.companies.get_tickers_by_company_ids.return_value = {
-            1: [
-                Ticker(
-                    id=10,
-                    ticker="AAPL",
-                    exchange="NASDAQ",
-                    status="active",
-                    company_id=1,
-                )
-            ]
-        }
-        mock_filings_db.companies.get_filing_entities_by_company_ids.return_value = {
-            1: [
-                FilingEntity(
-                    id=20,
-                    registry="SEC",
-                    number="0000320193",
-                    status="active",
-                    company_id=1,
-                )
-            ]
-        }
+        mock_filings_db.companies.get_all_companies = AsyncMock(
+            return_value=[Company(id=1, name="Apple Inc.", industry="Technology")]
+        )
+        mock_filings_db.companies.get_tickers_by_company_ids = AsyncMock(
+            return_value={
+                1: [
+                    Ticker(
+                        id=10,
+                        ticker="AAPL",
+                        exchange="NASDAQ",
+                        status="active",
+                        company_id=1,
+                    )
+                ]
+            }
+        )
+        mock_filings_db.companies.get_filing_entities_by_company_ids = AsyncMock(
+            return_value={
+                1: [
+                    FilingEntity(
+                        id=20,
+                        registry="SEC",
+                        number="0000320193",
+                        status="active",
+                        company_id=1,
+                    )
+                ]
+            }
+        )
 
         response = client.get("/admin/companies")
 
@@ -142,11 +154,13 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_update_company_fields(self, mock_filings_db, client):
         """Test updating company fields."""
-        mock_filings_db.companies.update_company.return_value = Company(
-            id=1, name="Apple Inc.", industry="Tech"
+        mock_filings_db.companies.update_company = AsyncMock(
+            return_value=Company(id=1, name="Apple Inc.", industry="Tech")
         )
-        mock_filings_db.companies.get_tickers_by_company_id.return_value = []
-        mock_filings_db.companies.get_filing_entities_by_company_id.return_value = []
+        mock_filings_db.companies.get_tickers_by_company_id = AsyncMock(return_value=[])
+        mock_filings_db.companies.get_filing_entities_by_company_id = AsyncMock(
+            return_value=[]
+        )
 
         response = client.put("/admin/companies/1", json={"industry": "Tech"})
 
@@ -156,15 +170,17 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_add_company_ticker(self, mock_filings_db, client):
         """Test adding a company ticker mapping."""
-        mock_filings_db.companies.get_company_by_id.return_value = Company(
-            id=1, name="Apple Inc.", industry=None
+        mock_filings_db.companies.get_company_by_id = AsyncMock(
+            return_value=Company(id=1, name="Apple Inc.", industry=None)
         )
-        mock_filings_db.companies.create_ticker.return_value = Ticker(
-            id=10,
-            ticker="AAPL",
-            exchange="NASDAQ",
-            status="active",
-            company_id=1,
+        mock_filings_db.companies.create_ticker = AsyncMock(
+            return_value=Ticker(
+                id=10,
+                ticker="AAPL",
+                exchange="NASDAQ",
+                status="active",
+                company_id=1,
+            )
         )
 
         response = client.post(
@@ -179,7 +195,7 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_delete_company_ticker(self, mock_filings_db, client):
         """Test deleting a company ticker mapping."""
-        mock_filings_db.companies.delete_ticker.return_value = True
+        mock_filings_db.companies.delete_ticker = AsyncMock(return_value=True)
 
         response = client.delete("/admin/companies/1/tickers/10")
 
@@ -188,15 +204,17 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_add_company_filing_entity(self, mock_filings_db, client):
         """Test adding a filing entity to a company."""
-        mock_filings_db.companies.get_company_by_id.return_value = Company(
-            id=1, name="Apple Inc.", industry=None
+        mock_filings_db.companies.get_company_by_id = AsyncMock(
+            return_value=Company(id=1, name="Apple Inc.", industry=None)
         )
-        mock_filings_db.companies.create_filing_entity.return_value = FilingEntity(
-            id=20,
-            registry="SEC",
-            number="0000320193",
-            status="active",
-            company_id=1,
+        mock_filings_db.companies.create_filing_entity = AsyncMock(
+            return_value=FilingEntity(
+                id=20,
+                registry="SEC",
+                number="0000320193",
+                status="active",
+                company_id=1,
+            )
         )
 
         response = client.post(
@@ -211,16 +229,18 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_delete_company_filing_entity_conflict(self, mock_filings_db, client):
         """Test deleting a filing entity returns 409 if it's still present (likely FK)."""
-        mock_filings_db.companies.delete_filing_entity.return_value = False
-        mock_filings_db.companies.get_filing_entities_by_company_id.return_value = [
-            FilingEntity(
-                id=20,
-                registry="SEC",
-                number="0000320193",
-                status="active",
-                company_id=1,
-            )
-        ]
+        mock_filings_db.companies.delete_filing_entity = AsyncMock(return_value=False)
+        mock_filings_db.companies.get_filing_entities_by_company_id = AsyncMock(
+            return_value=[
+                FilingEntity(
+                    id=20,
+                    registry="SEC",
+                    number="0000320193",
+                    status="active",
+                    company_id=1,
+                )
+            ]
+        )
 
         response = client.delete("/admin/companies/1/filing-entities/20")
 
@@ -231,9 +251,9 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test listing overrides with statement filter."""
-        mock_filings_db.concept_normalization_overrides.list_all.return_value = [
-            mock_override
-        ]
+        mock_filings_db.concept_normalization_overrides.list_all = AsyncMock(
+            return_value=[mock_override]
+        )
 
         response = client.get(
             "/admin/concept-normalization-overrides?statement=Income Statement&company_id=0"
@@ -257,8 +277,8 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, sample_override_data, mock_override
     ):
         """Test creating an override successfully."""
-        mock_filings_db.concept_normalization_overrides.create.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            return_value=mock_override
         )
 
         response = client.post(
@@ -275,8 +295,8 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, sample_override_data
     ):
         """Test creating override with validation error."""
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Invalid data"
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError("Invalid data")
         )
 
         response = client.post(
@@ -294,8 +314,8 @@ class TestAdminEndpoints:
         mock_override.unit = "USD"
         mock_override.weight = None
         mock_override.parent_concept = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
 
         updated_mock = Mock()
@@ -313,8 +333,8 @@ class TestAdminEndpoints:
         updated_mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
         updated_mock.updated_at = datetime(2024, 1, 2, 0, 0, 0)
 
-        mock_filings_db.concept_normalization_overrides.update.return_value = (
-            updated_mock
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            return_value=updated_mock
         )
 
         update_data = {
@@ -335,7 +355,12 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_update_override_not_found(self, mock_filings_db, client):
         """Test updating non-existent override."""
-        mock_filings_db.concept_normalization_overrides.update.return_value = None
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=Mock()
+        )
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            return_value=None
+        )
 
         update_data = {"normalized_label": "Updated Label"}
 
@@ -351,6 +376,11 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test creating override with parent_concept and is_abstract=True fails."""
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Records with parent_concept cannot have is_abstract=True"
+            )
+        )
         override_data = {
             "company_id": 0,
             "concept": "us-gaap:TestConcept",
@@ -377,9 +407,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test creating override with parent_concept but no weight fails."""
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Records with parent_concept must have a weight specified"
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Records with parent_concept must have a weight specified"
+            )
         )
 
         override_data = {
@@ -408,9 +439,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test creating non-abstract override without unit fails."""
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Non-abstract records (is_abstract=False) must have a unit specified"
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Non-abstract records (is_abstract=False) must have a unit specified"
+            )
         )
 
         override_data = {
@@ -439,6 +471,9 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test creating abstract override with parent_concept fails."""
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError("Abstract records cannot have parent_concept")
+        )
         override_data = {
             "company_id": 0,
             "concept": "us-gaap:TestConcept",
@@ -463,9 +498,10 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_create_override_abstract_with_weight_fails(self, mock_filings_db, client):
         """Test creating abstract override with weight fails."""
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Abstract records (is_abstract=True) cannot have a weight"
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a weight"
+            )
         )
 
         override_data = {
@@ -492,6 +528,11 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_create_override_abstract_with_unit_fails(self, mock_filings_db, client):
         """Test creating abstract override with unit fails."""
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a unit"
+            )
+        )
         override_data = {
             "company_id": 0,
             "concept": "us-gaap:TestConcept",
@@ -516,7 +557,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_delete_override_success(self, mock_filings_db, client):
         """Test deleting an override successfully."""
-        mock_filings_db.concept_normalization_overrides.delete.return_value = True
+        mock_filings_db.concept_normalization_overrides.delete = AsyncMock(
+            return_value=True
+        )
 
         response = client.delete(
             "/admin/concept-normalization-overrides/0/Income%20Statement/us-gaap%3ATestConcept"
@@ -529,13 +572,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test updating override to have parent_concept with is_abstract=True fails."""
-        # Set existing to non-abstract with parent_concept
-        mock_override.is_abstract = False
-        mock_override.parent_concept = "us-gaap:ParentConcept"
-        mock_override.unit = "USD"
-        mock_override.weight = 1.0
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Records with parent_concept cannot be abstract (is_abstract must be False)"
+            )
         )
 
         update_data = {"is_abstract": True}
@@ -560,12 +600,13 @@ class TestAdminEndpoints:
         mock_override.parent_concept = None
         mock_override.unit = "USD"
         mock_override.weight = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
-        # Configure mock to raise ValueError when update is called
-        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
-            "Records with parent_concept must have a weight specified"
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Records with parent_concept must have a weight specified"
+            )
         )
 
         update_data = {"parent_concept": "us-gaap:ParentConcept"}
@@ -585,13 +626,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test updating override to be non-abstract without unit fails."""
-        # Set existing to abstract
-        mock_override.is_abstract = True
-        mock_override.parent_concept = None
-        mock_override.unit = None
-        mock_override.weight = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Non-abstract records (is_abstract=False) must have a unit specified"
+            )
         )
 
         update_data = {"is_abstract": False}
@@ -610,13 +648,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test updating abstract override to have parent_concept fails."""
-        # Set existing to abstract
-        mock_override.is_abstract = True
-        mock_override.parent_concept = None
-        mock_override.unit = None
-        mock_override.weight = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a parent_concept"
+            )
         )
 
         update_data = {"parent_concept": "us-gaap:ParentConcept"}
@@ -641,12 +676,13 @@ class TestAdminEndpoints:
         mock_override.parent_concept = None
         mock_override.unit = None
         mock_override.weight = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
-        # Configure mock to raise ValueError when update is called
-        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
-            "Abstract records (is_abstract=True) cannot have a weight"
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a weight"
+            )
         )
 
         update_data = {"weight": 1.0}
@@ -666,13 +702,10 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test updating abstract override to have unit fails."""
-        # Set existing to abstract
-        mock_override.is_abstract = True
-        mock_override.parent_concept = None
-        mock_override.unit = None
-        mock_override.weight = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a unit"
+            )
         )
 
         update_data = {"unit": "USD"}
@@ -690,7 +723,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_delete_override_not_found(self, mock_filings_db, client):
         """Test deleting non-existent override."""
-        mock_filings_db.concept_normalization_overrides.delete.return_value = False
+        mock_filings_db.concept_normalization_overrides.delete = AsyncMock(
+            return_value=False
+        )
 
         response = client.delete(
             "/admin/concept-normalization-overrides/0/Income%20Statement/us-gaap%3ANonExistent"
@@ -701,8 +736,8 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_delete_override_validation_error(self, mock_filings_db, client):
         """Test deleting override with validation error."""
-        mock_filings_db.concept_normalization_overrides.delete.side_effect = ValueError(
-            "Cannot delete: record is referenced"
+        mock_filings_db.concept_normalization_overrides.delete = AsyncMock(
+            side_effect=ValueError("Cannot delete: record is referenced")
         )
 
         response = client.delete(
@@ -714,9 +749,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_export_to_csv(self, mock_filings_db, client, mock_override):
         """Test exporting overrides to CSV."""
-        mock_filings_db.concept_normalization_overrides.list_all.return_value = [
-            mock_override
-        ]
+        mock_filings_db.concept_normalization_overrides.list_all = AsyncMock(
+            return_value=[mock_override]
+        )
 
         response = client.get(
             "/admin/concept-normalization-overrides/export?company_id=0"
@@ -742,9 +777,9 @@ class TestAdminEndpoints:
         self, mock_filings_db, client, mock_override
     ):
         """Test exporting overrides to CSV with statement filter."""
-        mock_filings_db.concept_normalization_overrides.list_all.return_value = [
-            mock_override
-        ]
+        mock_filings_db.concept_normalization_overrides.list_all = AsyncMock(
+            return_value=[mock_override]
+        )
 
         response = client.get(
             "/admin/concept-normalization-overrides/export?statement=Income Statement&company_id=0"
@@ -757,7 +792,9 @@ class TestAdminEndpoints:
     def test_import_from_csv_success(self, mock_filings_db, client):
         """Test importing overrides from CSV."""
         # Setup mocks
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=None
+        )
         mock_created = Mock()
         mock_created.company_id = 0
         mock_created.concept = "us-gaap:TestConcept"
@@ -771,8 +808,8 @@ class TestAdminEndpoints:
         mock_created.weight = None
         mock_created.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_created.updated_at = datetime(2024, 1, 1, 0, 0, 0)
-        mock_filings_db.concept_normalization_overrides.create.return_value = (
-            mock_created
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            return_value=mock_created
         )
 
         # Create CSV content
@@ -826,8 +863,8 @@ class TestAdminEndpoints:
     def test_import_from_csv_with_update(self, mock_filings_db, client, mock_override):
         """Test importing CSV with update_existing=True."""
         # Mock existing override
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
         mock_updated = Mock()
         mock_updated.company_id = 0
@@ -842,8 +879,8 @@ class TestAdminEndpoints:
         mock_updated.parent_concept = None
         mock_updated.created_at = datetime(2024, 1, 1, 0, 0, 0)
         mock_updated.updated_at = datetime(2024, 1, 2, 0, 0, 0)
-        mock_filings_db.concept_normalization_overrides.update.return_value = (
-            mock_updated
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            return_value=mock_updated
         )
 
         # Create CSV content
@@ -898,8 +935,8 @@ class TestAdminEndpoints:
     ):
         """Test importing CSV with existing records and update_existing=False."""
         # Mock existing override
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
 
         # Create CSV content
@@ -950,7 +987,9 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_import_from_csv_with_errors(self, mock_filings_db, client):
         """Test importing CSV with validation errors."""
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=None
+        )
 
         # Create CSV with missing required fields
         csv_content = io.StringIO()
@@ -1004,10 +1043,13 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test importing CSV with non-abstract record without unit fails."""
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Non-abstract records (is_abstract=False) must have a unit specified"
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=None
+        )
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Non-abstract records (is_abstract=False) must have a unit specified"
+            )
         )
 
         csv_content = io.StringIO()
@@ -1063,10 +1105,13 @@ class TestAdminEndpoints:
     @patch("api.admin.filings_db")
     def test_import_from_csv_abstract_with_unit_fails(self, mock_filings_db, client):
         """Test importing CSV with abstract record with unit fails."""
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Abstract records (is_abstract=True) cannot have a unit"
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=None
+        )
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a unit"
+            )
         )
 
         csv_content = io.StringIO()
@@ -1124,10 +1169,13 @@ class TestAdminEndpoints:
         self, mock_filings_db, client
     ):
         """Test importing CSV with parent_concept but no weight fails."""
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
-        # Configure mock to raise ValueError when create is called
-        mock_filings_db.concept_normalization_overrides.create.side_effect = ValueError(
-            "Records with parent_concept must have a weight specified"
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=None
+        )
+        mock_filings_db.concept_normalization_overrides.create = AsyncMock(
+            side_effect=ValueError(
+                "Records with parent_concept must have a weight specified"
+            )
         )
 
         csv_content = io.StringIO()
@@ -1190,12 +1238,13 @@ class TestAdminEndpoints:
         mock_override.unit = "USD"
         mock_override.weight = None
         mock_override.parent_concept = None
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = (
-            mock_override
+        mock_filings_db.concept_normalization_overrides.get_by_key = AsyncMock(
+            return_value=mock_override
         )
-        # Configure mock to raise ValueError when update is called
-        mock_filings_db.concept_normalization_overrides.update.side_effect = ValueError(
-            "Abstract records (is_abstract=True) cannot have a unit"
+        mock_filings_db.concept_normalization_overrides.update = AsyncMock(
+            side_effect=ValueError(
+                "Abstract records (is_abstract=True) cannot have a unit"
+            )
         )
 
         # CSV tries to update to abstract but keep unit (should fail)
@@ -1278,32 +1327,16 @@ class TestAdminEndpoints:
         assert response.status_code == 400
         assert "csv" in response.json()["detail"].lower()
 
-    @patch("api.admin.filings_db")
-    def test_import_from_csv_multiple_rows(self, mock_filings_db, client):
+    def test_import_from_csv_multiple_rows(self, client):
         """Test importing CSV with multiple rows."""
-        # Mock no existing records
-        mock_filings_db.concept_normalization_overrides.get_by_key.return_value = None
+        import api.admin
 
-        # Create mock for created records
-        def create_side_effect(override):
-            mock = Mock()
-            mock.company_id = override.company_id
-            mock.concept = override.concept
-            mock.statement = override.statement
-            mock.normalized_label = override.normalized_label
-            mock.is_abstract = override.is_abstract
-            mock.is_global = override.is_global
-            mock.abstract_concept = override.abstract_concept
-            mock.description = override.description
-            mock.unit = override.unit
-            mock.weight = override.weight
-            mock.created_at = datetime(2024, 1, 1, 0, 0, 0)
-            mock.updated_at = datetime(2024, 1, 1, 0, 0, 0)
-            return mock
+        mock_overrides = Mock()
+        mock_overrides.get_by_key = AsyncMock(return_value=None)
 
-        mock_filings_db.concept_normalization_overrides.create.side_effect = (
-            create_side_effect
-        )
+        mock_overrides.create = AsyncMock(return_value=Mock())
+        mock_filings_db = Mock()
+        mock_filings_db.concept_normalization_overrides = mock_overrides
 
         # Create CSV with multiple rows
         csv_content = io.StringIO()
@@ -1317,6 +1350,7 @@ class TestAdminEndpoints:
                 "is_abstract",
                 "is_global",
                 "abstract_concept",
+                "parent_concept",
                 "description",
                 "unit",
                 "weight",
@@ -1332,6 +1366,7 @@ class TestAdminEndpoints:
                 "is_abstract": "false",
                 "is_global": "true",
                 "abstract_concept": "",
+                "parent_concept": "",
                 "description": "",
                 "unit": "USD",
                 "weight": "",
@@ -1346,21 +1381,28 @@ class TestAdminEndpoints:
                 "is_abstract": "true",
                 "is_global": "true",
                 "abstract_concept": "",
+                "parent_concept": "",
                 "description": "",
                 "unit": "",
                 "weight": "",
             }
         )
 
-        files = {"file": ("test.csv", csv_content.getvalue(), "text/csv")}
+        files = {
+            "file": ("test.csv", csv_content.getvalue().encode("utf-8"), "text/csv")
+        }
 
-        response = client.post(
-            "/admin/concept-normalization-overrides/import",
-            files=files,
-        )
+        with patch.object(api.admin, "filings_db", mock_filings_db):
+            response = client.post(
+                "/admin/concept-normalization-overrides/import",
+                files=files,
+            )
 
-        assert response.status_code == 200
+        assert response.status_code == 200, response.text
         data = response.json()
-        assert data["created"] == 2
+        assert data["created"] == 2, (
+            f"Expected created=2, got {data['created']}. "
+            f"Errors: {data.get('errors', [])}"
+        )
         assert data["updated"] == 0
         assert len(data["errors"]) == 0
