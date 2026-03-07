@@ -25,8 +25,14 @@ def upgrade() -> None:
         sa.Column("industry", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Dummpy company to avoid null company_id references / fks
+    # Seed companies referenced by override CSVs in later migrations (0, 2, 5)
     op.execute(companies_table.insert().values(id=0, name="0", industry=None))
+    op.execute(
+        companies_table.insert().values(id=2, name="Seed company 2", industry=None)
+    )
+    op.execute(
+        companies_table.insert().values(id=5, name="Seed company", industry=None)
+    )
     op.create_index(
         "ix_companies_name_prefix",
         "companies",

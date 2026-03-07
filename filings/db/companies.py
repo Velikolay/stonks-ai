@@ -37,7 +37,7 @@ class CompanyOperationsAsync:
     async def insert_company(self, company: CompanyCreate) -> Optional[int]:
         """Insert a new company and return its ID."""
         try:
-            async with self.engine.begin() as conn:
+            async with self.engine.connect() as conn:
                 stmt = (
                     insert(self.companies_table)
                     .values(name=company.name, industry=company.industry)
@@ -45,12 +45,12 @@ class CompanyOperationsAsync:
                 )
                 result = await conn.execute(stmt)
                 company_id = result.scalar_one()
-                logger.info(f"Inserted company: {company.name} with ID: {company_id}")
+                await conn.commit()
                 return company_id
 
         except SQLAlchemyError as e:
             logger.exception("Error inserting company: %s", e)
-            raise
+            return None
 
     async def get_company_by_id(self, company_id: int) -> Optional[Company]:
         """Get company by ID."""

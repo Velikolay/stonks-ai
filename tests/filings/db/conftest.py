@@ -147,8 +147,8 @@ def clean_tables(test_engine: Engine):
             conn.execute(text("TRUNCATE TABLE concept_normalization_overrides CASCADE"))
             conn.execute(text("TRUNCATE TABLE financial_facts_overrides CASCADE"))
             # Recreate company rows that migrations and override CSVs reference.
-            # company_id=0: global overrides; 2, 5: concept/financial-facts override CSVs.
-            for cid, name in [(0, "0"), (2, "Seed company 2"), (5, "Seed company")]:
+            # company_id=0: global overrides
+            for cid, name in [(0, "0")]:
                 conn.execute(
                     text(
                         "INSERT INTO companies (id, name, industry) "
@@ -156,15 +156,6 @@ def clean_tables(test_engine: Engine):
                         "ON CONFLICT (id) DO NOTHING"
                     )
                 )
-            # Reset sequence so next insert gets id > max(0,2,5), avoiding duplicate key.
-            # Seed ids are 0, 2, 5; setval(seq, 5, true) makes next nextval() return 6.
-            conn.execute(
-                text(
-                    "SELECT setval("
-                    "COALESCE(pg_get_serial_sequence('companies', 'id'), 'companies_id_seq'), "
-                    "5, true)"
-                )
-            )
             conn.commit()
     except Exception:
         # Tables might not exist yet, which is fine for the first test

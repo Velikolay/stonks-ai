@@ -166,50 +166,6 @@ class TestFilingOperations:
         assert len(filings) >= 1
         assert all(f.form_type == "10-Q" for f in filings)
 
-    async def test_get_latest_filing(self, db, sample_company):
-        """Test retrieving latest filing for company and form type."""
-        # Create company
-        company = await db.companies.get_or_create_company(sample_company)
-        filing_entity_id = await self._ensure_filing_entity_id(
-            db, company_id=company.id
-        )
-
-        # Create multiple filings with different dates
-        filing1 = FilingCreate(
-            company_id=company.id,
-            filing_entity_id=filing_entity_id,
-            registry="SEC",
-            number="0000320193-25-000073",
-            form_type="10-Q",
-            filing_date=date(2024, 6, 15),
-            fiscal_period_end=date(2024, 3, 30),
-            fiscal_year=2024,
-            fiscal_quarter=2,
-        )
-
-        filing2 = FilingCreate(
-            company_id=company.id,
-            filing_entity_id=filing_entity_id,
-            registry="SEC",
-            number="0000320193-25-000074",
-            form_type="10-Q",
-            filing_date=date(2024, 12, 19),
-            fiscal_period_end=date(2024, 9, 28),
-            fiscal_year=2024,
-            fiscal_quarter=4,
-        )
-
-        await db.filings.insert_filing(filing1)
-        latest_filing_id = await db.filings.insert_filing(filing2)
-
-        # Retrieve latest filing
-        latest_filing = await db.filings.get_latest_filing(company.id, "10-Q")
-
-        # Verify results
-        assert latest_filing is not None
-        assert latest_filing.id == latest_filing_id
-        assert latest_filing.filing_date == date(2024, 12, 19)
-
     async def test_get_filing_by_number(self, db, sample_company, sample_filing):
         """Test retrieving filing by source and filing number."""
         # Create company and filing

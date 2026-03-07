@@ -184,10 +184,3 @@ class FilingOperationsAsync:
         except SQLAlchemyError as e:
             logger.error(f"Error getting filings by company: {e}")
             return []
-
-    async def get_latest_filing(
-        self, company_id: int, form_type: Optional[str] = None
-    ) -> Optional[Filing]:
-        """Get the latest filing for a company and optionally form type."""
-        filings = await self.get_filings_by_company(company_id, form_type)
-        return filings[0] if filings else None

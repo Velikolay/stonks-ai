@@ -104,15 +104,6 @@ def upgrade() -> None:
 
     connection = op.get_bind()
 
-    # Ensure company 2 exists (referenced by concept-normalization-overrides.csv)
-    connection.execute(
-        sa.text(
-            "INSERT INTO companies (id, name, industry) "
-            "VALUES (2, 'Seed company 2', NULL) "
-            "ON CONFLICT (id) DO NOTHING"
-        )
-    )
-
     rows = []
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
