@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),
+        sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("fact_override_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )

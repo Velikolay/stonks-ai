@@ -1,6 +1,7 @@
 """Financial facts override models."""
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -23,6 +24,7 @@ class FinancialFactsOverrideBase(BaseModel):
     to_concept: str
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
+    to_weight: Optional[Decimal] = None
 
 
 class FinancialFactsOverrideCreate(FinancialFactsOverrideBase):
@@ -44,6 +46,7 @@ class FinancialFactsOverrideUpdate(BaseModel):
     to_concept: Optional[str] = None
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
+    to_weight: Optional[Decimal] = None
 
 
 class FinancialFactsOverride(FinancialFactsOverrideBase):

@@ -14,6 +14,7 @@ BEGIN
         COALESCE(r.to_concept, ff.concept) AS concept,
         COALESCE(r.to_axis, ff.axis) AS axis,
         COALESCE(r.to_member, ff.member) AS member,
+        COALESCE(r.to_weight, ff.weight) AS weight,
         r.id AS fact_override_id
     FROM financial_facts ff
     JOIN LATERAL (
@@ -39,6 +40,7 @@ BEGIN
                 + (r.from_period IS NOT NULL)::int
                 + (r.to_period IS NOT NULL)::int
             ) DESC,
+            (r.to_period - r.from_period) ASC NULLS LAST,
             r.updated_at DESC
         LIMIT 1
     ) r ON TRUE
@@ -60,6 +62,7 @@ BEGIN
         concept,
         axis,
         member,
+        weight,
         fact_override_id
     )
     SELECT
@@ -69,6 +72,7 @@ BEGIN
         concept,
         axis,
         member,
+        weight,
         fact_override_id
     FROM tmp_financial_facts_overridden_new
     ON CONFLICT (id) DO UPDATE
@@ -78,6 +82,7 @@ BEGIN
         concept = EXCLUDED.concept,
         axis = EXCLUDED.axis,
         member = EXCLUDED.member,
+        weight = EXCLUDED.weight,
         fact_override_id = EXCLUDED.fact_override_id;
 END;
 $$;

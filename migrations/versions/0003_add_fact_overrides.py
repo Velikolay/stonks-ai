@@ -41,6 +41,7 @@ def upgrade() -> None:
         sa.Column("to_concept", sa.String(), nullable=False),
         sa.Column("to_axis", sa.String(), nullable=True),
         sa.Column("to_member", sa.String(), nullable=True),
+        sa.Column("to_weight", sa.Numeric(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -139,6 +140,7 @@ def upgrade() -> None:
                         "to_concept": row["to_concept"],
                         "to_axis": row.get("to_axis") or None,
                         "to_member": row.get("to_member") or None,
+                        "to_weight": row.get("to_weight") or None,
                     }
                 )
             except Exception as e:

@@ -133,6 +133,7 @@ class FinancialFactsOverrideResponse(BaseModel):
     to_concept: str
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
+    to_weight: Optional[Decimal] = None
     is_global: bool
     created_at: datetime
     updated_at: datetime
@@ -1219,6 +1220,7 @@ async def list_financial_facts_overrides(
                 to_concept=o.to_concept,
                 to_axis=o.to_axis,
                 to_member=o.to_member,
+                to_weight=o.to_weight,
                 is_global=o.is_global,
                 created_at=o.created_at,
                 updated_at=o.updated_at,
@@ -1258,6 +1260,7 @@ async def create_financial_facts_override(
             to_concept=created.to_concept,
             to_axis=created.to_axis,
             to_member=created.to_member,
+            to_weight=created.to_weight,
             is_global=created.is_global,
             created_at=created.created_at,
             updated_at=created.updated_at,
@@ -1301,6 +1304,7 @@ async def update_financial_facts_override(
             to_concept=updated.to_concept,
             to_axis=updated.to_axis,
             to_member=updated.to_member,
+            to_weight=updated.to_weight,
             is_global=updated.is_global,
             created_at=updated.created_at,
             updated_at=updated.updated_at,
@@ -1371,6 +1375,7 @@ async def export_financial_facts_overrides_to_csv(
             "to_concept",
             "to_axis",
             "to_member",
+            "to_weight",
             "is_global",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -1392,6 +1397,7 @@ async def export_financial_facts_overrides_to_csv(
                     "to_concept": o.to_concept,
                     "to_axis": o.to_axis or "",
                     "to_member": o.to_member or "",
+                    "to_weight": str(o.to_weight) if o.to_weight is not None else "",
                     "is_global": str(o.is_global),
                 }
             )
@@ -1467,6 +1473,13 @@ async def import_financial_facts_overrides_from_csv(
                     )
                     continue
 
+                to_weight_val = (row.get("to_weight") or "").strip()
+                try:
+                    to_weight = Decimal(to_weight_val) if to_weight_val else None
+                except Exception:
+                    errors.append(f"Row {row_num}: Invalid to_weight value")
+                    continue
+
                 override_create = FinancialFactsOverrideCreate(
                     company_id=row_company_id,
                     concept=row["concept"].strip(),
@@ -1480,6 +1493,7 @@ async def import_financial_facts_overrides_from_csv(
                     to_concept=row["to_concept"].strip(),
                     to_axis=(row.get("to_axis", "").strip() or None),
                     to_member=(row.get("to_member", "").strip() or None),
+                    to_weight=to_weight,
                 )
 
                 override_id_str = (row.get("id") or "").strip()
@@ -1496,6 +1510,7 @@ async def import_financial_facts_overrides_from_csv(
                         to_concept=override_create.to_concept,
                         to_axis=override_create.to_axis,
                         to_member=override_create.to_member,
+                        to_weight=override_create.to_weight,
                     )
                     updated_obj = await filings_db.financial_facts_overrides.update(
                         override_id, override_update

@@ -18,7 +18,7 @@ BEGIN
             ff.is_abstract,
             ff.value,
             ff.comparative_value,
-            ff.weight,
+            COALESCE(ffo.weight, ff.weight) AS weight,
             ff.unit,
             COALESCE(ffo.axis, ff.axis) AS axis,
             COALESCE(ffo.member, ff.member) AS member,
