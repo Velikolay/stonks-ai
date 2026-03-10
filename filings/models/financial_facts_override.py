@@ -24,6 +24,7 @@ class FinancialFactsOverrideBase(BaseModel):
     to_concept: str
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
+    to_member_label: Optional[str] = None
     to_weight: Optional[Decimal] = None
 
 
@@ -46,6 +47,7 @@ class FinancialFactsOverrideUpdate(BaseModel):
     to_concept: Optional[str] = None
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
+    to_member_label: Optional[str] = None
     to_weight: Optional[Decimal] = None
 
 

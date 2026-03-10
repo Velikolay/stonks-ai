@@ -22,7 +22,7 @@ BEGIN
             ff.unit,
             COALESCE(ffo.axis, ff.axis) AS axis,
             COALESCE(ffo.member, ff.member) AS member,
-            ff.member_label,
+            COALESCE(ffo.member_label, ff.member_label) AS member_label,
             ff.statement,
             ff.period_end,
             ff.comparative_period_end,

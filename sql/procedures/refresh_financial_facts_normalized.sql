@@ -22,7 +22,7 @@ BEGIN
             ff.unit,
             COALESCE(ffo.axis, ff.axis) AS axis,
             COALESCE(ffo.member, ff.member) AS member,
-            ff.member_label,
+            COALESCE(ffo.member_label, ff.member_label) AS member_label,
             ff.statement,
             ff.period_end,
             ff.comparative_period_end,
@@ -139,6 +139,8 @@ BEGIN
             AND ff.concept = cn.concept
         LEFT JOIN dimension_normalization dn
             ON ff.company_id = dn.company_id
+            AND ff.statement = dn.statement
+            AND COALESCE(cno.normalized_label, cn.normalized_label, ff.label) = dn.normalized_label
             AND ff.axis = dn.axis
             AND ff.member = dn.member
             AND ff.member_label = dn.member_label

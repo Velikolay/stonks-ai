@@ -60,6 +60,7 @@ class FinancialFactsOverridesOperationsAsync:
                         to_concept=row.to_concept,
                         to_axis=row.to_axis,
                         to_member=row.to_member,
+                        to_member_label=row.to_member_label,
                         to_weight=row.to_weight,
                         is_global=row.is_global,
                         created_at=row.created_at,
@@ -94,6 +95,7 @@ class FinancialFactsOverridesOperationsAsync:
                         to_concept=override.to_concept,
                         to_axis=override.to_axis,
                         to_member=override.to_member,
+                        to_member_label=override.to_member_label,
                         to_weight=override.to_weight,
                     )
                     .returning(self.overrides_table)
@@ -116,6 +118,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_concept=row.to_concept,
                     to_axis=row.to_axis,
                     to_member=row.to_member,
+                    to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
                     is_global=row.is_global,
                     created_at=row.created_at,
@@ -146,6 +149,7 @@ class FinancialFactsOverridesOperationsAsync:
                     "to_concept",
                     "to_axis",
                     "to_member",
+                    "to_member_label",
                     "to_weight",
                 ]:
                     value = getattr(override_update, field)
@@ -181,6 +185,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_concept=row.to_concept,
                     to_axis=row.to_axis,
                     to_member=row.to_member,
+                    to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
                     is_global=row.is_global,
                     created_at=row.created_at,
@@ -243,6 +248,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_concept=row.to_concept,
                     to_axis=row.to_axis,
                     to_member=row.to_member,
+                    to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
                     is_global=row.is_global,
                     created_at=row.created_at,

@@ -22,7 +22,7 @@ BEGIN
             ff.unit,
             COALESCE(ffo.axis, ff.axis) AS axis,
             COALESCE(ffo.member, ff.member) AS member,
-            ff.member_label,
+            COALESCE(ffo.member_label, ff.member_label) AS member_label,
             ff.statement,
             ff.period_end,
             ff.comparative_period_end,
@@ -37,9 +37,30 @@ BEGIN
             AND ffo.company_id = ff.company_id
         WHERE ff.company_id = ANY(company_ids)
     ),
+    financial_facts_normalized_base AS (
+        SELECT
+            ff.*,
+            COALESCE(cnoc.normalized_label, cnog.normalized_label, cn.normalized_label, ff.label) AS normalized_label
+        FROM financial_facts_overridden_cte ff
+        LEFT JOIN concept_normalization cn
+            ON ff.company_id = cn.company_id
+            AND ff.statement = cn.statement
+            AND ff.concept = cn.concept
+        LEFT JOIN concept_normalization_overrides cnoc
+            ON ff.company_id = cnoc.company_id
+            AND ff.statement = cnoc.statement
+            AND ff.concept = cnoc.concept
+        LEFT JOIN concept_normalization_overrides cnog
+            ON ff.statement = cnog.statement
+            AND ff.concept = cnog.concept
+            AND cnog.is_global = TRUE
+        WHERE ff.axis <> ''
+    ),
     dimension_normalized_base AS (
         SELECT DISTINCT ON (
             ff.company_id,
+            ff.statement,
+            ff.normalized_label,
             ff.axis,
             ff.member,
             ff.member_label,
@@ -47,6 +68,8 @@ BEGIN
             dno.normalized_member_label
         )
             ff.company_id,
+            ff.statement,
+            ff.normalized_label,
             ff.axis,
             ff.member,
             ff.member_label,
@@ -65,12 +88,13 @@ BEGIN
                 ELSE NULL
             END AS override_level,
             md5(
-                ff.company_id || '|' || ff.axis || '|' || ff.member || '|' || ff.member_label
+                ff.company_id || '|' || ff.statement || '|' || ff.normalized_label || '|'
+                || ff.axis || '|' || ff.member || '|' || ff.member_label
                 || '|' || COALESCE(dno.normalized_axis_label, '')
                 || '|' || COALESCE(dno.normalized_member_label, '')
                 || '|' || 'grouping'
             ) AS id
-        FROM financial_facts_overridden_cte ff
+        FROM financial_facts_normalized_base ff
         LEFT JOIN LATERAL (
             SELECT dno.*
             FROM dimension_normalization_overrides dno
@@ -86,10 +110,10 @@ BEGIN
                 dno.updated_at DESC
             LIMIT 1
         ) dno ON TRUE
-        WHERE
-            ff.axis <> ''
         ORDER BY
             ff.company_id,
+            ff.statement,
+            ff.normalized_label,
             ff.axis,
             ff.member,
             ff.member_label,
@@ -98,16 +122,23 @@ BEGIN
             ff.period_end DESC
     ),
     exploded AS (
-        SELECT id, member AS key FROM dimension_normalized_base
+        SELECT company_id, statement, normalized_label, id, member AS key
+        FROM dimension_normalized_base
         UNION
-        SELECT id, member_label AS key FROM dimension_normalized_base
+        SELECT company_id, statement, normalized_label, id, member_label AS key
+        FROM dimension_normalized_base
         UNION
-        SELECT id, normalized_member_label AS key FROM dimension_normalized_base
+        SELECT company_id, statement, normalized_label, id, normalized_member_label AS key
+        FROM dimension_normalized_base
     ),
     edges AS (
         SELECT DISTINCT e1.id AS src, e2.id AS dst
         FROM exploded e1
-        JOIN exploded e2 ON e1.key = e2.key
+        JOIN exploded e2
+            ON e1.key = e2.key
+            AND e1.company_id = e2.company_id
+            AND e1.statement = e2.statement
+            AND e1.normalized_label = e2.normalized_label
     ),
     groups AS (
         SELECT id, id AS group_id
@@ -152,6 +183,8 @@ BEGIN
     dimension_normalization_grouping AS (
         SELECT
             b.company_id,
+            b.statement,
+            b.normalized_label,
             b.axis,
             b.member,
             b.member_label,
@@ -170,7 +203,6 @@ BEGIN
     facts AS (
         SELECT
             ff.*,
-            COALESCE(cnoc.normalized_label, cnog.normalized_label, cn.normalized_label, ff.label) AS normalized_label,
             COALESCE(dng.normalized_axis_label, ff.axis) AS normalized_axis_label,
             COALESCE(dng.normalized_member_label, ff.member_label) AS normalized_member_label,
             ff.value * ff.weight AS normalized_value,
@@ -178,23 +210,15 @@ BEGIN
             COALESCE(dng.overridden, FALSE) AS overridden,
             dng.override_priority,
             dng.override_level
-        FROM financial_facts_overridden_cte ff
-        LEFT JOIN concept_normalization cn
-            USING (company_id, statement, concept)
-        LEFT JOIN concept_normalization_overrides cnoc
-            USING (company_id, statement, concept)
-        LEFT JOIN concept_normalization_overrides cnog
-            ON ff.statement = cnog.statement
-            AND ff.concept = cnog.concept
-            AND cnog.is_global = TRUE
+        FROM financial_facts_normalized_base ff
         LEFT JOIN dimension_normalization_grouping dng
             ON ff.company_id = dng.company_id
+            AND ff.statement = dng.statement
+            AND ff.normalized_label = dng.normalized_label
             AND ff.axis = dng.axis
             AND ff.member = dng.member
             AND ff.member_label = dng.member_label
             AND ff.period_end <= dng.group_max_period_end
-        WHERE
-            ff.axis <> ''
     ),
     same_period_pairs AS (
         SELECT DISTINCT
@@ -268,14 +292,14 @@ BEGIN
                 OR (
                     f1.override_level = 'axis'
                     AND f2.override_level = 'member'
-                    AND f1.normalized_axis_label = f2.normalized_member_label
+                    AND f1.normalized_axis_label = f2.normalized_axis_label
                     AND f1.normalized_member_label <> f2.normalized_member_label
                 )
                 OR (
                     f1.override_level = 'member'
                     AND f2.override_level = 'axis'
-                    AND f1.normalized_member_label = f2.normalized_axis_label
-                    AND f1.normalized_axis_label <> f2.normalized_axis_label
+                    AND f1.normalized_axis_label = f2.normalized_axis_label
+                    AND f1.normalized_member_label <> f2.normalized_member_label
                 )
             )
             AND f1.period_end > f2.period_end
@@ -388,8 +412,10 @@ BEGIN
             current_period DESC
     ),
     dimension_normalization_chaining AS (
-        SELECT DISTINCT ON (company_id, axis, member, member_label)
+        SELECT DISTINCT ON (company_id, statement, normalized_label, axis, member, member_label)
             company_id,
+            statement,
+            label AS normalized_label,
             axis,
             member,
             member_label,
@@ -405,6 +431,8 @@ BEGIN
         JOIN group_normalized gn USING (group_id)
         ORDER BY
             company_id,
+            statement,
+            label,
             axis,
             member,
             member_label,
@@ -418,12 +446,14 @@ BEGIN
         SELECT * FROM dimension_normalization_chaining
     ),
     groups_distinct AS (
-        SELECT DISTINCT company_id, group_id
+        SELECT DISTINCT company_id, statement, normalized_label, group_id
         FROM base
     ),
     group_members AS (
         SELECT DISTINCT
             company_id,
+            statement,
+            normalized_label,
             axis,
             member,
             member_label,
@@ -433,11 +463,15 @@ BEGIN
     group_edges AS (
         SELECT DISTINCT
             gm1.company_id,
+            gm1.statement,
+            gm1.normalized_label,
             gm1.group_id AS group_id1,
             gm2.group_id AS group_id2
         FROM group_members gm1
         JOIN group_members gm2
             ON gm1.company_id = gm2.company_id
+            AND gm1.statement = gm2.statement
+            AND gm1.normalized_label = gm2.normalized_label
             AND gm1.axis = gm2.axis
             AND gm1.member = gm2.member
             AND gm1.member_label = gm2.member_label
@@ -445,27 +479,33 @@ BEGIN
     ),
     group_components AS (
         WITH RECURSIVE reach AS (
-            SELECT company_id, group_id AS root_group_id, group_id
+            SELECT company_id, statement, normalized_label, group_id AS root_group_id, group_id
             FROM groups_distinct
 
             UNION
 
-            SELECT r.company_id, r.root_group_id, e.group_id2 AS group_id
+            SELECT r.company_id, r.statement, r.normalized_label, r.root_group_id, e.group_id2 AS group_id
             FROM reach r
             JOIN group_edges e
                 ON e.company_id = r.company_id
+                AND e.statement = r.statement
+                AND e.normalized_label = r.normalized_label
                 AND e.group_id1 = r.group_id
         )
         SELECT
             company_id,
+            statement,
+            normalized_label,
             group_id,
             MIN(root_group_id) AS component_id
         FROM reach
-        GROUP BY company_id, group_id
+        GROUP BY company_id, statement, normalized_label, group_id
     ),
     component_canonical AS (
-        SELECT DISTINCT ON (gc.company_id, gc.component_id)
+        SELECT DISTINCT ON (gc.company_id, gc.statement, gc.normalized_label, gc.component_id)
             gc.company_id,
+            gc.statement,
+            gc.normalized_label,
             gc.component_id,
             b.normalized_axis_label,
             b.normalized_member_label,
@@ -476,9 +516,13 @@ BEGIN
         FROM group_components gc
         JOIN base b
             ON b.company_id = gc.company_id
+            AND b.statement = gc.statement
+            AND b.normalized_label = gc.normalized_label
             AND b.group_id = gc.group_id
         ORDER BY
             gc.company_id,
+            gc.statement,
+            gc.normalized_label,
             gc.component_id,
             CASE b.override_priority
                 WHEN 'company' THEN 1
@@ -495,16 +539,22 @@ BEGIN
     component_group_max_period_end AS (
         SELECT
             gc.company_id,
+            gc.statement,
+            gc.normalized_label,
             gc.component_id,
             MAX(b.group_max_period_end) AS group_max_period_end
         FROM group_components gc
         JOIN base b
             ON b.company_id = gc.company_id
+            AND b.statement = gc.statement
+            AND b.normalized_label = gc.normalized_label
             AND b.group_id = gc.group_id
-        GROUP BY gc.company_id, gc.component_id
+        GROUP BY gc.company_id, gc.statement, gc.normalized_label, gc.component_id
     )
-    SELECT DISTINCT ON (gm.company_id, gm.axis, gm.member, gm.member_label)
+    SELECT DISTINCT ON (gm.company_id, gm.statement, gm.normalized_label, gm.axis, gm.member, gm.member_label)
         gm.company_id,
+        gm.statement,
+        gm.normalized_label,
         gm.axis,
         gm.member,
         gm.member_label,
@@ -519,15 +569,23 @@ BEGIN
     FROM group_members gm
     JOIN group_components gc
         ON gc.company_id = gm.company_id
+        AND gc.statement = gm.statement
+        AND gc.normalized_label = gm.normalized_label
         AND gc.group_id = gm.group_id
     JOIN component_canonical cc
         ON cc.company_id = gc.company_id
+        AND cc.statement = gc.statement
+        AND cc.normalized_label = gc.normalized_label
         AND cc.component_id = gc.component_id
     JOIN component_group_max_period_end cgmp
         ON cgmp.company_id = gc.company_id
+        AND cgmp.statement = gc.statement
+        AND cgmp.normalized_label = gc.normalized_label
         AND cgmp.component_id = gc.component_id
     ORDER BY
         gm.company_id,
+        gm.statement,
+        gm.normalized_label,
         gm.axis,
         gm.member,
         gm.member_label,
@@ -541,6 +599,8 @@ BEGIN
             FROM tmp_dimension_normalization_new t
             WHERE
                 t.company_id = dn.company_id
+                AND t.statement = dn.statement
+                AND t.normalized_label = dn.normalized_label
                 AND t.axis = dn.axis
                 AND t.member = dn.member
                 AND t.member_label = dn.member_label
@@ -548,6 +608,8 @@ BEGIN
 
     INSERT INTO dimension_normalization (
         company_id,
+        statement,
+        normalized_label,
         axis,
         member,
         member_label,
@@ -562,6 +624,8 @@ BEGIN
     )
     SELECT
         company_id,
+        statement,
+        normalized_label,
         axis,
         member,
         member_label,
@@ -574,7 +638,7 @@ BEGIN
         override_priority,
         override_level
     FROM tmp_dimension_normalization_new
-    ON CONFLICT (company_id, axis, member, member_label) DO UPDATE
+    ON CONFLICT (company_id, statement, normalized_label, axis, member, member_label) DO UPDATE
     SET
         normalized_axis_label = EXCLUDED.normalized_axis_label,
         normalized_member_label = EXCLUDED.normalized_member_label,

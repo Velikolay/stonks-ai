@@ -87,18 +87,18 @@ class SECXBRLParser:
             facts.extend(equity_facts)
 
             # Parse disaggregated revenues
-            disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
-            facts.extend(disaggregated_revenue_facts)
+            # disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
+            # facts.extend(disaggregated_revenue_facts)
 
             # Parse disaggregated operating income
-            disaggregated_operating_income_facts = (
-                self._parse_disaggregated_operating_income(xbrl)
-            )
-            facts.extend(disaggregated_operating_income_facts)
+            # disaggregated_operating_income_facts = (
+            #     self._parse_disaggregated_operating_income(xbrl)
+            # )
+            # facts.extend(disaggregated_operating_income_facts)
 
             # Parse disaggregated COGS
-            disaggregated_cogs_facts = self._parse_disaggregated_cogs(xbrl)
-            facts.extend(disaggregated_cogs_facts)
+            # disaggregated_cogs_facts = self._parse_disaggregated_cogs(xbrl)
+            # facts.extend(disaggregated_cogs_facts)
 
             logger.info(
                 f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
@@ -154,9 +154,9 @@ class SECXBRLParser:
             position = 0
 
             base_df = statement_df[statement_df["dimension"] != True]  # noqa: E712
-            # dimensions_df = statement_df[
-            #     statement_df["dimension"] == True  # noqa: E712
-            # ]
+            dimensions_df = statement_df[
+                statement_df["dimension"] == True  # noqa: E712
+            ]
 
             # Map concept -> label from the base (non-dimension) facts so dimension facts
             # can reuse the same label and avoid "hierarchy" generation.
@@ -180,17 +180,17 @@ class SECXBRLParser:
                     position += 1
 
             # Handle dimension facts (rows where dimension=True)
-            # if dimensions_df is not None and not dimensions_df.empty:
-            #     for _, row in dimensions_df.iterrows():
-            #         fact = self._create_dimension_fact(
-            #             row=row,
-            #             statement_type=statement_type,
-            #             period_col=latest_period_col,
-            #             comparative_period_col=comparative_period_col,
-            #             base_label_by_concept=base_label_by_concept,
-            #         )
-            #         if fact:
-            #             facts.append(fact)
+            if dimensions_df is not None and not dimensions_df.empty:
+                for _, row in dimensions_df.iterrows():
+                    fact = self._create_dimension_fact(
+                        row=row,
+                        statement_type=statement_type,
+                        period_col=latest_period_col,
+                        comparative_period_col=comparative_period_col,
+                        base_label_by_concept=base_label_by_concept,
+                    )
+                    if fact:
+                        facts.append(fact)
 
         except Exception:
             logger.exception(f"Error parsing {statement_type}")

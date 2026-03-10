@@ -41,6 +41,7 @@ def upgrade() -> None:
         sa.Column("to_concept", sa.String(), nullable=False),
         sa.Column("to_axis", sa.String(), nullable=True),
         sa.Column("to_member", sa.String(), nullable=True),
+        sa.Column("to_member_label", sa.String(), nullable=True),
         sa.Column("to_weight", sa.Numeric(), nullable=True),
         sa.Column(
             "created_at",
@@ -59,6 +60,11 @@ def upgrade() -> None:
             ["company_id"],
             ["companies.id"],
             name="fk_financial_facts_overrides_company_id",
+        ),
+        sa.CheckConstraint(
+            "(to_axis IS NULL AND to_member IS NULL AND to_member_label IS NULL) "
+            "OR (to_axis IS NOT NULL AND to_member IS NOT NULL AND to_member_label IS NOT NULL)",
+            name="chk_ffo_dimension_target_all_or_none",
         ),
     )
 
@@ -140,6 +146,7 @@ def upgrade() -> None:
                         "to_concept": row["to_concept"],
                         "to_axis": row.get("to_axis") or None,
                         "to_member": row.get("to_member") or None,
+                        "to_member_label": row.get("to_member_label") or None,
                         "to_weight": row.get("to_weight") or None,
                     }
                 )

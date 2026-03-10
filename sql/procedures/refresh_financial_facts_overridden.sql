@@ -14,6 +14,7 @@ BEGIN
         COALESCE(r.to_concept, ff.concept) AS concept,
         COALESCE(r.to_axis, ff.axis) AS axis,
         COALESCE(r.to_member, ff.member) AS member,
+        COALESCE(r.to_member_label, ff.member_label) AS member_label,
         COALESCE(r.to_weight, ff.weight) AS weight,
         r.id AS fact_override_id
     FROM financial_facts ff
@@ -62,6 +63,7 @@ BEGIN
         concept,
         axis,
         member,
+        member_label,
         weight,
         fact_override_id
     )
@@ -72,6 +74,7 @@ BEGIN
         concept,
         axis,
         member,
+        member_label,
         weight,
         fact_override_id
     FROM tmp_financial_facts_overridden_new
@@ -82,6 +85,7 @@ BEGIN
         concept = EXCLUDED.concept,
         axis = EXCLUDED.axis,
         member = EXCLUDED.member,
+        member_label = EXCLUDED.member_label,
         weight = EXCLUDED.weight,
         fact_override_id = EXCLUDED.fact_override_id;
 END;

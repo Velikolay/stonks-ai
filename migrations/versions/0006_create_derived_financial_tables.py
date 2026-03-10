@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),
+        sa.Column("member_label", sa.String(), nullable=False),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("fact_override_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -68,15 +69,12 @@ def upgrade() -> None:
         sa.Column("parent_concept_source", sa.String(), nullable=False),
         sa.PrimaryKeyConstraint("company_id", "statement", "concept", "parent_concept"),
     )
-    op.create_index(
-        "ix_hierarchy_normalization_company_statement_concept",
-        "hierarchy_normalization",
-        ["company_id", "statement", "concept"],
-    )
 
     op.create_table(
         "dimension_normalization",
         sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("normalized_label", sa.String(), nullable=False),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),
         sa.Column("member_label", sa.String(), nullable=False),
@@ -88,12 +86,14 @@ def upgrade() -> None:
         sa.Column("overridden", sa.Boolean(), nullable=False),
         sa.Column("override_priority", sa.String(), nullable=True),
         sa.Column("override_level", sa.String(), nullable=True),
-        sa.PrimaryKeyConstraint("company_id", "axis", "member", "member_label"),
-    )
-    op.create_index(
-        "ix_dimension_normalization_company_axis_member_label",
-        "dimension_normalization",
-        ["company_id", "axis", "member", "member_label"],
+        sa.PrimaryKeyConstraint(
+            "company_id",
+            "statement",
+            "normalized_label",
+            "axis",
+            "member",
+            "member_label",
+        ),
     )
 
     op.create_table(
