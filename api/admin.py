@@ -34,6 +34,31 @@ from filings.models.financial_facts_override import (
 
 logger = logging.getLogger(__name__)
 
+# CSV encoding: null = empty cell, empty string = __EMPTY__ (avoids quote escaping)
+CSV_EMPTY = "__EMPTY__"
+
+
+def _csv_format_optional(value: Optional[str]) -> str:
+    """Encode optional string: None -> '', '' -> __EMPTY__."""
+    if value is None:
+        return ""
+    if value == "":
+        return CSV_EMPTY
+    return value
+
+
+def _csv_parse_optional(value: Optional[str]) -> Optional[str]:
+    """Parse CSV: empty cell -> None, __EMPTY__ -> ''."""
+    if value is None:
+        return None
+    raw = value.strip()
+    if raw == "":
+        return None
+    if raw == CSV_EMPTY:
+        return ""
+    return raw
+
+
 # Create router for admin endpoints
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -1393,8 +1418,8 @@ async def export_financial_facts_overrides_to_csv(
                     "company_id": str(o.company_id),
                     "concept": o.concept,
                     "statement": o.statement,
-                    "axis": o.axis if o.axis is not None else "",
-                    "member": o.member if o.member is not None else "",
+                    "axis": _csv_format_optional(o.axis),
+                    "member": _csv_format_optional(o.member),
                     "label": o.label or "",
                     "form_type": o.form_type or "",
                     "from_period": str(o.from_period) if o.from_period else "",
@@ -1452,16 +1477,6 @@ async def import_financial_facts_overrides_from_csv(
 
         required_fields = ["company_id", "concept", "statement", "to_concept"]
 
-        def _parse_empty_token(value: Optional[str]) -> Optional[str]:
-            if value is None:
-                return None
-            raw = value.strip()
-            if raw == "":
-                return None
-            if raw == '""':
-                return ""
-            return raw
-
         for row_num, row in enumerate(reader, start=2):
             try:
                 missing_fields = [f for f in required_fields if not row.get(f)]
@@ -1490,8 +1505,8 @@ async def import_financial_facts_overrides_from_csv(
                     company_id=row_company_id,
                     concept=row["concept"].strip(),
                     statement=row["statement"].strip(),
-                    axis=_parse_empty_token(row.get("axis")),
-                    member=_parse_empty_token(row.get("member")),
+                    axis=_csv_parse_optional(row.get("axis")),
+                    member=_csv_parse_optional(row.get("member")),
                     label=(row.get("label", "").strip() or None),
                     form_type=(row.get("form_type", "").strip() or None),
                     from_period=(row.get("from_period", "").strip() or None),

@@ -15,6 +15,22 @@ from alembic import op
 
 logger = logging.getLogger(__name__)
 
+# CSV encoding (must match api/admin.py): empty -> None, __EMPTY__ -> ''
+_CSV_EMPTY = "__EMPTY__"
+
+
+def _parse_optional(value: object) -> object:
+    """Parse CSV: empty -> None, __EMPTY__ -> ''."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if raw == "":
+        return None
+    if raw == _CSV_EMPTY:
+        return ""
+    return raw
+
+
 # revision identifiers, used by Alembic.
 revision = "0003"
 down_revision = "0002"
@@ -128,16 +144,8 @@ def upgrade() -> None:
                         "company_id": row["company_id"],
                         "concept": row["concept"],
                         "statement": row["statement"],
-                        "axis": (
-                            ""
-                            if row.get("axis") in {'""'}
-                            else (row.get("axis") or None)
-                        ),
-                        "member": (
-                            ""
-                            if row.get("member") in {'""'}
-                            else (row.get("member") or None)
-                        ),
+                        "axis": _parse_optional(row.get("axis")),
+                        "member": _parse_optional(row.get("member")),
                         "label": row.get("label") or None,
                         "form_type": row.get("form_type") or None,
                         "from_period": row.get("from_period") or None,

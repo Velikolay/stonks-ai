@@ -1,9 +1,13 @@
 id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global
-3,1,us-gaap:ResearchAndDevelopmentExpense,Income Statement,,,,,2016-09-24,2016-09-24,us-gaap:ResearchAndDevelopmentExpense,,,,1,False
-8,5,us-gaap:OperatingLeasesIncomeStatementLeaseRevenue,Income Statement,,,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveLeasingMember,Automotive Leasing,,False
-7,5,tsla:AutomotiveLeasing,Income Statement,,,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveLeasingMember,Automotive Leasing,,False
-6,5,tsla:SalesRevenueAutomotive,Income Statement,,,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveRevenuesMember,Automotive Revenue,,False
-5,5,tsla:AutomotiveRevenues,Income Statement,,,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveRevenuesMember,Automotive Revenue,,False
-4,5,us-gaap:IncomeTaxExpenseBenefit,Income Statement,,,,10-K,,,us-gaap:IncomeTaxExpenseBenefit,,,,-1,False
-1,5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
-2,5,us-gaap:NetIncomeLoss,Comprehensive Income,,,,,2016-12-31,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
+1,1,us-gaap:ResearchAndDevelopmentExpense,Income Statement,,,,,2016-09-24,2016-09-24,us-gaap:ResearchAndDevelopmentExpense,,,,1,False
+3,5,tsla:AutomotiveLeasing,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveLeasingMember,Automotive Leasing,,False
+2,5,us-gaap:OperatingLeasesIncomeStatementLeaseRevenue,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveLeasingMember,Automotive Leasing,,False
+5,5,tsla:AutomotiveRevenues,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveRevenuesMember,Automotive Revenue,,False
+4,5,tsla:SalesRevenueAutomotive,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveRevenuesMember,Automotive Revenue,,False
+9,5,tsla:SalesRevenueServicesAndOtherNet,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:ServicesAndOtherMember,Services and Other,,False
+10,5,tsla:AutomotiveSales,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveSalesMember,Automotive Sales,,False
+11,5,tsla:AutomotiveSalesRevenue,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveSalesMember,Automotive Sales,,False
+12,5,us-gaap:SalesRevenueGoodsNet,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveSalesMember,Automotive Sales,,False
+6,5,us-gaap:IncomeTaxExpenseBenefit,Income Statement,,,,10-K,,,us-gaap:IncomeTaxExpenseBenefit,,,,-1,False
+8,5,us-gaap:NetIncomeLoss,Comprehensive Income,,,,,2016-12-31,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
+7,5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
