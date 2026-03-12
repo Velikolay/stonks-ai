@@ -120,6 +120,7 @@ def upgrade() -> None:
         sa.Column("parent_id", sa.BigInteger(), nullable=True),
         sa.Column("abstract_id", sa.BigInteger(), nullable=True),
         sa.Column("is_synthetic", sa.Boolean(), nullable=False),
+        sa.Column("is_duplicate", sa.Boolean(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

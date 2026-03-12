@@ -38,6 +38,7 @@ BEGIN
         WHERE
             ff.company_id = ANY(company_ids)
             AND ff.form_type = '10-K'
+            AND COALESCE(ff.is_duplicate, false) = false
         WINDOW w AS (
             PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
             ORDER BY ff.period_end DESC

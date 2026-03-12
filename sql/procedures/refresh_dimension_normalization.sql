@@ -135,7 +135,7 @@ BEGIN
         SELECT DISTINCT e1.id AS src, e2.id AS dst
         FROM exploded e1
         JOIN exploded e2
-            ON e1.key = e2.key
+            ON LOWER(e1.key) = LOWER(e2.key)
             AND e1.company_id = e2.company_id
             AND e1.statement = e2.statement
             AND e1.normalized_label = e2.normalized_label

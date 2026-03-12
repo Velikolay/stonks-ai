@@ -260,78 +260,152 @@ BEGIN
         WHERE
             NOT nf.is_abstract
             AND nf.is_synthetic
+    ),
+    rolled_up_facts AS (
+        SELECT
+            nf.id,
+            nf.company_id,
+            nf.filing_id,
+            nf.form_type,
+            nf.concept,
+            nf.label,
+            nf.normalized_label,
+            nf.is_abstract,
+            CASE
+                WHEN nf.is_synthetic THEN SUM(sr.contrib_value)
+                ELSE nf.value
+            END AS value,
+            CASE
+                WHEN nf.is_synthetic THEN SUM(sr.contrib_comparative_value)
+                ELSE nf.comparative_value
+            END AS comparative_value,
+            nf.weight,
+            nf.unit,
+            nf.axis,
+            nf.member,
+            nf.statement,
+            nf.period_end,
+            nf.comparative_period_end,
+            nf.period,
+            nf.position,
+            nf.parent_id,
+            nf.abstract_id,
+            nf.is_synthetic
+        FROM normalized_facts nf
+        LEFT JOIN synthetic_rollup sr
+            ON sr.id = nf.id
+        GROUP BY
+            nf.id,
+            nf.company_id,
+            nf.filing_id,
+            nf.form_type,
+            nf.concept,
+            nf.label,
+            nf.normalized_label,
+            nf.is_abstract,
+            nf.value,
+            nf.comparative_value,
+            nf.weight,
+            nf.unit,
+            nf.axis,
+            nf.member,
+            nf.statement,
+            nf.period_end,
+            nf.comparative_period_end,
+            nf.period,
+            nf.position,
+            nf.parent_id,
+            nf.abstract_id,
+            nf.is_synthetic
+    ),
+    chain_walk AS (
+        SELECT
+            r.id,
+            r.company_id,
+            r.statement,
+            r.concept,
+            r.normalized_label,
+            r.axis,
+            r.member,
+            r.period_end,
+            r.value,
+            r.comparative_value,
+            r.comparative_period_end,
+            1::bigint AS depth
+        FROM rolled_up_facts r
+        WHERE r.comparative_value IS NOT NULL
+          AND r.comparative_period_end IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            r.id,
+            r.company_id,
+            r.statement,
+            r.concept,
+            r.normalized_label,
+            r.axis,
+            r.member,
+            r.period_end,
+            r.value,
+            r.comparative_value,
+            r.comparative_period_end,
+            c.depth + 1
+        FROM chain_walk c
+        JOIN rolled_up_facts r
+            ON r.company_id = c.company_id
+            AND r.statement = c.statement
+            AND r.normalized_label = c.normalized_label
+            AND r.axis = c.axis
+            AND r.member = c.member
+            AND r.value = c.comparative_value
+            AND r.period_end = c.comparative_period_end
+    ),
+    chain_depth_per_id AS (
+        SELECT id, MAX(depth) AS chain_depth
+        FROM chain_walk
+        GROUP BY id
+    ),
+    deduped AS (
+        SELECT
+            r.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY r.company_id, r.statement, r.normalized_label,
+                             r.axis, r.member, r.period_end
+                ORDER BY COALESCE(cd.chain_depth, 1) DESC, r.id ASC
+            ) AS rn
+        FROM rolled_up_facts r
+        LEFT JOIN chain_depth_per_id cd ON cd.id = r.id
+    ),
+    deduped_by_id AS (
+        SELECT DISTINCT ON (id)
+            id,
+            company_id,
+            filing_id,
+            form_type,
+            concept,
+            label,
+            normalized_label,
+            is_abstract,
+            value,
+            comparative_value,
+            weight,
+            unit,
+            axis,
+            member,
+            statement,
+            period_end,
+            comparative_period_end,
+            period,
+            position,
+            parent_id,
+            abstract_id,
+            is_synthetic,
+            rn > 1 AS is_duplicate
+        FROM deduped
+        ORDER BY id, is_duplicate ASC
     )
-    SELECT DISTINCT ON (
-        nf.company_id,
-        nf.statement,
-        nf.concept,
-        nf.normalized_label,
-        nf.axis,
-        nf.member,
-        nf.period_end
-    )
-        nf.id,
-        nf.company_id,
-        nf.filing_id,
-        nf.form_type,
-        nf.concept,
-        nf.label,
-        nf.normalized_label,
-        nf.is_abstract,
-        CASE
-            WHEN nf.is_synthetic THEN SUM(sr.contrib_value)
-            ELSE nf.value
-        END AS value,
-        CASE
-            WHEN nf.is_synthetic THEN SUM(sr.contrib_comparative_value)
-            ELSE nf.comparative_value
-        END AS comparative_value,
-        nf.weight,
-        nf.unit,
-        nf.axis,
-        nf.member,
-        nf.statement,
-        nf.period_end,
-        nf.comparative_period_end,
-        nf.period,
-        nf.position,
-        nf.parent_id,
-        nf.abstract_id,
-        nf.is_synthetic
-    FROM normalized_facts nf
-    LEFT JOIN synthetic_rollup sr
-        ON sr.id = nf.id
-    GROUP BY
-        nf.id,
-        nf.company_id,
-        nf.filing_id,
-        nf.form_type,
-        nf.concept,
-        nf.label,
-        nf.normalized_label,
-        nf.is_abstract,
-        nf.value,
-        nf.comparative_value,
-        nf.weight,
-        nf.unit,
-        nf.axis,
-        nf.member,
-        nf.statement,
-        nf.period_end,
-        nf.comparative_period_end,
-        nf.period,
-        nf.position,
-        nf.parent_id,
-        nf.abstract_id,
-        nf.is_synthetic
-    ORDER BY
-        nf.company_id,
-        nf.statement,
-        nf.concept,
-        nf.normalized_label,
-        nf.axis,
-        nf.member,
-        nf.period_end;
+    SELECT * FROM deduped_by_id;
 
     DELETE FROM financial_facts_normalized ff
     WHERE
@@ -364,7 +438,8 @@ BEGIN
         position,
         parent_id,
         abstract_id,
-        is_synthetic
+        is_synthetic,
+        is_duplicate
     )
     SELECT
         id,
@@ -388,7 +463,8 @@ BEGIN
         position,
         parent_id,
         abstract_id,
-        is_synthetic
+        is_synthetic,
+        is_duplicate
     FROM tmp_financial_facts_normalized_new
     ON CONFLICT (id) DO UPDATE
     SET
@@ -412,6 +488,7 @@ BEGIN
         position = EXCLUDED.position,
         parent_id = EXCLUDED.parent_id,
         abstract_id = EXCLUDED.abstract_id,
-        is_synthetic = EXCLUDED.is_synthetic;
+        is_synthetic = EXCLUDED.is_synthetic,
+        is_duplicate = EXCLUDED.is_duplicate;
 END;
 $$;
