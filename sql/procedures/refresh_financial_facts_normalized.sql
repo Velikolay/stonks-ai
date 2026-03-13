@@ -347,27 +347,41 @@ BEGIN
         UNION ALL
 
         SELECT
-            r.id,
-            r.company_id,
-            r.statement,
-            r.concept,
-            r.normalized_label,
-            r.axis,
-            r.member,
-            r.period_end,
-            r.value,
-            r.comparative_value,
-            r.comparative_period_end,
+            COALESCE(r_value.id, r_concept.id) AS id,
+            COALESCE(r_value.company_id, r_concept.company_id) AS company_id,
+            COALESCE(r_value.statement, r_concept.statement) AS statement,
+            COALESCE(r_value.concept, r_concept.concept) AS concept,
+            COALESCE(r_value.normalized_label, r_concept.normalized_label) AS normalized_label,
+            COALESCE(r_value.axis, r_concept.axis) AS axis,
+            COALESCE(r_value.member, r_concept.member) AS member,
+            COALESCE(r_value.period_end, r_concept.period_end) AS period_end,
+            COALESCE(r_value.value, r_concept.value) AS value,
+            COALESCE(r_value.comparative_value, r_concept.comparative_value) AS comparative_value,
+            COALESCE(r_value.comparative_period_end, r_concept.comparative_period_end) AS comparative_period_end,
             c.depth + 1
         FROM chain_walk c
-        JOIN distinct_rolled_up_facts r
-            ON r.company_id = c.company_id
-            AND r.statement = c.statement
-            AND r.normalized_label = c.normalized_label
-            AND r.axis = c.axis
-            AND r.member = c.member
-            AND r.value = c.comparative_value
-            AND r.period_end = c.comparative_period_end
+        -- use value match with priority
+        LEFT JOIN distinct_rolled_up_facts r_value
+            ON r_value.company_id = c.company_id
+            AND r_value.statement = c.statement
+            AND r_value.normalized_label = c.normalized_label
+            AND r_value.axis = c.axis
+            AND r_value.member = c.member
+            AND r_value.value = c.comparative_value
+            AND r_value.period_end = c.comparative_period_end
+        -- fallback to concept match if value is not found
+        LEFT JOIN distinct_rolled_up_facts r_concept
+            ON r_concept.company_id = c.company_id
+            AND r_concept.statement = c.statement
+            AND r_concept.normalized_label = c.normalized_label
+            AND r_concept.axis = c.axis
+            AND r_concept.member = c.member
+            AND r_concept.concept = c.concept
+            AND r_concept.period_end = c.comparative_period_end
+            AND r_value.id IS NULL
+
+        WHERE r_value.id IS NOT NULL
+        OR r_concept.id IS NOT NULL
     ),
     chain_depth_per_id AS (
         SELECT r.id, MAX(cw.depth) AS chain_depth
