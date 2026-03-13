@@ -72,7 +72,7 @@ BEGIN
             ON ff.company_id = f.company_id
             AND ff.filing_id = f.id
         WHERE ff.company_id = ANY(company_ids)
-          AND COALESCE(ff.is_duplicate, false) = false
+          AND ff.is_duplicate = false
         WINDOW w AS (
             PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
             ORDER BY ff.period_end DESC
