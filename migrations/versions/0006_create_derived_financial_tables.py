@@ -81,7 +81,6 @@ def upgrade() -> None:
         sa.Column("normalized_axis_label", sa.String(), nullable=False),
         sa.Column("normalized_member_label", sa.String(), nullable=True),
         sa.Column("group_id", sa.String(), nullable=False),
-        sa.Column("group_max_period_end", sa.Date(), nullable=False),
         sa.Column("source", sa.String(), nullable=False),
         sa.Column("overridden", sa.Boolean(), nullable=False),
         sa.Column("override_priority", sa.String(), nullable=True),

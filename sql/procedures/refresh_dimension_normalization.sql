@@ -122,13 +122,13 @@ BEGIN
             ff.period_end DESC
     ),
     exploded AS (
-        SELECT company_id, statement, normalized_label, id, member AS key
+        SELECT id, company_id, statement, normalized_label, member AS key
         FROM dimension_normalized_base
         UNION
-        SELECT company_id, statement, normalized_label, id, member_label AS key
+        SELECT id, company_id, statement, normalized_label, member_label AS key
         FROM dimension_normalized_base
         UNION
-        SELECT company_id, statement, normalized_label, id, normalized_member_label AS key
+        SELECT id, company_id, statement, normalized_label, normalized_member_label AS key
         FROM dimension_normalized_base
     ),
     edges AS (
@@ -535,21 +535,6 @@ BEGIN
                 ELSE 3
             END,
             b.group_max_period_end DESC
-    ),
-    component_group_max_period_end AS (
-        SELECT
-            gc.company_id,
-            gc.statement,
-            gc.normalized_label,
-            gc.component_id,
-            MAX(b.group_max_period_end) AS group_max_period_end
-        FROM group_components gc
-        JOIN base b
-            ON b.company_id = gc.company_id
-            AND b.statement = gc.statement
-            AND b.normalized_label = gc.normalized_label
-            AND b.group_id = gc.group_id
-        GROUP BY gc.company_id, gc.statement, gc.normalized_label, gc.component_id
     )
     SELECT DISTINCT ON (gm.company_id, gm.statement, gm.normalized_label, gm.axis, gm.member, gm.member_label)
         gm.company_id,
@@ -561,7 +546,6 @@ BEGIN
         cc.normalized_axis_label,
         cc.normalized_member_label,
         gc.component_id AS group_id,
-        cgmp.group_max_period_end,
         cc.source,
         cc.overridden,
         cc.override_priority,
@@ -577,11 +561,6 @@ BEGIN
         AND cc.statement = gc.statement
         AND cc.normalized_label = gc.normalized_label
         AND cc.component_id = gc.component_id
-    JOIN component_group_max_period_end cgmp
-        ON cgmp.company_id = gc.company_id
-        AND cgmp.statement = gc.statement
-        AND cgmp.normalized_label = gc.normalized_label
-        AND cgmp.component_id = gc.component_id
     ORDER BY
         gm.company_id,
         gm.statement,
@@ -616,7 +595,6 @@ BEGIN
         normalized_axis_label,
         normalized_member_label,
         group_id,
-        group_max_period_end,
         source,
         overridden,
         override_priority,
@@ -632,7 +610,6 @@ BEGIN
         normalized_axis_label,
         normalized_member_label,
         group_id,
-        group_max_period_end,
         source,
         overridden,
         override_priority,
@@ -643,7 +620,6 @@ BEGIN
         normalized_axis_label = EXCLUDED.normalized_axis_label,
         normalized_member_label = EXCLUDED.normalized_member_label,
         group_id = EXCLUDED.group_id,
-        group_max_period_end = EXCLUDED.group_max_period_end,
         source = EXCLUDED.source,
         overridden = EXCLUDED.overridden,
         override_priority = EXCLUDED.override_priority,
