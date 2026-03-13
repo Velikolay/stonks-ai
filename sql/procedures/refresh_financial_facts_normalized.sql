@@ -318,6 +318,14 @@ BEGIN
             nf.abstract_id,
             nf.is_synthetic
     ),
+    distinct_rolled_up_facts AS (
+        SELECT DISTINCT ON (
+            company_id, statement, normalized_label, axis, member, value, period_end
+        )
+            *
+        FROM rolled_up_facts
+        ORDER BY company_id, statement, normalized_label, axis, member, value, period_end, id
+    ),
     chain_walk AS (
         SELECT
             r.id,
@@ -352,7 +360,7 @@ BEGIN
             r.comparative_period_end,
             c.depth + 1
         FROM chain_walk c
-        JOIN rolled_up_facts r
+        JOIN distinct_rolled_up_facts r
             ON r.company_id = c.company_id
             AND r.statement = c.statement
             AND r.normalized_label = c.normalized_label
@@ -362,9 +370,17 @@ BEGIN
             AND r.period_end = c.comparative_period_end
     ),
     chain_depth_per_id AS (
-        SELECT id, MAX(depth) AS chain_depth
-        FROM chain_walk
-        GROUP BY id
+        SELECT r.id, MAX(cw.depth) AS chain_depth
+        FROM rolled_up_facts r
+        LEFT JOIN chain_walk cw
+            ON r.company_id = cw.company_id
+            AND r.statement = cw.statement
+            AND r.normalized_label = cw.normalized_label
+            AND r.axis = cw.axis
+            AND r.member = cw.member
+            AND r.value = cw.value
+            AND r.period_end = cw.period_end
+        GROUP BY r.id
     ),
     deduped AS (
         SELECT
