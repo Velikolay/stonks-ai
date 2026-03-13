@@ -55,6 +55,7 @@ class SECXBRLParser:
             income_facts = self._parse_statement(
                 xbrl.statements.income_statement().to_dataframe(include_unit=True),
                 "Income Statement",
+                include_dimensions=True,
             )
             facts.extend(income_facts)
 
@@ -62,6 +63,7 @@ class SECXBRLParser:
             balance_facts = self._parse_statement(
                 xbrl.statements.balance_sheet().to_dataframe(include_unit=True),
                 "Balance Sheet",
+                include_dimensions=False,
             )
             facts.extend(balance_facts)
 
@@ -69,22 +71,35 @@ class SECXBRLParser:
             cashflow_facts = self._parse_statement(
                 xbrl.statements.cashflow_statement().to_dataframe(include_unit=True),
                 "Cash Flow Statement",
+                include_dimensions=False,
             )
             facts.extend(cashflow_facts)
 
             # Parse comprehensive income
-            comprehensive_income_facts = self._parse_statement(
-                xbrl.statements.comprehensive_income().to_dataframe(include_unit=True),
-                "Comprehensive Income",
-            )
-            facts.extend(comprehensive_income_facts)
+            try:
+                comprehensive_income_facts = self._parse_statement(
+                    xbrl.statements.comprehensive_income().to_dataframe(
+                        include_unit=True
+                    ),
+                    "Comprehensive Income",
+                    include_dimensions=False,
+                )
+                facts.extend(comprehensive_income_facts)
+            except Exception:
+                logger.exception("Error parsing comprehensive income")
 
             # Parse statement of shareholders equity
-            equity_facts = self._parse_statement(
-                xbrl.statements.statement_of_equity().to_dataframe(include_unit=True),
-                "Statement of Equity",
-            )
-            facts.extend(equity_facts)
+            try:
+                equity_facts = self._parse_statement(
+                    xbrl.statements.statement_of_equity().to_dataframe(
+                        include_unit=True
+                    ),
+                    "Statement of Equity",
+                    include_dimensions=False,
+                )
+                facts.extend(equity_facts)
+            except Exception:
+                logger.exception("Error parsing statement of equity")
 
             # Parse disaggregated revenues
             # disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
@@ -110,13 +125,18 @@ class SECXBRLParser:
             return []
 
     def _parse_statement(
-        self, statement_df: pd.DataFrame, statement_type: str
+        self,
+        statement_df: pd.DataFrame,
+        statement_type: str,
+        include_dimensions: bool,
     ) -> list[FinancialFactCreate]:
         """Parse a financial statement dataframe and extract facts.
 
         Args:
             statement_df: DataFrame from edgartools statement
             statement_type: Type of statement (Income Statement, Balance Sheet, etc.)
+            include_dimensions: If True, parse dimension facts. Pass True only for
+                Income Statement; pass False for other statements.
 
         Returns:
             List of FinancialFact objects
@@ -179,8 +199,12 @@ class SECXBRLParser:
                         base_label_by_concept.setdefault(fact.concept, fact.label)
                     position += 1
 
-            # Handle dimension facts (rows where dimension=True)
-            if dimensions_df is not None and not dimensions_df.empty:
+            # Handle dimension facts (rows where dimension=True); only for income statement
+            if (
+                include_dimensions
+                and dimensions_df is not None
+                and not dimensions_df.empty
+            ):
                 for _, row in dimensions_df.iterrows():
                     fact = self._create_dimension_fact(
                         row=row,
