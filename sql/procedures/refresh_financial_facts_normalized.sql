@@ -7,7 +7,20 @@ BEGIN
     END IF;
 
     CREATE TEMP TABLE tmp_financial_facts_normalized_new ON COMMIT DROP AS
-    WITH RECURSIVE financial_facts_overridden_cte AS (
+    WITH RECURSIVE conflicting_fact_keys AS (
+        SELECT unnest(array_agg(id)) AS id
+        FROM financial_facts
+        WHERE company_id = ANY(company_ids)
+        GROUP BY company_id, statement, concept, axis, member, member_label, period_end
+        HAVING COUNT(DISTINCT value) > 1
+    ),
+    financial_facts_deduped AS (
+        SELECT ff.*
+        FROM financial_facts ff
+        WHERE ff.company_id = ANY(company_ids)
+          AND ff.id NOT IN (SELECT id FROM conflicting_fact_keys)
+    ),
+    financial_facts_overridden_cte AS (
         SELECT
             ff.id,
             ff.filing_id,
@@ -31,11 +44,10 @@ BEGIN
             ff.parent_id,
             ff.abstract_id,
             ffo.fact_override_id
-        FROM financial_facts ff
+        FROM financial_facts_deduped ff
         LEFT JOIN financial_facts_overridden ffo
             ON ffo.id = ff.id
             AND ffo.company_id = ff.company_id
-        WHERE ff.company_id = ANY(company_ids)
     ),
     hierarchy_normalization_cte AS (
         SELECT *
