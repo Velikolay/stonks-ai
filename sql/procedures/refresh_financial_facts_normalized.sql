@@ -40,7 +40,7 @@ BEGIN
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
         FROM financial_facts_base
-        GROUP BY company_id, statement, concept, axis, member, member_label, period_end
+        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end
         HAVING COUNT(DISTINCT value) > 1
     ),
     financial_facts_overridden_cte AS (
