@@ -340,6 +340,7 @@ BEGIN
     chain_walk AS (
         SELECT
             r.id,
+            r.id AS chain_root_id,
             r.company_id,
             r.statement,
             r.concept,
@@ -359,6 +360,7 @@ BEGIN
 
         SELECT
             COALESCE(r_value.id, r_concept.id) AS id,
+            c.chain_root_id,
             COALESCE(r_value.company_id, r_concept.company_id) AS company_id,
             COALESCE(r_value.statement, r_concept.statement) AS statement,
             COALESCE(r_value.concept, r_concept.concept) AS concept,
@@ -394,18 +396,22 @@ BEGIN
         WHERE r_value.id IS NOT NULL
         OR r_concept.id IS NOT NULL
     ),
-    chain_depth_per_id AS (
-        SELECT r.id, MAX(cw.depth) AS chain_depth
+    chain_sizes AS (
+        SELECT chain_root_id, MAX(depth) AS chain_size
+        FROM chain_walk
+        GROUP BY chain_root_id
+    ),
+    chain_sizes_per_id AS (
+        SELECT
+            r.id,
+            id_chain.chain_size
         FROM rolled_up_facts r
-        LEFT JOIN chain_walk cw
-            ON r.company_id = cw.company_id
-            AND r.statement = cw.statement
-            AND r.normalized_label = cw.normalized_label
-            AND r.axis = cw.axis
-            AND r.member = cw.member
-            AND r.value = cw.value
-            AND r.period_end = cw.period_end
-        GROUP BY r.id
+        LEFT JOIN (
+            SELECT cw.id, MAX(cs.chain_size) AS chain_size
+            FROM chain_walk cw
+            JOIN chain_sizes cs ON cs.chain_root_id = cw.chain_root_id
+            GROUP BY cw.id
+        ) id_chain ON id_chain.id = r.id
     ),
     deduped AS (
         SELECT
@@ -413,10 +419,10 @@ BEGIN
             ROW_NUMBER() OVER (
                 PARTITION BY r.company_id, r.statement, r.normalized_label,
                              r.axis, r.member, r.period_end
-                ORDER BY COALESCE(cd.chain_depth, 1) DESC, r.id ASC
+                ORDER BY COALESCE(cs.chain_size, 1) DESC, r.id ASC
             ) AS rn
         FROM rolled_up_facts r
-        LEFT JOIN chain_depth_per_id cd ON cd.id = r.id
+        LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id
     ),
     deduped_by_id AS (
         SELECT DISTINCT ON (id)
