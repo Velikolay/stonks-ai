@@ -253,6 +253,11 @@ class SECXBRLParser:
             member = row.get("dimension_member").replace("_", ":")
             member_label = row.get("dimension_member_label")
 
+            # Hack to overcome poor dimension label in edgartools
+            if row.get("label").startswith(f"{member_label} - "):
+                member = row.get("label").replace(f"{member_label} - ", "")
+                member_label = row.get("label").replace(f"{member_label} - ", "")
+
             if not axis or member is None:
                 return None
 
