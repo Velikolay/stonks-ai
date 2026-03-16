@@ -419,7 +419,12 @@ BEGIN
             ROW_NUMBER() OVER (
                 PARTITION BY r.company_id, r.statement, r.normalized_label,
                              r.axis, r.member, r.period_end
-                ORDER BY COALESCE(cs.chain_size, 1) DESC, r.id ASC
+                ORDER BY
+                    -- prefer amendments over original filings
+                    CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
+                    -- prefer longer chains
+                    COALESCE(cs.chain_size, 1) DESC,
+                    r.id ASC
             ) AS rn
         FROM rolled_up_facts r
         LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id

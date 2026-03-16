@@ -17,7 +17,7 @@ BEGIN
         FROM filings f
         WHERE
             f.company_id = ANY(company_ids)
-            AND f.form_type IN ('10-K', '10-K/A', '10-Q')
+            AND f.form_type IN ('10-K', '10-K/A', '10-Q', '10-Q/A')
     ),
     filings_cte AS (
         SELECT
@@ -26,12 +26,12 @@ BEGIN
             o.fiscal_year,
             o.fiscal_quarter,
             CASE
-                WHEN o.form_type IN ('10-K', '10-K/A') THEN o.id
+                WHEN o.form_type = '10-K' THEN o.id
                 ELSE (
                     SELECT k.id
                     FROM ordered_filings k
                     WHERE k.company_id = o.company_id
-                        AND k.form_type IN ('10-K', '10-K/A')
+                        AND k.form_type = '10-K'
                         AND k.seq > o.seq
                     ORDER BY k.seq
                     LIMIT 1
@@ -105,7 +105,7 @@ BEGIN
             is_synthetic,
             source_type
         FROM all_filings_data
-        WHERE source_type = '10-Q'
+        WHERE source_type IN ('10-Q', '10-Q/A')
     ),
     quarterly_filings_with_prev AS (
         SELECT
@@ -177,7 +177,7 @@ BEGIN
             is_synthetic,
             source_type
         FROM all_filings_data
-        WHERE source_type = '10-K'
+        WHERE source_type IN ('10-K', '10-K/A')
     ),
     quarterly_aggregation AS (
         SELECT
