@@ -17,7 +17,7 @@ BEGIN
         FROM filings f
         WHERE
             f.company_id = ANY(company_ids)
-            AND f.form_type IN ('10-K', '10-Q')
+            AND f.form_type IN ('10-K', '10-K/A', '10-Q')
     ),
     filings_cte AS (
         SELECT
@@ -26,12 +26,12 @@ BEGIN
             o.fiscal_year,
             o.fiscal_quarter,
             CASE
-                WHEN o.form_type = '10-K' THEN o.id
+                WHEN o.form_type IN ('10-K', '10-K/A') THEN o.id
                 ELSE (
                     SELECT k.id
                     FROM ordered_filings k
                     WHERE k.company_id = o.company_id
-                        AND k.form_type = '10-K'
+                        AND k.form_type IN ('10-K', '10-K/A')
                         AND k.seq > o.seq
                     ORDER BY k.seq
                     LIMIT 1

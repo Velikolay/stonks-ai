@@ -37,7 +37,7 @@ BEGIN
             AND ff.filing_id = f.id
         WHERE
             ff.company_id = ANY(company_ids)
-            AND ff.form_type = '10-K'
+            AND ff.form_type IN ('10-K', '10-K/A')
             AND ff.is_duplicate = false
         WINDOW w AS (
             PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
