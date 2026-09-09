@@ -1,4 +1,17 @@
-.PHONY: help install format lint test clean db-init db-reset db-status
+.PHONY: help install format lint test clean db-init db-reset db-status \
+	ingest refresh overrides-load overrides-check psql diagnose
+
+# Connection string used by the psql-based targets below. Override per-invocation
+# with `make psql DATABASE_URL=...`.
+DATABASE_URL ?= postgresql://rag_user:rag_password@localhost:5432/rag_db
+
+# Ingest defaults; override on the command line, e.g. `make ingest TICKERS=AAPL,MSFT`
+TICKERS ?=
+TICKERS_FILE ?=
+FORMS ?= 10-K,10-Q
+# 0 loads every available XBRL filing, which is what a new company needs.
+LIMIT ?= 0
+COMPANY_IDS ?=
 
 # Default target
 help:
@@ -17,6 +30,14 @@ help:
 	@echo "  db-reset   - Reset database (drop and recreate)"
 	@echo "  db-status  - Show migration status"
 	@echo "  db-history - Show migration history"
+	@echo ""
+	@echo "Filings data commands (see AGENTS.md):"
+	@echo "  ingest          - Ingest all SEC filings (TICKERS=AAPL,MSFT; LIMIT=N caps per form)"
+	@echo "  refresh         - Recompute normalized/quarterly/yearly financials (COMPANY_IDS=1,2)"
+	@echo "  overrides-load  - Sync migrations/data/*.csv overrides into the database"
+	@echo "  overrides-check - Show what overrides-load would change (dry run)"
+	@echo "  diagnose        - Run the data-quality queries in sql/diagnostics"
+	@echo "  psql            - Open an interactive psql shell"
 	@echo ""
 	@echo "Docker commands:"
 	@echo "  docker-up          - Start services"
@@ -85,11 +106,11 @@ dev-setup: install format lint typecheck test
 # Database commands
 db-start:
 	@echo "🐳 Starting database..."
-	brew services start postgresql@16
+	brew services start postgresql@17
 
 db-stop:
 	@echo "🐳 Stopping database..."
-	brew services stop postgresql@16
+	brew services stop postgresql@17
 
 db-init:
 	@echo "🗄️  Initializing database..."
@@ -107,6 +128,42 @@ db-status:
 db-history:
 	@echo "📜 Migration history..."
 	alembic history
+
+# Filings data commands (see AGENTS.md for the full workflow)
+ingest:
+	@echo "📥 Ingesting SEC filings..."
+	python -m filings.scripts.ingest \
+		$(if $(TICKERS),--tickers $(TICKERS)) \
+		$(if $(TICKERS_FILE),--tickers-file $(TICKERS_FILE)) \
+		--forms $(FORMS) --limit $(LIMIT)
+
+refresh:
+	@echo "🔄 Refreshing financials..."
+	@if [ -n "$(COMPANY_IDS)" ]; then \
+		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 \
+			-c "CALL refresh_financials(ARRAY[$(COMPANY_IDS)]::int[]);"; \
+	else \
+		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 \
+			-c "DO 'DECLARE ids int[]; BEGIN SELECT array_agg(id) INTO ids FROM companies; CALL refresh_financials(ids); END';"; \
+	fi
+
+overrides-load:
+	@echo "📤 Syncing override CSVs..."
+	python -m filings.scripts.seed_overrides
+
+overrides-check:
+	@echo "🔎 Checking override CSVs (dry run)..."
+	python -m filings.scripts.seed_overrides --dry-run
+
+diagnose:
+	@for f in sql/diagnostics/*.sql; do \
+		echo ""; \
+		echo "=== $$f ==="; \
+		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f "$$f" || exit 1; \
+	done
+
+psql:
+	psql "$(DATABASE_URL)"
 
 # Docker commands
 docker-up:

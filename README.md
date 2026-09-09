@@ -13,6 +13,8 @@ A Python application that implements a Retrieval-Augmented Generation (RAG) syst
 - **Database Migrations**: Alembic-based migration system for schema management
 - **Docker**: Complete containerized setup with Docker Compose
 
+For ingesting and normalizing SEC 10-K/10-Q filings, see [AGENTS.md](AGENTS.md).
+
 ## Prerequisites
 
 - Docker and Docker Compose
