@@ -78,7 +78,8 @@ disjoint series, period gaps, orphaned parents, and quarterly-versus-annual
 reconciliation; and the remaining rollup, sign-flip and conflicting-fact rows
 have each been individually explained as genuine source-data artifacts. Unmapped
 concepts with low fact counts are acceptable; unmapped concepts appearing in
-every filing are not.
+every filing are not. Unlinked-series candidates need not be empty, but each one
+must have been either merged with an override or dismissed as a coincidence.
 
 **Work one class of problem at a time.** Fix the most frequent unmapped concept,
 refresh, re-diagnose. A single concept override often closes dozens of
@@ -292,6 +293,7 @@ single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 | `07_sign_flips.sql` | Series that change sign between periods; labels carrying conflicting weights |
 | `08_quarterly_vs_annual.sql` | Fiscal years where four quarters do not sum to the 10-K figure |
 | `09_conflicting_facts.sql` | Facts dropped before normalization because a group reports conflicting values |
+| `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
 
 Start with `01` and `02`. Coverage gaps and unmapped concepts cause most of what
 the later files report, and fixing them removes those findings for free.
@@ -300,6 +302,68 @@ the later files report, and fixing them removes those findings for free.
 procedure silently discards every fact whose group reports more than one distinct
 value for the same period, which is what a restatement looks like. If a line item
 is missing and appears nowhere else, check here.
+
+## Working the unlinked-series candidates
+
+`10_unlinked_series.sql` is different from the other nine: it reports
+*candidates*, not defects. Its rows are pairs of series that look like the two
+halves of one renamed line item, together with the evidence for that reading.
+Deciding is your job, and the rules below keep that decision honest.
+
+Nothing else finds these. `03` needs the two halves to already share a
+`normalized_label`, and `04` only finds holes *inside* a series, so a series that
+runs 2010 to 2015 beside a successor running 2016 to 2025 looks like two healthy
+series to every other file.
+
+### Why the link was missed
+
+All rename detection rests on one join in
+[refresh_concept_normalization.sql](sql/procedures/refresh_concept_normalization.sql),
+which matches a filing's comparative value against the prior period's value.
+Every condition on it is a way to miss a real rename: exact value equality fails
+on a restatement, both sides are multiplied by `weight` so a weight override on
+only one concept breaks the match, `form_type` must agree so a rename that
+appears first in a 10-Q is invisible, and a missing `comparative_value` means
+there is no bridge at all. The `false_matches` CTEs then drop a pair entirely for
+the whole company and statement if any period triple chains or any mirrored pair
+appears. `refresh_dimension_normalization.sql` repeats the same join and
+additionally requires the same `normalized_label`.
+
+The grouping signal has its own bail-out: if a single filing uses two labels for
+one concept, grouping is disabled for that concept everywhere. That is the most
+common finding in the first query.
+
+### The four queries
+
+| Query | Signal |
+| --- | --- |
+| Series that stop early | The loose gate: two series in the same slot that never coexist, one ending where the other begins. `shares_concept` and `similar_concept_name` rank them; `successor_candidates = 1` means the seam is unambiguous |
+| Value bridges not used | Re-runs the procedure's own join with one condition relaxed at a time. `why_unlinked` names the condition that had to give |
+| Statement slots | A parent that lost exactly one child and gained exactly one at the next annual boundary |
+| Axis members | An axis where exactly one member retired and exactly one took its place, siblings otherwise unchanged |
+
+`why_unlinked` tells you which CSV to edit. "Magnitudes match, signs or weights
+differ" is a `weight` override, not a label override. "Values within tolerance,
+likely restated" means the numbers genuinely disagree, so confirm the restatement
+before merging. "Exact bridge rejected by false_matches" means the evidence was
+conclusive and a guard threw it away, which is the safest class to act on.
+
+### Deciding
+
+The queries are deterministic and never merge anything. Judgement happens
+between the diagnostic and the CSV, and then stops being judgement: the override
+row is reviewable in git and reapplied identically on every refresh. Do not push
+scoring or thresholds into the procedures, and never let a tolerance match merge
+series automatically.
+
+- **Act directly** on a clean one-out-one-in swap and on an exact bridge that only `false_matches` rejected. These are mechanical.
+- **Confirm in the filing** for everything else. `filings.public_url` links to it. Adjacent periods and similar labels are a reason to open the 10-K, not a reason to write the override.
+- **Prefer leaving it unlinked** when the evidence is only suggestive. The two errors are not symmetric: a missed link is loud and keeps reappearing here, while a wrong link produces a continuous-looking series with a silent discontinuity that passes every other diagnostic precisely because it looks well formed.
+- **Record why** in the `description` column of `concept-normalization-overrides.csv`, including the filing and period you confirmed against, so the next reader can tell an established merge from an inferred one.
+
+Expect false positives in the last two queries; two unrelated line items can
+swap places at the same boundary by coincidence. That is the intended cost of a
+candidate list, and it is why the filing is the arbiter.
 
 ## Debugging beyond overrides
 
