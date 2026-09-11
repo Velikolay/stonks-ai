@@ -16,10 +16,11 @@ BEGIN
             ff.concept,
             ff.label,
             ff.normalized_label,
-            CASE
-                WHEN ff.weight * FIRST_VALUE(ff.weight) OVER w < 0 THEN -1 * ff.value
-                ELSE ff.value
-            END AS value,
+            -- Keep each period's reported value and calculation weight. Weight is a
+            -- linkbase coefficient, not a display-sign convention; rewriting history
+            -- when weight flips (e.g. MSFT FY2014 expenses) invents false sign flips.
+            ff.value,
+            ff.weight,
             ff.unit,
             ff.axis,
             ff.member,
@@ -29,8 +30,7 @@ BEGIN
             ff.is_synthetic,
             f.fiscal_year,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
-            FIRST_VALUE(ff.position) OVER w AS latest_position,
-            FIRST_VALUE(ff.weight) OVER w AS latest_weight
+            FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings f
             ON ff.company_id = f.company_id
@@ -55,7 +55,7 @@ BEGIN
         normalized_label,
         value,
         unit,
-        latest_weight AS weight,
+        weight,
         axis,
         member,
         statement,

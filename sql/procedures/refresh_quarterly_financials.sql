@@ -47,10 +47,11 @@ BEGIN
             ff.parent_id,
             ff.label,
             ff.normalized_label,
-            CASE
-                WHEN ff.weight * FIRST_VALUE(ff.weight) OVER w < 0 THEN -1 * ff.value
-                ELSE ff.value
-            END AS value,
+            -- Keep each period's reported value and calculation weight. Weight is a
+            -- linkbase coefficient, not a display-sign convention; rewriting history
+            -- when weight flips invents false sign flips in the presentation layer.
+            ff.value,
+            ff.weight,
             ff.unit,
             ff.statement,
             ff.concept,
@@ -65,8 +66,7 @@ BEGIN
             f.fiscal_quarter,
             f.fiscal_tag,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
-            FIRST_VALUE(ff.position) OVER w AS latest_position,
-            FIRST_VALUE(ff.weight) OVER w AS latest_weight
+            FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings_cte f
             ON ff.company_id = f.company_id
@@ -97,7 +97,7 @@ BEGIN
             axis,
             member,
             latest_abstract_id AS abstract_id,
-            latest_weight AS weight,
+            weight,
             latest_position AS position,
             period_end,
             period,
@@ -163,7 +163,7 @@ BEGIN
             fiscal_tag,
             label,
             value,
-            latest_weight AS weight,
+            weight,
             unit,
             statement,
             concept,
