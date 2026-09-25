@@ -110,6 +110,14 @@ BEGIN
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
+            -- Weighted-average share counts are period averages, not additive flows.
+            -- Never YTD-difference them. EPS stays on the normal YTD→discrete path:
+            -- mid-year 10-Qs often only tag YTD EPS, and differencing recovers the
+            -- three-months-ended figure that quarterly charts (e.g. Yahoo) expect.
+            q.concept IN (
+                'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+            ) AS is_non_additive,
             CASE
                 WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
                 THEN LAG(value) OVER w
@@ -133,6 +141,7 @@ BEGIN
             label,
             normalized_label,
             CASE
+                WHEN is_non_additive THEN value
                 WHEN period = 'Q' THEN value
                 WHEN period = 'YTD' AND prev_value IS NULL THEN value
                 WHEN period = 'YTD' AND prev_value IS NOT NULL THEN value - prev_value
@@ -230,7 +239,10 @@ BEGIN
             AND q.fiscal_tag = a.fiscal_tag
         WHERE
             a.statement != 'Balance Sheet'
-            AND a.normalized_label NOT ILIKE 'Shares Outstanding%'
+            AND a.concept NOT IN (
+                'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+            )
     )
     SELECT
         id,
@@ -283,7 +295,10 @@ BEGIN
     FROM annual_filings
     WHERE
         statement = 'Balance Sheet'
-        OR normalized_label ILIKE 'Shares Outstanding%'
+        OR concept IN (
+            'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+            'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+        )
 
     UNION ALL
 

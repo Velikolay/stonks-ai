@@ -1,5 +1,7 @@
 -- Flow metrics should reconcile: four quarters must sum to the annual figure.
--- Balance Sheet and share-count lines are point-in-time, so they are excluded.
+-- Balance Sheet and weighted-average share counts are excluded (period averages /
+-- point-in-time, not additive). EPS is YTD-differenced for quarterly presentation
+-- so it stays in this check.
 --
 -- Tolerance is 0.5% of the annual value.
 
@@ -19,7 +21,10 @@ WITH quarters AS (
     WHERE NOT is_abstract
       AND value IS NOT NULL
       AND statement <> 'Balance Sheet'
-      AND normalized_label NOT ILIKE 'Shares Outstanding%'
+      AND concept NOT IN (
+          'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+          'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+      )
     GROUP BY company_id, statement, normalized_label, axis, member, fiscal_year
 )
 SELECT
