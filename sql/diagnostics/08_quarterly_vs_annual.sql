@@ -23,7 +23,9 @@ WITH quarters AS (
       AND statement <> 'Balance Sheet'
       AND concept NOT IN (
           'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-          'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+          'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
+          'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
       )
     GROUP BY company_id, statement, normalized_label, axis, member, fiscal_year
 )

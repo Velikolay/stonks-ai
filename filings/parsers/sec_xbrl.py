@@ -53,7 +53,9 @@ class SECXBRLParser:
 
             # Parse income statement
             income_facts = self._parse_statement(
-                xbrl.statements.income_statement().to_dataframe(include_unit=True),
+                xbrl.statements.income_statement().to_dataframe(
+                    include_unit=True, include_point_in_time=True
+                ),
                 "Income Statement",
                 include_dimensions=True,
             )
@@ -61,7 +63,9 @@ class SECXBRLParser:
 
             # Parse balance sheet
             balance_facts = self._parse_statement(
-                xbrl.statements.balance_sheet().to_dataframe(include_unit=True),
+                xbrl.statements.balance_sheet().to_dataframe(
+                    include_unit=True, include_point_in_time=True
+                ),
                 "Balance Sheet",
                 include_dimensions=False,
             )
@@ -69,7 +73,9 @@ class SECXBRLParser:
 
             # Parse cash flow statement
             cashflow_facts = self._parse_statement(
-                xbrl.statements.cashflow_statement().to_dataframe(include_unit=True),
+                xbrl.statements.cashflow_statement().to_dataframe(
+                    include_unit=True, include_point_in_time=True
+                ),
                 "Cash Flow Statement",
                 include_dimensions=False,
             )
@@ -79,7 +85,7 @@ class SECXBRLParser:
             try:
                 comprehensive_income_facts = self._parse_statement(
                     xbrl.statements.comprehensive_income().to_dataframe(
-                        include_unit=True
+                        include_unit=True, include_point_in_time=True
                     ),
                     "Comprehensive Income",
                     include_dimensions=False,
@@ -92,7 +98,7 @@ class SECXBRLParser:
             try:
                 equity_facts = self._parse_statement(
                     xbrl.statements.statement_of_equity().to_dataframe(
-                        include_unit=True
+                        include_unit=True, include_point_in_time=True
                     ),
                     "Statement of Equity",
                     include_dimensions=False,
@@ -307,7 +313,11 @@ class SECXBRLParser:
                 if comparative_period_col
                 else None
             )
-            period = self._determine_period_type_from_column(period_col, statement_type)
+            period = self._determine_period_type_from_column(
+                period_col,
+                statement_type,
+                point_in_time=row.get("point_in_time"),
+            )
 
             period_end_str = period_end.isoformat() if period_end else ""
             fact_key = str(
@@ -669,18 +679,54 @@ class SECXBRLParser:
             return PeriodType.YTD
 
     def _determine_period_type_from_column(
-        self, period_col: str, statement_type: str
+        self,
+        period_col: str,
+        statement_type: str,
+        point_in_time: Optional[bool] = None,
     ) -> Optional[PeriodType]:
         """Determine period type based on the period column name.
 
+        Instant (point-in-time) XBRL facts are stored with period=NULL regardless
+        of statement. Duration facts on non-balance-sheet statements use the
+        column label (Q* → Q, otherwise YTD).
+
+        edgartools ``include_point_in_time`` is True for instant, False for
+        duration, and None when period_types are missing (common for ending-cash
+        stocks rendered on the cash flow statement). Those CFS unknowns are
+        treated as instants.
+
         Args:
             period_col: The period column name (e.g., "2025-06-28 (Q2)", "2025-12-31")
+            statement_type: Financial statement name
+            point_in_time: From edgartools ``include_point_in_time``
 
         Returns:
-            PeriodType.Q if it's a quarter, PeriodType.YTD if it's year-to-date, None if no period info
+            PeriodType.Q if it's a quarter, PeriodType.YTD if it's year-to-date,
+            None for balance-sheet / instant facts
         """
+        # Normalize pandas/numpy bools; leave missing as None.
+        if point_in_time is True or point_in_time is False:
+            is_point_in_time: Optional[bool] = bool(point_in_time)
+        elif point_in_time is None:
+            is_point_in_time = None
+        else:
+            try:
+                if point_in_time != point_in_time:  # NaN
+                    is_point_in_time = None
+                else:
+                    is_point_in_time = bool(point_in_time)
+            except (TypeError, ValueError):
+                is_point_in_time = None
+
+        if is_point_in_time is True:
+            return None
 
         if statement_type == "Balance Sheet":
+            return None
+
+        # CFS rows with no period_types are almost always ending/beginning cash
+        # stocks that edgartools failed to mark as instant.
+        if is_point_in_time is None and statement_type == "Cash Flow Statement":
             return None
 
         # Validate that the period column contains an ISO date (YYYY-MM-DD format)
@@ -699,7 +745,7 @@ class SECXBRLParser:
         ):
             return PeriodType.Q
 
-        # If we can't determine the period type, default to YTD
+        # Duration facts without a quarter marker default to YTD
         return PeriodType.YTD
 
     def _extract_comparative_period_column(
@@ -895,7 +941,11 @@ class SECXBRLParser:
             )
 
             # Determine period type based on the period column name
-            period = self._determine_period_type_from_column(period_col, statement_type)
+            period = self._determine_period_type_from_column(
+                period_col,
+                statement_type,
+                point_in_time=row.get("point_in_time"),
+            )
 
             # Generate deterministic UUID from concept, statement_type, and period_end
             period_end_str = period_end.isoformat() if period_end else ""

@@ -110,13 +110,14 @@ BEGIN
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
-            -- Weighted-average share counts are period averages, not additive flows.
-            -- Never YTD-difference them. EPS stays on the normal YTD→discrete path:
-            -- mid-year 10-Qs often only tag YTD EPS, and differencing recovers the
-            -- three-months-ended figure that quarterly charts (e.g. Yahoo) expect.
+            -- Point-in-time / period-average stocks: never YTD-difference these.
+            -- EPS stays on the normal YTD→discrete path (mid-year 10-Qs often only
+            -- tag YTD EPS; differencing recovers three-months-ended figures).
             q.concept IN (
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
+                'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
             ) AS is_non_additive,
             CASE
                 WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
@@ -241,7 +242,9 @@ BEGIN
             a.statement != 'Balance Sheet'
             AND a.concept NOT IN (
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
+                'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
             )
     )
     SELECT
@@ -297,7 +300,9 @@ BEGIN
         statement = 'Balance Sheet'
         OR concept IN (
             'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-            'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+            'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
+            'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+            'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
         )
 
     UNION ALL

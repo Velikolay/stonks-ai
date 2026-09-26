@@ -293,21 +293,19 @@ class TestSECXBRLParser:
         )
         assert result == "Q"
 
-        # Test with valid YTD period column (no quarter indicator)
+        # Duration CFS facts need point_in_time=False; None means unknown→instant
         result = parser._determine_period_type_from_column(
-            "2024-12-31", "Cash Flow Statement"
+            "2024-12-31", "Cash Flow Statement", point_in_time=False
         )
         assert result == "YTD"
 
-        # Test with valid YTD period column (explicit YTD)
         result = parser._determine_period_type_from_column(
-            "2024-12-31 (YTD)", "Cash Flow Statement"
+            "2024-12-31 (YTD)", "Cash Flow Statement", point_in_time=False
         )
         assert result == "YTD"
 
-        # Test with valid period column (quarter in middle)
         result = parser._determine_period_type_from_column(
-            "Q3 2024-09-30", "Cash Flow Statement"
+            "Q3 2024-09-30", "Cash Flow Statement", point_in_time=False
         )
         assert result == "Q"
 
@@ -318,6 +316,23 @@ class TestSECXBRLParser:
 
         result = parser._determine_period_type_from_column(
             "2024-03-31", "Balance Sheet"
+        )
+        assert result is None
+
+        # Instant facts from edgartools point_in_time must not inherit CFS YTD/Q
+        result = parser._determine_period_type_from_column(
+            "2024-06-30", "Cash Flow Statement", point_in_time=True
+        )
+        assert result is None
+
+        result = parser._determine_period_type_from_column(
+            "2024-06-30", "Cash Flow Statement", point_in_time=False
+        )
+        assert result == "YTD"
+
+        # Missing period_types on CFS (edgartools None) → treat as instant
+        result = parser._determine_period_type_from_column(
+            "2024-06-30", "Cash Flow Statement", point_in_time=None
         )
         assert result is None
 
