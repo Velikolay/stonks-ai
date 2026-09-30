@@ -293,7 +293,7 @@ class TestSECXBRLParser:
         )
         assert result == "Q"
 
-        # Duration CFS facts need point_in_time=False; None means unknown→instant
+        # Duration CFS / IS facts use the column heuristic
         result = parser._determine_period_type_from_column(
             "2024-12-31", "Cash Flow Statement", point_in_time=False
         )
@@ -326,15 +326,14 @@ class TestSECXBRLParser:
         assert result is None
 
         result = parser._determine_period_type_from_column(
+            "2024-06-30", "Statement of Equity", point_in_time=True
+        )
+        assert result is None
+
+        result = parser._determine_period_type_from_column(
             "2024-06-30", "Cash Flow Statement", point_in_time=False
         )
         assert result == "YTD"
-
-        # Missing period_types on CFS (edgartools None) → treat as instant
-        result = parser._determine_period_type_from_column(
-            "2024-06-30", "Cash Flow Statement", point_in_time=None
-        )
-        assert result is None
 
     def test_is_column_mostly_empty(self):
         """Test that _is_column_mostly_empty correctly identifies empty columns."""

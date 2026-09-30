@@ -110,14 +110,15 @@ BEGIN
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
-            -- Point-in-time / period-average stocks: never YTD-difference these.
-            -- EPS stays on the normal YTD→discrete path (mid-year 10-Qs often only
-            -- tag YTD EPS; differencing recovers three-months-ended figures).
-            q.concept IN (
-                'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
-                'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
+            -- Stocks (period NULL) and weighted-average share counts are not
+            -- additive across sub-periods; never YTD-difference them. EPS stays
+            -- on the normal YTD→discrete path.
+            (
+                q.period IS NULL
+                OR q.concept IN (
+                    'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                    'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+                )
             ) AS is_non_additive,
             CASE
                 WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
@@ -181,6 +182,7 @@ BEGIN
             member,
             latest_abstract_id AS abstract_id,
             period_end,
+            period,
             normalized_label,
             latest_position AS position,
             is_abstract,
@@ -240,11 +242,11 @@ BEGIN
             AND q.fiscal_tag = a.fiscal_tag
         WHERE
             a.statement != 'Balance Sheet'
+            -- Instant stocks are not annual−Σquarters flows.
+            AND a.period IS NOT NULL
             AND a.concept NOT IN (
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
-                'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
     )
     SELECT
@@ -300,9 +302,14 @@ BEGIN
         statement = 'Balance Sheet'
         OR concept IN (
             'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-            'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
-            'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-            'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
+            'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+        )
+        -- Year-end stocks (period NULL): pass through as Q4 like the BS.
+        -- Skip "beginning *" — those are year-start values on the 10-K, not Q4.
+        OR (
+            period IS NULL
+            AND COALESCE(normalized_label, '') !~* 'beginning'
+            AND COALESCE(label, '') !~* 'beginning'
         )
 
     UNION ALL

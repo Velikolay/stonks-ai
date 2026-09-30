@@ -107,20 +107,6 @@ class SECXBRLParser:
             except Exception:
                 logger.exception("Error parsing statement of equity")
 
-            # Parse disaggregated revenues
-            # disaggregated_revenue_facts = self._parse_disaggregated_revenues(xbrl)
-            # facts.extend(disaggregated_revenue_facts)
-
-            # Parse disaggregated operating income
-            # disaggregated_operating_income_facts = (
-            #     self._parse_disaggregated_operating_income(xbrl)
-            # )
-            # facts.extend(disaggregated_operating_income_facts)
-
-            # Parse disaggregated COGS
-            # disaggregated_cogs_facts = self._parse_disaggregated_cogs(xbrl)
-            # facts.extend(disaggregated_cogs_facts)
-
             logger.info(
                 f"Parsed {len(facts)} financial facts from filing {filing.accession_number}"
             )
@@ -690,10 +676,8 @@ class SECXBRLParser:
         of statement. Duration facts on non-balance-sheet statements use the
         column label (Q* → Q, otherwise YTD).
 
-        edgartools ``include_point_in_time`` is True for instant, False for
-        duration, and None when period_types are missing (common for ending-cash
-        stocks rendered on the cash flow statement). Those CFS unknowns are
-        treated as instants.
+        edgartools ``include_point_in_time`` is True for instant and False for
+        duration (fixed in 5.58.0+ for instant facts under duration columns).
 
         Args:
             period_col: The period column name (e.g., "2025-06-28 (Q2)", "2025-12-31")
@@ -722,11 +706,6 @@ class SECXBRLParser:
             return None
 
         if statement_type == "Balance Sheet":
-            return None
-
-        # CFS rows with no period_types are almost always ending/beginning cash
-        # stocks that edgartools failed to mark as instant.
-        if is_point_in_time is None and statement_type == "Cash Flow Statement":
             return None
 
         # Validate that the period column contains an ISO date (YYYY-MM-DD format)

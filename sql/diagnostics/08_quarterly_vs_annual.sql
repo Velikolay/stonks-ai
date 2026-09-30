@@ -1,33 +1,35 @@
 -- Flow metrics should reconcile: four quarters must sum to the annual figure.
--- Balance Sheet and weighted-average share counts are excluded (period averages /
--- point-in-time, not additive). EPS is YTD-differenced for quarterly presentation
--- so it stays in this check.
+-- Instant stocks (period NULL on the source fact) are excluded via join.
+-- Label filter still drops SoE begin/end rows that are mis-tagged as duration.
+-- Weighted-average share counts are duration but non-additive, so listed
+-- explicitly. EPS stays in this check (YTD-differenced for quarterly presentation).
 --
 -- Tolerance is 0.5% of the annual value.
 
 \echo '--- Fiscal years where four quarters do not sum to the 10-K figure ---'
 WITH quarters AS (
     SELECT
-        company_id,
-        statement,
-        normalized_label,
-        axis,
-        member,
-        fiscal_year,
-        SUM(value) AS quarterly_total,
+        q.company_id,
+        q.statement,
+        q.normalized_label,
+        q.axis,
+        q.member,
+        q.fiscal_year,
+        SUM(q.value) AS quarterly_total,
         COUNT(*) AS quarter_count,
-        array_agg(DISTINCT source_type) AS source_types
-    FROM quarterly_financials
-    WHERE NOT is_abstract
-      AND value IS NOT NULL
-      AND statement <> 'Balance Sheet'
-      AND concept NOT IN (
+        array_agg(DISTINCT q.source_type) AS source_types
+    FROM quarterly_financials q
+    JOIN financial_facts_normalized ff ON ff.id = q.id
+    WHERE NOT q.is_abstract
+      AND q.value IS NOT NULL
+      AND q.statement <> 'Balance Sheet'
+      AND ff.period IS NOT NULL
+      AND q.concept NOT IN (
           'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
-          'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding',
-          'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'
+          'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
       )
-    GROUP BY company_id, statement, normalized_label, axis, member, fiscal_year
+      AND q.normalized_label !~* 'beginning|ending balance|end of period'
+    GROUP BY q.company_id, q.statement, q.normalized_label, q.axis, q.member, q.fiscal_year
 )
 SELECT
     y.company_id,
