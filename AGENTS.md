@@ -75,11 +75,12 @@ make refresh COMPANY_IDS=1,2
 
 **Stop when** `make diagnose` reports no rows for coverage gaps, duplicate and
 disjoint series, period gaps, orphaned parents, and quarterly-versus-annual
-reconciliation; and the remaining rollup, sign-flip and conflicting-fact rows
-have each been individually explained as genuine source-data artifacts. Unmapped
-concepts with low fact counts are acceptable; unmapped concepts appearing in
-every filing are not. Unlinked-series candidates need not be empty, but each one
-must have been either merged with an override or dismissed as a coincidence.
+reconciliation; and the remaining rollup, sign-flip, conflicting-fact and
+value-anomaly rows have each been individually explained as genuine source-data
+artifacts. Unmapped concepts with low fact counts are acceptable; unmapped
+concepts appearing in every filing are not. Unlinked-series candidates need not
+be empty, but each one must have been either merged with an override or
+dismissed as a coincidence.
 
 **Work one class of problem at a time.** Fix the most frequent unmapped concept,
 refresh, re-diagnose. A single concept override often closes dozens of
@@ -294,6 +295,7 @@ single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 | `08_quarterly_vs_annual.sql` | Fiscal years where four quarters do not sum to the 10-K figure |
 | `09_conflicting_facts.sql` | Facts dropped before normalization because a group reports conflicting values |
 | `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
+| `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 
 Start with `01` and `02`. Coverage gaps and unmapped concepts cause most of what
 the later files report, and fixing them removes those findings for free.
@@ -303,9 +305,17 @@ procedure silently discards every fact whose group reports more than one distinc
 value for the same period, which is what a restatement looks like. If a line item
 is missing and appears nowhere else, check here.
 
+`11` catches years that pass `08` but still look wrong: a Q4 whose sign flips
+against Q1–Q3, a Q4 that is more than 3× any earlier quarter, the same Q4
+pattern repeating across years, a yearly value more than 5× the series median,
+or a rare negative (or positive) in an otherwise one-sided series. Prefer the
+repeating-Q4 query when triageing — one-off seasonality is common; a repeat is
+usually a systematic YTD or calculated-Q4 bug. Confirm in the filing before
+overriding.
+
 ## Working the unlinked-series candidates
 
-`10_unlinked_series.sql` is different from the other nine: it reports
+`10_unlinked_series.sql` is different from the defect diagnostics: it reports
 *candidates*, not defects. Its rows are pairs of series that look like the two
 halves of one renamed line item, together with the evidence for that reading.
 Deciding is your job, and the rules below keep that decision honest.
