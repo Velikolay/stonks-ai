@@ -251,50 +251,98 @@ BEGIN
         ) t
         ORDER BY company_id, statement, concept, src_priority
     ),
-    global_group_overrides AS (
+    concept_overrides AS (
         SELECT
-            cn.group_id,
-            MAX(cno.normalized_label) AS normalized_label,
-            MAX(cno.weight) AS weight,
-            MAX(cno.unit) AS unit
+            cn.*,
+            cdo.normalized_label AS company_label,
+            cdo.weight AS company_weight,
+            cdo.unit AS company_unit,
+            gdo.normalized_label AS global_label,
+            gdo.weight AS global_weight,
+            gdo.unit AS global_unit,
+            -- A group inherits an override only when every overridden member
+            -- agrees on the label. Members disagreeing proves the inferred group
+            -- merged unrelated concepts, so the rest keep their inferred label
+            -- instead of an arbitrary one. MIN = MAX stands in for
+            -- COUNT(DISTINCT ...), which Postgres cannot compute as a window.
+            CASE
+                WHEN MIN(cdo.normalized_label) OVER w
+                     = MAX(cdo.normalized_label) OVER w
+                THEN MAX(cdo.normalized_label) OVER w
+            END AS company_group_label,
+            CASE
+                WHEN MIN(cdo.normalized_label) OVER w
+                     = MAX(cdo.normalized_label) OVER w
+                THEN MAX(cdo.weight) OVER w
+            END AS company_group_weight,
+            CASE
+                WHEN MIN(cdo.normalized_label) OVER w
+                     = MAX(cdo.normalized_label) OVER w
+                THEN MAX(cdo.unit) OVER w
+            END AS company_group_unit,
+            CASE
+                WHEN MIN(gdo.normalized_label) OVER w
+                     = MAX(gdo.normalized_label) OVER w
+                THEN MAX(gdo.normalized_label) OVER w
+            END AS global_group_label,
+            CASE
+                WHEN MIN(gdo.normalized_label) OVER w
+                     = MAX(gdo.normalized_label) OVER w
+                THEN MAX(gdo.weight) OVER w
+            END AS global_group_weight,
+            CASE
+                WHEN MIN(gdo.normalized_label) OVER w
+                     = MAX(gdo.normalized_label) OVER w
+                THEN MAX(gdo.unit) OVER w
+            END AS global_group_unit
         FROM concept_normalization_combined cn
-        JOIN concept_normalization_overrides cno
-            ON cn.statement = cno.statement
-            AND cn.concept = cno.concept
-            AND cno.is_global = TRUE
-        GROUP BY cn.group_id
-    ),
-    company_group_overrides AS (
-        SELECT
-            cn.group_id,
-            cn.company_id,
-            MAX(cno.normalized_label) AS normalized_label,
-            MAX(cno.weight) AS weight,
-            MAX(cno.unit) AS unit
-        FROM concept_normalization_combined cn
-        JOIN concept_normalization_overrides cno
-            ON cn.company_id = cno.company_id
-            AND cn.statement = cno.statement
-            AND cn.concept = cno.concept
-        GROUP BY cn.group_id, cn.company_id
+        LEFT JOIN concept_normalization_overrides cdo
+            ON cn.company_id = cdo.company_id
+            AND cn.statement = cdo.statement
+            AND cn.concept = cdo.concept
+            AND cdo.is_global = FALSE
+        LEFT JOIN concept_normalization_overrides gdo
+            ON cn.statement = gdo.statement
+            AND cn.concept = gdo.concept
+            AND gdo.company_id = 0
+            AND gdo.is_global = TRUE
+        WINDOW w AS (
+            PARTITION BY cn.company_id, cn.statement, cn.group_id
+        )
     )
     SELECT
-        cn.company_id,
-        cn.statement,
-        cn.concept,
-        COALESCE(cgo.normalized_label, ggo.normalized_label, cn.normalized_label) AS normalized_label,
-        COALESCE(cgo.weight, ggo.weight) AS weight,
-        COALESCE(cgo.unit, ggo.unit) AS unit,
-        cn.group_id,
-        cn.source,
-        COALESCE(cgo.normalized_label, ggo.normalized_label) IS NOT NULL AS overridden
-    FROM concept_normalization_combined cn
-    LEFT JOIN company_group_overrides cgo
-        ON cn.company_id = cgo.company_id
-        AND cn.group_id = cgo.group_id
-    LEFT JOIN global_group_overrides ggo
-        ON cn.group_id = ggo.group_id
-    WHERE cn.company_id = ANY(company_ids);
+        co.company_id,
+        co.statement,
+        co.concept,
+        COALESCE(
+            co.company_label,
+            co.global_label,
+            co.company_group_label,
+            co.global_group_label,
+            co.normalized_label
+        ) AS normalized_label,
+        COALESCE(
+            co.company_weight,
+            co.global_weight,
+            co.company_group_weight,
+            co.global_group_weight
+        ) AS weight,
+        COALESCE(
+            co.company_unit,
+            co.global_unit,
+            co.company_group_unit,
+            co.global_group_unit
+        ) AS unit,
+        co.group_id,
+        co.source,
+        COALESCE(
+            co.company_label,
+            co.global_label,
+            co.company_group_label,
+            co.global_group_label
+        ) IS NOT NULL AS overridden
+    FROM concept_overrides co
+    WHERE co.company_id = ANY(company_ids);
 
     DELETE FROM concept_normalization cn
     WHERE
