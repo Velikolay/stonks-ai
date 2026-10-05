@@ -19,10 +19,10 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:IncomeLossFromContinuingOperationsAfterIncomeTaxes,Income Statement,Net Income,False,True,,,,usd,
 0,us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest,Income Statement,Income Before Tax from Continuing Operations,False,True,,,,usd,
 0,us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments,Income Statement,Income Before Tax from Continuing Operations,False,True,,,,usd,
-0,us-gaap:CashAndCashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,True,,,,usd,
+0,us-gaap:CashAndCashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:CashAndCashEquivalentsAtCarryingValue,Cash Flow Statement,Cash and Cash Equivalents,False,True,,,Same BS cash stock when tagged on CFS; do not treat as a flow,usd,
-0,us-gaap:Cash,Balance Sheet,Cash and Cash Equivalents,False,True,,,,usd,
-0,us-gaap:CashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,True,,,,usd,
+0,us-gaap:Cash,Balance Sheet,Cash and Cash Equivalents,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
+0,us-gaap:CashEquivalentsAtCarryingValue,Balance Sheet,Cash and Cash Equivalents,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:Assets,Balance Sheet,Total Assets,False,True,,,,usd,
 0,us-gaap:AssetsTotal,Balance Sheet,Total Assets,False,True,,,,usd,
 0,us-gaap:Liabilities,Balance Sheet,Total Liabilities,False,True,,us-gaap:LiabilitiesAndStockholdersEquity,,usd,1.0
@@ -44,8 +44,8 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:LongTermDebt,Balance Sheet,Long-term Debt,False,True,,,,usd,
 0,us-gaap:ShortTermBorrowings,Balance Sheet,Short-term Debt,False,True,,,,usd,
 0,us-gaap:ShortTermDebt,Balance Sheet,Short-term Debt,False,True,,,,usd,
-0,us-gaap:MarketableSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,True,,,,usd,
-0,us-gaap:AvailableForSaleSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,True,,,,usd,
+0,us-gaap:MarketableSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
+0,us-gaap:AvailableForSaleSecuritiesCurrent,Balance Sheet,Current Marketable Securities,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:AvailableForSaleSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,True,,,,usd,
 0,us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent,Balance Sheet,Non-current Marketable Securities,False,True,,,,usd,
 0,us-gaap:DeferredRevenueCurrent,Balance Sheet,Deferred Revenue,False,True,,,,usd,
@@ -66,7 +66,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:LiabilitiesCurrentAbstract,Balance Sheet,Current liabilities,True,True,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,,,
 0,us-gaap:AccountsPayable,Balance Sheet,Accounts Payable,False,True,us-gaap:LiabilitiesCurrentAbstract,us-gaap:LiabilitiesCurrent,,usd,1.0
 0,us-gaap:AccountsPayableCurrent,Balance Sheet,Accounts Payable,False,True,us-gaap:LiabilitiesCurrentAbstract,us-gaap:LiabilitiesCurrent,,usd,1.0
-0,us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,True,,us-gaap:Assets,,usd,1.0
+0,us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:Assets,,usd,1.0
 0,us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:Assets,,usd,1.0
 0,us-gaap:LiabilitiesCurrent,Balance Sheet,Total Current Liabilities,False,True,us-gaap:LiabilitiesCurrentAbstract,us-gaap:Liabilities,,usd,1.0
 0,us-gaap:OperatingExpenses,Income Statement,Operating Expenses,False,True,,,,usd,
@@ -75,6 +75,8 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:PropertyPlantAndEquipmentNet,Balance Sheet,"Property, Plant and Equipment",False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:OtherAssetsNoncurrent,Balance Sheet,Other Non Current Assets,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:AssetsAbstract,Balance Sheet,Assets,True,True,,,,,
+0,us-gaap:AssetsCurrentAbstract,Balance Sheet,Current Assets,True,True,us-gaap:AssetsAbstract,,Section header parallel to Non-current Assets,,
+0,us-gaap:PrepaidExpenseAndOtherAssetsCurrent,Balance Sheet,Prepaid expenses and other current assets,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:SalesRevenueNet,Income Statement,Revenue,False,True,,,,usd,
 0,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
 5,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Income Statement,Net income attributable to common stockholders,False,False,,,,usd,
@@ -89,7 +91,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
 5,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Comprehensive Income,Net income attributable to common stockholders,False,False,,,,usd,
 0,us-gaap:OperatingRevenues,Income Statement,Revenue,False,True,,,,usd,
-0,us-gaap:AccountsReceivableNetCurrent,Balance Sheet,"Accounts receivable, net",False,True,,,,usd,
+0,us-gaap:AccountsReceivableNetCurrent,Balance Sheet,"Accounts receivable, net",False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:CommonStockIncludingAdditionalPaidInCapital,Balance Sheet,Common stock and paid-in capital,False,True,,,Merged singular/plural US-GAAP rename; strip share-count suffix from labels,usd,
 0,us-gaap:CommonStocksIncludingAdditionalPaidInCapital,Balance Sheet,Common stock and paid-in capital,False,True,,,Merged singular/plural US-GAAP rename; strip share-count suffix from labels,usd,
 0,us-gaap:StockIssuedDuringPeriodValueShareBasedCompensation,Statement of Equity,Stock-based compensation expense,False,True,,,Exact comparative bridge to Adjustments...RequisiteServicePeriod rejected by false_matches (FY2010),usd,
@@ -102,7 +104,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:AdjustmentToAdditionalPaidInCapitalIncomeTaxEffectFromShareBasedCompensationNet,Comprehensive Income,Stock-based compensation income tax benefits,False,True,,,Unify benefits/deficiencies labels across periods,usd,
 4,msft:AdjustmentsToAdditionalPaidInCapitalIncomeTaxEffectFromShareBasedCompensationNet,Statement of Equity,Stock-based compensation income tax benefits,False,False,,,MSFT-local concept bridged exactly across form types to us-gaap:AdjustmentTo...Net,usd,
 4,msft:AdjustmentsToAdditionalPaidInCapitalIncomeTaxEffectFromShareBasedCompensationNet,Comprehensive Income,Stock-based compensation income tax benefits,False,False,,,MSFT-local concept bridged exactly across form types to us-gaap:AdjustmentTo...Net,usd,
-0,us-gaap:ShortTermInvestments,Balance Sheet,Current Marketable Securities,False,True,,,,usd,
+0,us-gaap:ShortTermInvestments,Balance Sheet,Current Marketable Securities,False,True,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,,usd,1.0
 0,us-gaap:OtherComprehensiveIncomeLossNetOfTaxPeriodIncreaseDecreaseAbstract,Comprehensive Income,Other comprehensive income,True,True,,,,,
 0,us-gaap:OtherComprehensiveIncomeLossNetOfTaxPeriodIncreaseDecreaseAbstract,Statement of Equity,Other comprehensive income,True,True,,,,,
 0,us-gaap:RetainedEarningsAccumulatedDeficit,Balance Sheet,Retained earnings,False,True,,,Strip AOCI dollar amounts from labels,usd,
@@ -112,10 +114,11 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:PaymentsOfDebtRestructuringCosts,Cash Flow Statement,Payments of debt restructuring costs,False,True,,,Was falsely chained into short-term debt proceeds,usd,
 0,us-gaap:CommonStockValue,Balance Sheet,Common stock,False,True,,,Strip share-count / par-value suffix from labels,usd,
 6,us-gaap:AssetsAbstract,Balance Sheet,Assets,True,False,,,UBER scaffold for company-scoped asset parents,,
+6,us-gaap:AssetsCurrentAbstract,Balance Sheet,Current Assets,True,False,us-gaap:AssetsAbstract,,UBER scaffold for Current Assets abstract,,
 6,us-gaap:Assets,Balance Sheet,Total Assets,False,False,,,UBER scaffold for company-scoped asset parents,usd,
 6,us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,False,us-gaap:AssetsAbstract,,UBER scaffold for company-scoped asset parents,,
 6,us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:Assets,UBER scaffold; synthetic NC assets under Total Assets,usd,1.0
-6,us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,False,,us-gaap:Assets,UBER scaffold; current assets under Total Assets,usd,1.0
+6,us-gaap:AssetsCurrent,Balance Sheet,Total Current Assets,False,False,us-gaap:AssetsCurrentAbstract,us-gaap:Assets,UBER scaffold; current assets under Total Assets,usd,1.0
 6,us-gaap:LiabilitiesAndStockholdersEquityAbstract,Balance Sheet,Liabilities and Shareholders' Equity,True,False,,,UBER scaffold for company-scoped liability parents,,
 6,us-gaap:LiabilitiesAndStockholdersEquity,Balance Sheet,"Total liabilities, redeemable non-controlling interests and equity",False,False,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,UBER scaffold for equity/liability total parents,usd,
 6,us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest,Balance Sheet,Total Equity including NCI,False,False,,us-gaap:LiabilitiesAndStockholdersEquity,UBER scaffold; inclusive equity under L+mezz+equity,usd,1.0
@@ -128,7 +131,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 6,us-gaap:CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization,Income Statement,Cost of Revenue,False,False,,,Common tech/SaaS COGS concept (ex-D&A),usd,
 6,us-gaap:NetIncomeLossAttributableToNoncontrollingInterest,Income Statement,Net income attributable to noncontrolling interests,False,False,,,Strip trailing net-of-tax phrase from labels,usd,
 0,us-gaap:OtherComprehensiveIncomeLossNetOfTax,Comprehensive Income,Other comprehensive income,False,True,,,,usd,
-6,us-gaap:RestrictedCashAndCashEquivalentsAtCarryingValue,Balance Sheet,Restricted cash and cash equivalents,False,False,,,,usd,
+6,us-gaap:RestrictedCashAndCashEquivalentsAtCarryingValue,Balance Sheet,Restricted cash and cash equivalents,False,False,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,Current restricted cash under Current Assets,usd,1.0
 6,us-gaap:RestrictedCashAndCashEquivalentsNoncurrent,Balance Sheet,"Restricted cash and cash equivalents, noncurrent",False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,Noncurrent restricted cash under Total Non Current Assets,usd,1.0
 6,us-gaap:TemporaryEquityCarryingAmountAttributableToParent,Balance Sheet,Redeemable convertible preferred stock,False,False,,,Strip share-count / liquidation-preference suffix,usd,
 6,uber:AccruedLiabilitiesAndOtherLiabilitiesCurrent,Balance Sheet,Accrued Liabilities,False,False,us-gaap:LiabilitiesCurrentAbstract,us-gaap:LiabilitiesCurrent,One-out-one-in successor to AccruedLiabilitiesCurrent; under Total Current Liabilities,usd,1.0
@@ -147,7 +150,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 6,us-gaap:LossOnSaleOfInvestments,Cash Flow Statement,Loss from sale of investments,False,False,,,Was falsely chained into acquisition payments,usd,
 6,us-gaap:PaymentsForDerivativeInstrumentFinancingActivities,Cash Flow Statement,Purchase of Capped Calls,False,False,,,Prevent capped-call label from absorbing impairments,usd,
 6,us-gaap:RestrictedInvestments,Balance Sheet,Restricted investments,False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,Prevent restricted-investments label pollution; under Total Non Current Assets,usd,1.0
-6,us-gaap:AssetsOfDisposalGroupIncludingDiscontinuedOperationCurrent,Balance Sheet,Assets held for sale,False,False,,us-gaap:AssetsCurrent,Was falsely chained into Restricted investments; under Total Current Assets,usd,1.0
+6,us-gaap:AssetsOfDisposalGroupIncludingDiscontinuedOperationCurrent,Balance Sheet,Assets held for sale,False,False,us-gaap:AssetsCurrentAbstract,us-gaap:AssetsCurrent,Assets held for sale under Current Assets,usd,1.0
 6,uber:IncreaseDecreaseFundsHeldByInsurers,Cash Flow Statement,Collateral held by insurer,False,False,,,Was falsely chained into debt proceeds,usd,
 6,uber:FundsHeldByInsurer,Balance Sheet,Collateral held by insurer,False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,Was falsely chained into Restricted investments; under Total Non Current Assets,usd,1.0
 6,uber:MarketableandNonMarketableInvestments,Balance Sheet,Investments,False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,Strip amortized-cost parentheticals; under Total Non Current Assets,usd,1.0
