@@ -74,13 +74,13 @@ make refresh COMPANY_IDS=1,2
 ```
 
 **Stop when** `make diagnose` reports no rows for coverage gaps, duplicate and
-disjoint series, period gaps, orphaned parents, and quarterly-versus-annual
-reconciliation; and the remaining rollup, sign-flip, conflicting-fact and
-value-anomaly rows have each been individually explained as genuine source-data
-artifacts. Unmapped concepts with low fact counts are acceptable; unmapped
-concepts appearing in every filing are not. Unlinked-series candidates need not
-be empty, but each one must have been either merged with an override or
-dismissed as a coincidence.
+disjoint series, period gaps, orphaned parents, quarterly-versus-annual
+reconciliation, and Balance Sheet structure identities; and the remaining
+rollup, sign-flip, conflicting-fact and value-anomaly rows have each been
+individually explained as genuine source-data artifacts. Unmapped concepts with
+low fact counts are acceptable; unmapped concepts appearing in every filing are
+not. Unlinked-series candidates need not be empty, but each one must have been
+either merged with an override or dismissed as a coincidence.
 
 **Work one class of problem at a time.** Fix the most frequent unmapped concept,
 refresh, re-diagnose. A single concept override often closes dozens of
@@ -296,6 +296,7 @@ single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 | `09_conflicting_facts.sql` | Facts dropped before normalization because a group reports conflicting values |
 | `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
+| `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 
 Start with `01` and `02`. Coverage gaps and unmapped concepts cause most of what
 the later files report, and fixing them removes those findings for free.
@@ -312,6 +313,44 @@ or a rare negative (or positive) in an otherwise one-sided series. Prefer the
 repeating-Q4 query when triageing — one-off seasonality is common; a repeat is
 usually a systematic YTD or calculated-Q4 bug. Confirm in the filing before
 overriding.
+
+`12` is the Balance Sheet shape check. `05` only verifies each parent against its
+*direct* children, so a synthetic Non-current Assets bucket that never attaches
+to Total Assets can look fine in `05` while the BS is still wrong. `12` asserts
+the accounting identities below and that the Current / Non-current section
+abstracts exist.
+
+## Balance Sheet structure
+
+The presentation tree — not the raw XBRL parent chain — must satisfy:
+
+```
+Total Assets      = Total Current Assets      + Total Non Current Assets
+Total Liabilities = Total Current Liabilities + Total Non Current Liabilities
+Total Assets      = Total Liabilities + Equity
+```
+
+Equity on the credit side means the full ownership residual: prefer
+`Total Equity including NCI` when present, otherwise `Total Equity`, plus
+redeemable / mezzanine NCI when the filer reports it. Equivalently, the BS total
+`Total liabilities, redeemable non-controlling interests and equity` should equal
+`Total Assets`.
+
+Required abstracts (section headers, `is_abstract`) parallel the liability side:
+
+| Abstract label | Typical concept |
+| --- | --- |
+| Current Assets | `us-gaap:AssetsCurrentAbstract` |
+| Non-current Assets | `us-gaap:AssetsNoncurrentAbstract` |
+| Current liabilities | `us-gaap:LiabilitiesCurrentAbstract` |
+| Non-current Liabilities | `us-gaap:LiabilitiesNoncurrentAbstract` |
+
+Filers often parent every asset line directly to Total Assets. That is valid XBRL
+and will not fail chaining; it still fails `12` until overrides hang current lines
+under Current Assets / `AssetsCurrent` and non-current lines under Non-current
+Assets / `AssetsNoncurrent`, with those subtotals under Total Assets. Same pattern
+for liabilities. Fix with `concept-normalization-overrides.csv` (`parent_concept`,
+`abstract_concept`, and company-scoped scaffold rows when FKs require them).
 
 ## Working the unlinked-series candidates
 
