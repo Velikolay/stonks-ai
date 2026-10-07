@@ -16,3 +16,8 @@ id,company_id,concept,statement,axis,member,label,form_type,from_period,to_perio
 8,5,us-gaap:NetIncomeLoss,Comprehensive Income,,,,,2016-12-31,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
 7,5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
 6,5,us-gaap:IncomeTaxExpenseBenefit,Income Statement,,,,10-K,,,us-gaap:IncomeTaxExpenseBenefit,,,,-1,False
+18,6,us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents,Cash Flow Statement,,,Beginning of period,,,,uber:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsBeginningOfPeriod,,,,,False
+19,6,us-gaap:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests,Statement of Equity,,,Ending Balance,,,,uber:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterestsEndingBalance,,,,,False
+20,6,us-gaap:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests,Statement of Equity,,,Ending balance,,,,uber:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterestsEndingBalance,,,,,False
+21,6,us-gaap:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests,Statement of Equity,,,"Mezzanine Equity, Amount - Ending balance",,,,uber:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterestsEndingBalance,,,,,False
+22,6,us-gaap:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests,Statement of Equity,,,"Mezzanine equity, ending balance",,,,uber:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterestsEndingBalance,,,,,False
