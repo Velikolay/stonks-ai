@@ -165,10 +165,13 @@ vanishes from the presentation layer, this is usually why — check
 `financial_facts_normalized` before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
-the previous quarter when that quarter ended 80 to 100 days earlier. A quarter
-absent from all 10-Qs is derived as the annual figure minus the quarters that do
-exist, and marked `source_type = 'calculated'`. Balance Sheet and share-count
-lines are point-in-time and come from the annual filing instead of being summed.
+the previous quarter when that quarter ended 80 to 100 days earlier. Q4 is
+derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
+when all three earlier quarters already exist for that series (label + axis +
+member). Sparse series (e.g. a geo member tagged only in Q1 and the 10-K) are
+left without a calculated Q4 rather than dumping the residual into December.
+Balance Sheet and share-count lines are point-in-time and come from the annual
+filing instead of being summed.
 
 ## Override cookbook
 

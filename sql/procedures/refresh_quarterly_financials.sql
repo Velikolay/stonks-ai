@@ -199,7 +199,11 @@ BEGIN
             axis,
             member,
             fiscal_tag,
-            SUM(value) AS value
+            SUM(value) AS value,
+            -- Residual Q4 is only safe when Q1–Q3 already exist. Otherwise
+            -- annual−Σquarters dumps every missing quarter into Q4 (e.g. a
+            -- geo member tagged only in Q1 + 10-K).
+            COUNT(DISTINCT fiscal_quarter) AS quarter_count
         FROM quarterly_filings
         GROUP BY
             company_id,
@@ -248,6 +252,7 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
+            AND q.quarter_count = 3
     )
     SELECT
         id,
