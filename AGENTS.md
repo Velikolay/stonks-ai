@@ -75,12 +75,13 @@ make refresh COMPANY_IDS=1,2
 
 **Stop when** `make diagnose` reports no rows for coverage gaps, duplicate and
 disjoint series, period gaps, orphaned parents, quarterly-versus-annual
-reconciliation, and Balance Sheet structure identities; and the remaining
-rollup, sign-flip, conflicting-fact and value-anomaly rows have each been
-individually explained as genuine source-data artifacts. Unmapped concepts with
-low fact counts are acceptable; unmapped concepts appearing in every filing are
-not. Unlinked-series candidates need not be empty, but each one must have been
-either merged with an override or dismissed as a coincidence.
+reconciliation, Balance Sheet structure identities, and dimension axis splits;
+and the remaining rollup, sign-flip, conflicting-fact and value-anomaly rows
+have each been individually explained as genuine source-data artifacts.
+Unmapped concepts with low fact counts are acceptable; unmapped concepts
+appearing in every filing are not. Unlinked-series candidates need not be empty,
+but each one must have been either merged with an override or dismissed as a
+coincidence.
 
 **Work one class of problem at a time.** Fix the most frequent unmapped concept,
 refresh, re-diagnose. A single concept override often closes dozens of
@@ -192,6 +193,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Missing section header in the statement tree | `concept-normalization-overrides.csv` | `is_abstract`, `abstract_concept` |
 | Expense reported positive in some years, negative in others | `concept-normalization-overrides.csv` | `weight` |
 | Segment or product members named differently across years | `dimension-normalization-overrides.csv` | `normalized_member_label` |
+| Same segment on Product for Revenue but ConsolidationItems for Operating Income | `dimension-normalization-overrides.csv` | `normalized_axis_label=Product` on the ConsolidationItems members |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
 
@@ -245,11 +247,16 @@ is semicolon-separated.
 2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesMember,,False,Product,Google Services,
 0,us-gaap:StatementBusinessSegmentsAxis,,Japan,True,Geographical,Japan,
 0,srt:ProductOrServiceAxis,,,True,Product,,
+6,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,
 ```
 
 The first maps one company's segment member. The second matches any company that
 labels a segment "Japan". The third renames an axis globally and leaves members
-alone.
+alone. The fourth is the Operating-Income case: filers often put segment OI on
+`ConsolidationItemsAxis` while Revenue uses `ProductOrServiceAxis`. Grouping is
+per metric, so inference will not pull OI onto Product — override the members
+(and legacy names like Rides / Eats) explicitly. `13_dimension_axis_splits.sql`
+flags these splits.
 
 ### `financial-facts-overrides.csv`
 
@@ -300,9 +307,16 @@ single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 | `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
+| `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
 
 Start with `01` and `02`. Coverage gaps and unmapped concepts cause most of what
 the later files report, and fixing them removes those findings for free.
+
+`13` catches a UI-shaped gap that `02` misses: the members are normalized, but
+Revenue is on `Product` while Operating Income (or similar) is still on
+`ConsolidationItemsAxis`. Filter-by-Product then looks empty for that metric.
+Remap the ConsolidationItems members to `Product` in
+`dimension-normalization-overrides.csv` (see the cookbook example).
 
 `09` deserves attention because nothing else surfaces it: the normalization
 procedure silently discards every fact whose group reports more than one distinct
