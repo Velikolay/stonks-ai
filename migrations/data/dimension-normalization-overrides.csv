@@ -19,3 +19,8 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 0,us-gaap:StatementGeographicalAxis,,,True,Geographical,,
 0,us-gaap:StatementBusinessSegmentsAxis,,Greater China,True,Geographical,China,
 0,us-gaap:StatementBusinessSegmentsAxis,,China,True,Geographical,China,
+6,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
+6,srt:ConsolidationItemsAxis,Delivery,,False,Product,Delivery,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
+6,srt:ConsolidationItemsAxis,Freight,,False,Product,Freight,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
+6,srt:ConsolidationItemsAxis,Rides,,False,Product,Mobility,Pre-Mobility segment name for OI
+6,srt:ConsolidationItemsAxis,Eats,,False,Product,Delivery,Pre-Delivery segment name for OI
