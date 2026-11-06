@@ -57,7 +57,7 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,True,us-gaap:AssetsAbstract,,,,
 0,us-gaap:Goodwill,Balance Sheet,Goodwill,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
 0,us-gaap:IntangibleAssetsNetExcludingGoodwill,Balance Sheet,Intangible Assets Excluding Goodwill,False,True,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,,usd,1.0
-0,us-gaap:LongTermDebtNoncurrent,Balance Sheet,Long-term Debt,False,True,,us-gaap:LiabilitiesNoncurrent,,usd,1.0
+0,us-gaap:LongTermDebtNoncurrent,Balance Sheet,Long-term Debt,False,True,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,,usd,1.0
 0,us-gaap:DeferredRevenueNoncurrent,Balance Sheet,Deferred Revenue Non-current,False,True,,us-gaap:LiabilitiesNoncurrent,,usd,1.0
 0,us-gaap:LiabilitiesAndStockholdersEquityAbstract,Balance Sheet,Liabilities and Shareholders' Equity,True,True,,,,,
 0,us-gaap:LiabilitiesAndStockholdersEquity,Balance Sheet,"Total liabilities, redeemable non-controlling interests and equity",False,True,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,"BS total; parent for Liabilities, mezzanine NCI, and equity",usd,
@@ -198,3 +198,51 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 6,uber:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsBeginningOfPeriod,Cash Flow Statement,Beginning of period,False,False,,,"UBER CFS: Beginning of period split off so end-of-period cash label merge does not collide on same period_end",usd,
 6,us-gaap:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests,Statement of Equity,Beginning balance,False,False,,,"UBER SOE: TemporaryEquity begin/end share one concept; grouping disabled. Merge Beginning Balance casing (+ mezzanine beginning labels). Ending remapped via FFO.",usd,
 6,uber:TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterestsEndingBalance,Statement of Equity,Ending balance,False,False,,,"UBER SOE: Ending balance peel-off for TemporaryEquity so begin labels can merge.",usd,
+7,us-gaap:AssetsAbstract,Balance Sheet,Assets,True,False,,,NFLX scaffold for company-scoped asset parents,,
+7,us-gaap:AssetsNoncurrentAbstract,Balance Sheet,Non-current Assets,True,False,us-gaap:AssetsAbstract,,NFLX scaffold for company-scoped asset parents,,
+7,us-gaap:Assets,Balance Sheet,Total Assets,False,False,,,NFLX scaffold for company-scoped asset parents,usd,
+7,us-gaap:AssetsNoncurrent,Balance Sheet,Total Non Current Assets,False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:Assets,NFLX scaffold; synthetic NC assets under Total Assets,usd,1.0
+7,us-gaap:LiabilitiesAndStockholdersEquityAbstract,Balance Sheet,Liabilities and Shareholders' Equity,True,False,,,NFLX scaffold for company-scoped liability parents,,
+7,us-gaap:LiabilitiesAndStockholdersEquity,Balance Sheet,"Total liabilities, redeemable non-controlling interests and equity",False,False,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,NFLX scaffold; BS total parent for liabilities and equity,usd,
+7,us-gaap:LiabilitiesNoncurrentAbstract,Balance Sheet,Non-current Liabilities,True,False,us-gaap:LiabilitiesAndStockholdersEquityAbstract,,NFLX scaffold for company-scoped liability parents,,
+7,us-gaap:Liabilities,Balance Sheet,Total Liabilities,False,False,,us-gaap:LiabilitiesAndStockholdersEquity,NFLX scaffold; Total Liabilities under the BS total,usd,1.0
+7,us-gaap:LiabilitiesNoncurrent,Balance Sheet,Total Non Current Liabilities,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:Liabilities,NFLX scaffold; synthetic NC liabilities under Total Liabilities,usd,1.0
+7,nflx:ContentAssetsNetNoncurrent,Balance Sheet,"Content assets, net",False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,Non-current content assets reported beside other non-current assets; 10-K 2015-2025 gap vs Total Assets equals this line,usd,1.0
+7,nflx:ContentLibraryNetNoncurrent,Balance Sheet,"Content assets, net",False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,2009-2015 predecessor of ContentAssetsNetNoncurrent; same non-current content line,usd,1.0
+7,us-gaap:DeferredTaxAssetsNetNoncurrent,Balance Sheet,"Deferred Tax Assets, Non-Current",False,False,us-gaap:AssetsNoncurrentAbstract,us-gaap:AssetsNoncurrent,2009-2010 non-current DTA reported outside Total Non Current Assets,usd,1.0
+7,nflx:ContentLiabilitiesNoncurrent,Balance Sheet,Non-current content liabilities,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,Non-current content liabilities reported outside Total Non Current Liabilities; 10-K 2013-2025 gap equals this line,usd,1.0
+7,nflx:ContentAccountsPayableNoncurrent,Balance Sheet,Non-current content liabilities,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,2011-2013 predecessor of ContentLiabilitiesNoncurrent,usd,1.0
+7,us-gaap:OtherLongTermDebtNoncurrent,Balance Sheet,Long-Term Debt,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,2009-2010 other long-term debt reported outside Total Non Current Liabilities; distinct from Senior notes,usd,1.0
+7,us-gaap:SeniorLongTermNotes,Balance Sheet,Long-term Debt,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,2010-2013 senior notes are the long-term debt line and were chained to the 200M related-party note after its weight was corrected; keep this label and hang it under Total Non Current Liabilities,usd,1.0
+7,us-gaap:RelatedPartyTransactionDueFromToRelatedParty,Balance Sheet,Long-term debt due to related party,False,False,us-gaap:LiabilitiesNoncurrentAbstract,us-gaap:LiabilitiesNoncurrent,2011-2012 related-party long-term debt under Total Non Current Liabilities. Source weight is -1; fact override sets weight 1 so the positive amount adds,usd,1.0
+7,nflx:ContentAssetsNetCurrent,Balance Sheet,"Current content assets, net",False,False,,,False chain with us-gaap:ShortTermBorrowings. Filing label is Current content assets net (10-K 2015-2019); short-term borrowings start in the 2020 10-K,usd,
+7,nflx:CashCashEquivalentsBeginningOfPeriod,Cash Flow Statement,"Cash and cash equivalents, beginning of period",False,False,,,Beginning cash split off so it does not collide with end-of-period on the same concept,usd,
+7,nflx:CashCashEquivalentsEndOfPeriod,Cash Flow Statement,"Cash and cash equivalents, end of period",False,False,,,End-of-period cash including the restricted-cash successor under ASU 2016-18,usd,
+7,us-gaap:ExcessTaxBenefitFromShareBasedCompensationFinancingActivities,Cash Flow Statement,"Excess tax benefits from stock-based compensation, financing",False,False,,,False chain into foreign-currency remeasurement; financing line differs from the operating line in 32 of 38 periods,usd,
+7,us-gaap:ExcessTaxBenefitFromShareBasedCompensationOperatingActivities,Cash Flow Statement,"Excess tax benefits from stock-based compensation, operating",False,False,,,False chain into foreign-currency remeasurement; keep distinct from the financing line,usd,
+7,us-gaap:ForeignCurrencyTransactionGainLossBeforeTax,Cash Flow Statement,Foreign currency remeasurement loss (gain) on debt,False,False,,,Pin the FX remeasurement line so excess-tax-benefit concepts cannot inherit its label,usd,
+7,us-gaap:PaymentsOfDebtIssuanceCosts,Cash Flow Statement,Debt issuance costs,False,False,,,False chain into Purchases of investments,usd,
+7,us-gaap:ProceedsFromIssuanceOfDebt,Cash Flow Statement,Proceeds from issuance of debt,False,False,,,False chain into Purchases of investments; same line as ProceedsFromIssuanceOfLongTermDebt,usd,
+7,us-gaap:ProceedsFromIssuanceOfLongTermDebt,Cash Flow Statement,Proceeds from issuance of debt,False,False,,,Exact false_matches bridge into ProceedsFromIssuanceOfDebt at 2013-06-30 to 2014-06-30; no shared filing,usd,
+7,us-gaap:ForeignCurrencyTransactionLossBeforeTax,Cash Flow Statement,Foreign currency remeasurement loss (gain) on debt,False,False,,,Exact false_matches bridge from the 2017 10-K into ForeignCurrencyTransactionGainLossBeforeTax,usd,
+7,nflx:OtherNoncashIncomeExpense,Cash Flow Statement,Other non-cash items,False,False,,,Exact false_matches bridge into us-gaap:OtherNoncashIncomeExpense at 2011-03-31,usd,
+7,us-gaap:OtherNoncashIncomeExpense,Cash Flow Statement,Other non-cash items,False,False,,,Filing label is Other non-cash items; was chained onto Other Income Expenses,usd,
+7,nflx:PaymentsForProceedsFromOtherAssets,Cash Flow Statement,Other investing activities,False,False,,,Exact false_matches bridge into PaymentsForProceedsFromOtherInvestingActivities,usd,
+7,us-gaap:PaymentsForProceedsFromOtherInvestingActivities,Cash Flow Statement,Other investing activities,False,False,,,Successor of nflx:PaymentsForProceedsFromOtherAssets; latest filing label,usd,
+7,nflx:IncreaseDecreaseInContentLibrary,Cash Flow Statement,Additions to content assets,False,False,,,Exact false_matches bridge into AcquisitionOfStreamingContentLibrary at 2009-06-30,usd,
+7,nflx:AcquisitionOfStreamingContentLibrary,Cash Flow Statement,Additions to content assets,False,False,,,Predecessor of AdditionsToStreamingContentLibrary; no shared filing,usd,
+7,nflx:AdditionsToStreamingContentLibrary,Cash Flow Statement,Additions to content assets,False,False,,,Restated bridge into AdditionstoStreamingContentAssets (0.01 pct) at 2014-12-31 to 2015-12-31,usd,
+7,nflx:AdditionstoStreamingContentAssets,Cash Flow Statement,Additions to content assets,False,False,,,Case-variant predecessor of AdditionsToStreamingContentAssets,usd,
+7,nflx:AdditionsToStreamingContentAssets,Cash Flow Statement,Additions to content assets,False,False,,,Latest content-additions concept,usd,
+7,nflx:AmortizationOfStreamingContentLibrary,Cash Flow Statement,Amortization of content assets,False,False,,,First of the streaming-amortization rename chain,usd,
+7,nflx:CostOfServicesAmortizationOfStreamingContentLibrary,Cash Flow Statement,Amortization of content assets,False,False,,,Successor of AmortizationOfStreamingContentLibrary,usd,
+7,nflx:CostofServicesAmortizationofStreamingContentAssets,Cash Flow Statement,Amortization of content assets,False,False,,,Successor of CostOfServicesAmortizationOfStreamingContentLibrary,usd,
+7,nflx:CostOfServicesAmortizationOfStreamingContentAssets,Cash Flow Statement,Amortization of content assets,False,False,,,Latest streaming-amortization concept,usd,
+7,nflx:AmortizationOfDvdContentLibrary,Cash Flow Statement,Amortization of DVD content assets,False,False,,,First of the DVD-amortization rename chain,usd,
+7,nflx:CostOfServicesAmortizationOfDvdContentLibrary,Cash Flow Statement,Amortization of DVD content assets,False,False,,,Successor of AmortizationOfDvdContentLibrary,usd,
+7,nflx:CostofServicesAmortizationofDVDContentAssets,Cash Flow Statement,Amortization of DVD content assets,False,False,,,Latest DVD-amortization concept,usd,
+7,nflx:ContentLibraryNetCurrent,Balance Sheet,"Current content assets, net",False,False,,,One-out-one-in successor under Total Current Assets; retired 2014-12-31 and ContentAssetsNetCurrent starts 2015-12-31,usd,
+7,us-gaap:PaymentsToAcquireInvestments,Cash Flow Statement,Purchases of investments,False,False,,,Keep the real purchases line after debt-issuance and debt-proceeds concepts were chained onto it,usd,
+7,us-gaap:PaymentOfFinancingAndStockIssuanceCosts,Cash Flow Statement,Issuance costs,False,False,,,False chain into proceeds from maturities of investments,usd,
+7,us-gaap:ProceedsFromSaleMaturityAndCollectionOfShorttermInvestments,Cash Flow Statement,Proceeds from maturities and sales of investments,False,False,,,2023-2024 predecessor of ProceedsFromSaleMaturityAndCollectionsOfInvestments,usd,
+7,us-gaap:ProceedsFromSaleMaturityAndCollectionsOfInvestments,Cash Flow Statement,Proceeds from maturities and sales of investments,False,False,,,Successor to short-term investment maturities; periods do not overlap,usd,

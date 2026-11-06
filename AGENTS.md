@@ -62,7 +62,8 @@ make ingest TICKERS=AAPL,MSFT FORMS=10-K,10-Q
 # 2. Normalize (make ingest already refreshes; run this after editing overrides)
 make refresh COMPANY_IDS=1,2
 
-# 3. Diagnose
+# 3. Diagnose the company you just refreshed. make diagnose is global and
+#    most queries LIMIT 50, so filter the SQL to that company_id first.
 make diagnose
 
 # 4. Fix: edit the CSVs in migrations/data/, then
@@ -73,20 +74,32 @@ make refresh COMPANY_IDS=1,2
 # 5. Back to step 3
 ```
 
-**Stop when** `make diagnose` reports no rows for coverage gaps, duplicate and
-disjoint series, period gaps, orphaned parents, quarterly-versus-annual
-reconciliation, Balance Sheet structure identities, and dimension axis splits;
-and the remaining rollup, sign-flip, conflicting-fact and value-anomaly rows
-have each been individually explained as genuine source-data artifacts.
-Unmapped concepts with low fact counts are acceptable; unmapped concepts
-appearing in every filing are not. Unlinked-series candidates need not be empty,
-but each one must have been either merged with an override or dismissed as a
-coincidence.
+**Stop when**, for the company under work, coverage shows no missing 10-K years
+or empty filings, period gaps inside a real series are gone, orphaned parents
+are gone, no fiscal year fails the four-quarters-sum-to-the-10-K check, Balance
+Sheet identities hold, and dimension axis splits are gone. Explain each
+remaining rollup, sign-flip, conflicting-fact, and value-anomaly row as a
+source-data artifact.
 
-**Work one class of problem at a time.** Fix the most frequent unmapped concept,
-refresh, re-diagnose. A single concept override often closes dozens of
-downstream gaps, and fixing several at once makes it impossible to tell which
-override did what.
+Duplicate and disjoint rows are not themselves a reason to keep going:
+
+- An `is_duplicate` row whose twin is an amendment (a 10-K beside its 10-K/A,
+  same concept and period) is the dedup step keeping one filing. Leave it.
+- Two concepts that share a `normalized_label` over periods that do not overlap
+  are a rename the label override already merged. `03` keeps listing that pair.
+- Act when two concepts share a label in the same period, so dedup drops a
+  value, or when one concept still carries two labels.
+
+A concept with no `concept_normalization` row is acceptable when the presentation
+label is already canonical. One whose presentation label is still the raw filing
+label, and which appears in every filing, is not. Unlinked-series candidates
+need not be empty, but each one must have been either merged with an override or
+dismissed as a coincidence.
+
+**Work one class of problem at a time.** Inside genuinely unmapped concepts, fix
+the most frequent one, refresh, and re-diagnose. A single concept override often
+closes dozens of downstream gaps, and fixing several classes at once makes it
+impossible to tell which override did what.
 
 ### Ingest options
 
@@ -144,13 +157,20 @@ Four behaviours are worth knowing before you debug anything:
 
 **Precedence.** Everywhere, company-specific override beats global override beats
 inferred value beats the raw filing label. Global rows are stored with
-`company_id = 0` and `is_global = true`; the two must agree.
+`company_id = 0` and `is_global = true`; the two must agree. A company-specific
+row replaces the global row for that concept. Blank columns do not fall through
+to the global values, so copy every global field you still want and change only
+what differs.
 
 **Inference.** `concept_normalization` derives labels without any override, from
 two signals: *grouping*, where one concept reports different labels across
 filings and the most recent label wins; and *chaining*, where one period's
 comparative value matches another period's value, which detects a renamed
-concept. You only need an override when both signals fail.
+concept. The table only receives concepts that one of those signals selected. A
+line with a single stable label has no row there, which is not a defect: a
+global override is applied later, directly, in
+`refresh_financial_facts_normalized`. You need an override when both signals
+fail and the presentation label is still the raw filing label.
 
 **Synthetic rows.** When an override names a `parent_concept` or
 `abstract_concept` that is not a real fact in that filing, the procedure invents
@@ -209,7 +229,17 @@ rewrites raw data and is almost always company-specific.
 Primary key is `(company_id, concept, statement)`. `parent_concept` and
 `abstract_concept` must refer to another row in this file with the same
 `statement` and `company_id`. Set `unit` on non-abstract rows and `weight`
-whenever `parent_concept` is set.
+whenever `parent_concept` is set. Quote any field that contains a comma,
+including `description`; an unquoted comma shifts the columns and the loader
+reads `usd` as the weight.
+
+Do not set concept `weight` when the raw fact weight is already `-1`. The
+normalized value is negated when `raw weight × override weight` is negative, and
+the stored weight is the override, so a `+1` override on a `-1` fact flips the
+sign and the rollup subtracts the line. Correct that fact with
+`to_weight` in `financial-facts-overrides.csv` instead. Any weight change is a
+chaining input on the next refresh: two unrelated lines that now share an amount
+will link. Re-check those chains before merging labels.
 
 Give every company the same label for cash:
 
@@ -264,8 +294,10 @@ flags these splits.
 
 Left-hand columns match, `to_*` columns rewrite. `to_axis`, `to_member` and
 `to_member_label` must be all set or all blank; a check constraint enforces it.
-The `id` column is preserved so admin CSV exports round-trip; new rows can leave
-it blank.
+`to_concept` is required on every row, including a weight-only rewrite; repeat
+the source concept there. The `id` column is preserved so admin CSV exports
+round-trip. The loader inserts the file in one batch, so once any row has an
+`id`, a new row needs the next integer too. A blank `id` fails the load.
 
 Turn a company-specific revenue concept into a dimension of the standard one:
 
@@ -290,14 +322,20 @@ warning rather than failing the load, so overrides can be written ahead of time.
 
 ## Diagnostics
 
-`make diagnose` runs everything in [sql/diagnostics/](sql/diagnostics/). Run a
-single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
+`make diagnose` runs everything in [sql/diagnostics/](sql/diagnostics/) for every
+company. It takes no company filter, and most queries `LIMIT` 50.
+`10_unlinked_series.sql` joins every company before that limit, so on a populated
+database the first page is not the company you just ingested and the unlinked
+query is the slow one. Filter each file to that `company_id` on the base table
+scan, then read it. Run one file with
+`psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`. Refresh stays
+narrow: `make refresh COMPANY_IDS=7`.
 
 | File | Finds |
 | --- | --- |
 | `01_coverage.sql` | Filings and facts per company and year, missing 10-K years, filings that yielded no facts |
-| `02_unmapped.sql` | Concepts and dimensions with no normalization row, ranked by fact count |
-| `03_duplicates.sql` | `is_duplicate` rows, one label split across concepts, one concept split across labels |
+| `02_unmapped.sql` | Concepts with no `concept_normalization` row, and dimensions with no normalization row. A missing concept row is not a defect when the presentation label is already canonical |
+| `03_duplicates.sql` | `is_duplicate` rows, one label carried by several concepts, one concept split across labels. Amendment twins and non-overlapping renames are expected; same-period clashes are not |
 | `04_period_gaps.sql` | Missing years and quarters inside otherwise continuous series |
 | `05_rollups.sql` | Parents that do not equal the weighted sum of children; synthetic subtotals stuck at zero |
 | `06_orphans.sql` | `parent_id` and `abstract_id` pointing at rows that do not exist |
@@ -309,8 +347,17 @@ single file with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
 
-Start with `01` and `02`. Coverage gaps and unmapped concepts cause most of what
-the later files report, and fixing them removes those findings for free.
+Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
+whose presentation label is still raw cause most of what the later files report,
+and fixing them removes those findings for free.
+
+`02` lists concepts grouping and chaining never selected. Its `sample_label` is
+`MIN(label)`, which is alphabetical, so read the latest filing label before
+writing an override. Call the concept unmapped only when no override matches it
+and `yearly_financials` or `quarterly_financials` still shows the raw label. A
+statement-of-equity or comprehensive-income concept that uses several labels in
+one filing (beginning balance, ending balance, adoption adjustments) has
+grouping disabled on purpose. Do not force it onto one label.
 
 `13` catches a UI-shaped gap that `02` misses: the members are normalized, but
 Revenue is on `Product` while Operating Income (or similar) is still on
@@ -369,6 +416,12 @@ Assets / `AssetsNoncurrent`, with those subtotals under Total Assets. Same patte
 for liabilities. Fix with `concept-normalization-overrides.csv` (`parent_concept`,
 `abstract_concept`, and company-scoped scaffold rows when FKs require them).
 
+A proprietary concept can only point at a parent stored under the same
+`company_id`. The company scaffold replaces the global row for that concept,
+blanks included, so copy `parent_concept`, `abstract_concept`, `weight`, and
+`unit` from the global row. A scaffold `us-gaap:Liabilities` with an empty
+`parent_concept` unparents Total Liabilities from the balance-sheet total.
+
 ## Working the unlinked-series candidates
 
 `10_unlinked_series.sql` is different from the defect diagnostics: it reports
@@ -390,7 +443,9 @@ Every condition on it is a way to miss a real rename: exact value equality fails
 on a restatement, both sides are multiplied by `weight` so a weight override on
 only one concept breaks the match, `form_type` must agree so a rename that
 appears first in a 10-Q is invisible, and a missing `comparative_value` means
-there is no bridge at all. The `false_matches` CTEs then drop a pair entirely for
+there is no bridge at all. The same multiplication works in reverse: a weight
+you just corrected can create a new match against an unrelated line that now
+shares the amount. The `false_matches` CTEs then drop a pair entirely for
 the whole company and statement if any period triple chains or any mirrored pair
 appears. `refresh_dimension_normalization.sql` repeats the same join and
 additionally requires the same `normalized_label`.
@@ -486,7 +541,9 @@ usually surfaces a handful of new concepts that then apply to everything after i
 
 Refresh narrowly while iterating. `make refresh COMPANY_IDS=1,2` recomputes two
 companies in seconds; a full refresh over hundreds of companies is far slower and
-tells you nothing extra when you are testing one override.
+tells you nothing extra when you are testing one override. Diagnose narrowly
+too: `make diagnose` does not accept a company list, so filter the diagnostic
+SQL to those ids or the `LIMIT 50` pages belong to other companies.
 
 Back up before bulk re-ingestion with `make docker-backup`. Re-ingesting with
 `--override` deletes and reinserts facts, and the derived tables follow.

@@ -24,3 +24,18 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 6,srt:ConsolidationItemsAxis,Freight,,False,Product,Freight,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
 6,srt:ConsolidationItemsAxis,Rides,,False,Product,Mobility,Pre-Mobility segment name for OI
 6,srt:ConsolidationItemsAxis,Eats,,False,Product,Delivery,Pre-Delivery segment name for OI
+7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticMember,,False,Geographical,Domestic,Revenue is already Geographical; segment operating income used BusinessSegmentsAxis
+7,us-gaap:StatementBusinessSegmentsAxis,nflx:InternationalMember,,False,Geographical,International,Revenue is already Geographical; segment operating income used BusinessSegmentsAxis
+7,srt:ProductOrServiceAxis,Asia-Pacific,,False,Geographical,Asia-Pacific (APAC),Region filed on the product axis
+7,srt:ProductOrServiceAxis,Asia-Pacific (APAC),,False,Geographical,Asia-Pacific (APAC),Region filed on the product axis
+7,srt:ProductOrServiceAxis,"Europe, Middle East, and Africa",,False,Geographical,"Europe, Middle East, and Africa (EMEA)",Region filed on the product axis
+7,srt:ProductOrServiceAxis,"Europe, Middle East, and Africa (EMEA)",,False,Geographical,"Europe, Middle East, and Africa (EMEA)",Region filed on the product axis
+7,srt:ProductOrServiceAxis,Latin America,,False,Geographical,Latin America (LATAM),Region filed on the product axis
+7,srt:ProductOrServiceAxis,Latin America (LATAM),,False,Geographical,Latin America (LATAM),Region filed on the product axis
+7,srt:ProductOrServiceAxis,United States and Canada,,False,Geographical,United States and Canada (UCAN),Region filed on the product axis
+7,srt:ProductOrServiceAxis,United States and Canada (UCAN),,False,Geographical,United States and Canada (UCAN),Region filed on the product axis
+7,srt:ProductOrServiceAxis,nflx:DVDMember,,False,Product,DVD,Product line on the product axis
+7,srt:ProductOrServiceAxis,nflx:StreamingMember,,False,Product,Streaming,Product line on the product axis
+7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticDvdMember,,False,Product,Domestic DVD,2012-2019 DVD segment
+7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticStreamingMember,,False,Product,Domestic Streaming,2012-2019 streaming segment
+7,us-gaap:StatementBusinessSegmentsAxis,nflx:InternationalStreamingMember,,False,Product,International Streaming,2012-2019 streaming segment
