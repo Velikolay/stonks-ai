@@ -36,6 +36,22 @@ class SECXBRLParser:
             return True
         return is_na
 
+    def _print_sign(self, row: object) -> Optional[Decimal]:
+        """Return the presentation-linkbase sign without changing the value.
+
+        edgartools names this ``preferred_sign``. It is a print instruction
+        (+1 or -1). The instance amount stays in ``value``.
+        """
+        getter = getattr(row, "get", None)
+        sign = getter("preferred_sign") if getter else None
+        if self._is_nullish(sign):
+            return None
+        try:
+            return Decimal(str(sign))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid preferred_sign: {sign}")
+            return None
+
     def parse_filing(self, filing: Filing) -> list[FinancialFactCreate]:
         """Parse an XBRL filing and extract financial facts.
 
@@ -54,7 +70,9 @@ class SECXBRLParser:
             # Parse income statement
             income_facts = self._parse_statement(
                 xbrl.statements.income_statement().to_dataframe(
-                    include_unit=True, include_point_in_time=True
+                    include_unit=True,
+                    include_point_in_time=True,
+                    presentation=False,
                 ),
                 "Income Statement",
                 include_dimensions=True,
@@ -64,7 +82,9 @@ class SECXBRLParser:
             # Parse balance sheet
             balance_facts = self._parse_statement(
                 xbrl.statements.balance_sheet().to_dataframe(
-                    include_unit=True, include_point_in_time=True
+                    include_unit=True,
+                    include_point_in_time=True,
+                    presentation=False,
                 ),
                 "Balance Sheet",
                 include_dimensions=False,
@@ -74,7 +94,9 @@ class SECXBRLParser:
             # Parse cash flow statement
             cashflow_facts = self._parse_statement(
                 xbrl.statements.cashflow_statement().to_dataframe(
-                    include_unit=True, include_point_in_time=True
+                    include_unit=True,
+                    include_point_in_time=True,
+                    presentation=False,
                 ),
                 "Cash Flow Statement",
                 include_dimensions=False,
@@ -85,7 +107,9 @@ class SECXBRLParser:
             try:
                 comprehensive_income_facts = self._parse_statement(
                     xbrl.statements.comprehensive_income().to_dataframe(
-                        include_unit=True, include_point_in_time=True
+                        include_unit=True,
+                        include_point_in_time=True,
+                        presentation=False,
                     ),
                     "Comprehensive Income",
                     include_dimensions=False,
@@ -98,7 +122,9 @@ class SECXBRLParser:
             try:
                 equity_facts = self._parse_statement(
                     xbrl.statements.statement_of_equity().to_dataframe(
-                        include_unit=True, include_point_in_time=True
+                        include_unit=True,
+                        include_point_in_time=True,
+                        presentation=False,
                     ),
                     "Statement of Equity",
                     include_dimensions=False,
@@ -326,6 +352,7 @@ class SECXBRLParser:
                 is_abstract=is_abstract,
                 comparative_value=comparative_value_decimal,
                 weight=weight_decimal,
+                print_sign=self._print_sign(row),
                 unit=unit,
                 axis=axis,
                 member=member,
@@ -617,6 +644,7 @@ class SECXBRLParser:
                 is_abstract=False,
                 value=value_decimal,
                 weight=weight_decimal,
+                print_sign=self._print_sign(row),
                 comparative_value=comparative_value_decimal,
                 unit=unit,
                 axis=axis,
@@ -966,6 +994,7 @@ class SECXBRLParser:
                 is_abstract=is_abstract,
                 comparative_value=comparative_value_decimal,
                 weight=weight_decimal,
+                print_sign=self._print_sign(row),
                 unit=unit,
                 axis=None,
                 member=None,

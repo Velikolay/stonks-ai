@@ -16,11 +16,13 @@ BEGIN
             ff.concept,
             ff.label,
             ff.normalized_label,
-            -- Keep each period's reported value and calculation weight. Weight is a
+            -- value is the instance amount. print_sign is the print
+            -- instruction; display is value * print_sign. Weight is a
             -- linkbase coefficient, not a display-sign convention; rewriting history
             -- when weight flips (e.g. MSFT FY2014 expenses) invents false sign flips.
             ff.value,
             ff.weight,
+            ff.print_sign,
             ff.unit,
             ff.axis,
             ff.member,
@@ -56,6 +58,7 @@ BEGIN
         value,
         unit,
         weight,
+        print_sign,
         axis,
         member,
         statement,
@@ -88,6 +91,7 @@ BEGIN
         value,
         unit,
         weight,
+        print_sign,
         axis,
         member,
         statement,
@@ -110,6 +114,7 @@ BEGIN
         value,
         unit,
         weight,
+        print_sign,
         axis,
         member,
         statement,
@@ -132,6 +137,7 @@ BEGIN
         value = EXCLUDED.value,
         unit = EXCLUDED.unit,
         weight = EXCLUDED.weight,
+        print_sign = EXCLUDED.print_sign,
         axis = EXCLUDED.axis,
         member = EXCLUDED.member,
         statement = EXCLUDED.statement,

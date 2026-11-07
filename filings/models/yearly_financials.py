@@ -17,6 +17,7 @@ class YearlyFinancial(BaseModel):
     normalized_label: str
     value: Optional[Decimal] = None
     weight: Optional[Decimal] = None
+    print_sign: Optional[Decimal] = None
     unit: Optional[str] = None
     statement: Optional[str] = None
     axis: Optional[str] = None

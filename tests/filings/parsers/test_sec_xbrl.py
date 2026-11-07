@@ -512,3 +512,34 @@ class TestSECXBRLParser:
             assert facts[0].axis == "srt:ProductOrServiceAxis"
             assert facts[0].statement == "Disaggregated OperatingIncome (Product)"
             assert facts[0].label == "Operating Income - iPhone"
+
+    def test_statement_fact_keeps_instance_value_and_print_sign(self):
+        """Instance amount stays in value; preferred_sign is print_sign."""
+        parser = SECXBRLParser()
+        row = pd.Series(
+            {
+                "concept": "us-gaap_InterestExpenseNonoperating",
+                "label": "Interest expense",
+                "abstract": False,
+                "unit": "usd",
+                "2026-09-30 (YTD)": 622463000.0,
+                "2025-09-30 (YTD)": 542115000.0,
+                "weight": -1.0,
+                "preferred_sign": -1.0,
+                "point_in_time": False,
+            }
+        )
+
+        fact = parser._create_financial_fact_with_hierarchy(
+            row,
+            "Income Statement",
+            "2026-09-30 (YTD)",
+            "2025-09-30 (YTD)",
+            1,
+        )
+
+        assert fact is not None
+        assert fact.value == Decimal("622463000.0")
+        assert fact.comparative_value == Decimal("542115000.0")
+        assert fact.weight == Decimal("-1.0")
+        assert fact.print_sign == Decimal("-1.0")

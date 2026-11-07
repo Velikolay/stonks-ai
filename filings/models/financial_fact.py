@@ -28,6 +28,7 @@ class FinancialFactBase(BaseModel):
     value: Optional[Decimal] = Field(None, decimal_places=5)
     comparative_value: Optional[Decimal] = Field(None, decimal_places=5)
     weight: Optional[Decimal] = None
+    print_sign: Optional[Decimal] = None
     unit: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None

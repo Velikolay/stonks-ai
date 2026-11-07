@@ -134,6 +134,7 @@ def upgrade() -> None:
         sa.Column("value", sa.Numeric(), nullable=True),
         sa.Column("comparative_value", sa.Numeric(), nullable=True),
         sa.Column("weight", sa.Numeric(), nullable=True),
+        sa.Column("print_sign", sa.Numeric(), nullable=True),
         sa.Column("unit", sa.String(), nullable=True),
         sa.Column("axis", sa.String(), nullable=False),
         sa.Column("member", sa.String(), nullable=False),

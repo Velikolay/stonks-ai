@@ -116,6 +116,7 @@ class FinancialMetricResponse(BaseModel):
     normalized_label: str
     position: int = None
     weight: Optional[Decimal] = None
+    print_sign: Optional[Decimal] = None
     unit: Optional[str] = None
     statement: Optional[str] = None
     axis: Optional[str] = None
@@ -274,6 +275,7 @@ async def get_financials(
                 group_data = {
                     "values": [],
                     "weight": metric.weight,
+                    "print_sign": metric.print_sign,
                     "unit": metric.unit,
                     "abstracts": abstracts if abstracts else None,
                 }
@@ -313,6 +315,7 @@ async def get_financials(
                 normalized_label=normalized_label,
                 concept=group_data["concept"] if debug else None,
                 weight=group_data["weight"],
+                print_sign=group_data["print_sign"],
                 unit=group_data["unit"],
                 statement=statement,
                 axis=axis,
