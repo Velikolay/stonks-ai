@@ -141,6 +141,18 @@ class TestCompanyOperations:
         assert retrieved_company.id == original_company.id
         assert retrieved_company.name == original_company.name
 
+    async def test_insert_company_explicit_id_advances_sequence(self, db):
+        """An explicit id is stored and the next insert does not reuse it."""
+        pinned_id = await db.companies.insert_company(
+            CompanyCreate(name="Pinned Co"),
+            company_id=8,
+        )
+        assert pinned_id == 8
+
+        next_id = await db.companies.insert_company(CompanyCreate(name="Next Co"))
+        assert next_id is not None
+        assert next_id > 8
+
     async def test_insert_company_minimal_fields(self, db):
         """Test inserting company with minimal fields."""
         company_data = CompanyCreate(name="Test Company")

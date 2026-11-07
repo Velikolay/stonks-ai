@@ -1,0 +1,12 @@
+company_id,ticker,name
+1,AAPL,Apple Inc.
+2,GOOGL,Alphabet Inc.
+2,GOOG,Alphabet Inc.
+2,GOOGM,Alphabet Inc.
+2,GOOGN,Alphabet Inc.
+3,AMZN,AMAZON COM INC
+4,MSFT,MICROSOFT CORP
+5,TSLA,"Tesla, Inc."
+6,UBER,"Uber Technologies, Inc"
+7,NFLX,NETFLIX INC
+8,NVDA,NVIDIA CORP

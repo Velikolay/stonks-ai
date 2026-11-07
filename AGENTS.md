@@ -112,6 +112,14 @@ impossible to tell which override did what.
 | `FORMS` | Default `10-K,10-Q` |
 | `LIMIT` | Max filings per ticker per form; `0`, the default, loads every available filing |
 
+Company ids that the override CSVs use are pinned in
+[migrations/data/company-ids.csv](migrations/data/company-ids.csv). Migration
+0002 inserts those companies at those ids, and ingest uses the same file, so a
+fresh database lands Apple on 1, Alphabet on 2, Amazon on 3, Microsoft on 4,
+Tesla on 5, Uber on 6, Netflix on 7, and NVIDIA on 8. Company 0 stays the
+global override owner. Add a row there before writing a company-specific
+override for a new ticker.
+
 **Always load a company's complete XBRL history the first time you ingest it.**
 That is what the default `LIMIT=0` does, and it is not optional: normalization
 infers labels by chaining each period's comparative value back to the previous

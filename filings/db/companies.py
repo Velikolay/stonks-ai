@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, delete, func, insert, literal, select, update
+from sqlalchemy import MetaData, delete, func, insert, literal, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.sql import union_all
@@ -34,19 +34,40 @@ class CompanyOperationsAsync:
         self.tickers_table = metadata.tables["tickers"]
         self.filing_entities_table = metadata.tables["filing_entities"]
 
-    async def insert_company(self, company: CompanyCreate) -> Optional[int]:
-        """Insert a new company and return its ID."""
+    async def insert_company(
+        self, company: CompanyCreate, company_id: Optional[int] = None
+    ) -> Optional[int]:
+        """Insert a new company and return its ID.
+
+        Args:
+            company: Name and industry to store.
+            company_id: Id to insert. When set, the companies sequence is
+                advanced past it so the next automatic id does not collide.
+        """
         try:
             async with self.engine.connect() as conn:
+                values: dict[str, object] = {
+                    "name": company.name,
+                    "industry": company.industry,
+                }
+                if company_id is not None:
+                    values["id"] = company_id
                 stmt = (
                     insert(self.companies_table)
-                    .values(name=company.name, industry=company.industry)
+                    .values(**values)
                     .returning(self.companies_table.c.id)
                 )
                 result = await conn.execute(stmt)
-                company_id = result.scalar_one()
+                inserted_id = result.scalar_one()
+                if company_id is not None:
+                    await conn.execute(
+                        text(
+                            "SELECT setval('companies_id_seq', "
+                            "(SELECT MAX(id) FROM companies))"
+                        )
+                    )
                 await conn.commit()
-                return company_id
+                return inserted_id
 
         except SQLAlchemyError as e:
             logger.exception("Error inserting company: %s", e)

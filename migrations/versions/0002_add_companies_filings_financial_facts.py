@@ -6,6 +6,9 @@ Create Date: 2024-12-19 12:00:00.000000
 
 """
 
+import csv
+from pathlib import Path
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -25,13 +28,20 @@ def upgrade() -> None:
         sa.Column("industry", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    # Seed companies referenced by override CSVs in later migrations (0, 2, 5)
+    # Company 0 owns global overrides. The remaining ids are the lock in
+    # migrations/data/company-ids.csv, so override rows and ingest agree.
     op.execute(companies_table.insert().values(id=0, name="0", industry=None))
+    csv_path = Path(__file__).parent.parent / "data" / "company-ids.csv"
+    locked_names: dict[int, str] = {}
+    with open(csv_path, encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            locked_names.setdefault(int(row["company_id"]), row["name"].strip())
+    for company_id, name in sorted(locked_names.items()):
+        op.execute(
+            companies_table.insert().values(id=company_id, name=name, industry=None)
+        )
     op.execute(
-        companies_table.insert().values(id=2, name="Seed company 2", industry=None)
-    )
-    op.execute(
-        companies_table.insert().values(id=5, name="Seed company", industry=None)
+        sa.text("SELECT setval('companies_id_seq', (SELECT MAX(id) FROM companies))")
     )
     op.create_index(
         "ix_companies_name_prefix",

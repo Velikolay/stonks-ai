@@ -158,23 +158,6 @@ def upgrade() -> None:
                 logger.exception(f"Error processing row {row}")
                 raise e
 
-    known_company_ids = {
-        company_id
-        for (company_id,) in connection.execute(sa.text("SELECT id FROM companies"))
-    }
-    skipped = sorted(
-        {
-            int(row["company_id"])
-            for row in rows
-            if int(row["company_id"]) not in known_company_ids
-        }
-    )
-    if skipped:
-        logger.warning(
-            "Skipped concept overrides for unknown company_id(s) %s", skipped
-        )
-    rows = [row for row in rows if int(row["company_id"]) in known_company_ids]
-
     if rows:
         connection.execute(table.insert(), rows)
 

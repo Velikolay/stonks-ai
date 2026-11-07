@@ -7,8 +7,9 @@ from typing import Optional
 from dotenv import load_dotenv
 from edgar import Company
 
+from filings.company_ids import locked_company_id
 from filings.db import AsyncFilingsDatabase
-from filings.models.company import CompanyCreate
+from filings.models.company import CompanyCreate, CompanyUpdate
 from filings.models.filing import FilingCreate
 from filings.parsers.sec_xbrl import SECXBRLParser
 
@@ -185,6 +186,18 @@ class SECXBRLFilingsLoader:
                     exchange,
                 )
 
+            # A locked ticker always uses its pinned id, including when the
+            # ticker row is missing or stored under a different exchange.
+            pinned_id = locked_company_id(tickers)
+            if pinned_id is not None:
+                return await self._use_locked_company(
+                    company_id=pinned_id,
+                    tickers=tickers,
+                    exchange=exchange,
+                    name=company_name or tickers[0],
+                    industry=edgar_company.data.sic_description,
+                )
+
             # 1) Try to resolve existing company by any returned ticker
             for ticker in tickers:
                 existing = await self.database.companies.get_company_by_ticker(
@@ -198,7 +211,7 @@ class SECXBRLFilingsLoader:
                     )
                     return existing
 
-            # 2) Create new company, then attach all tickers to it (explicit create flow)
+            # 2) Create new company, then attach all tickers to it
             name_for_create = company_name or tickers[0]
             industry_for_create = edgar_company.data.sic_description
             company_id = await self.database.companies.insert_company(
@@ -243,6 +256,77 @@ class SECXBRLFilingsLoader:
         except Exception as e:
             logger.error(f"Error getting/creating company from edgar Company: {e}")
             return None
+
+    async def _use_locked_company(
+        self,
+        company_id: int,
+        tickers: list[str],
+        exchange: str,
+        name: str,
+        industry: Optional[str],
+    ):
+        """Return the pinned company, creating it at ``company_id`` when absent.
+
+        Args:
+            company_id: Id from the company-id lock file.
+            tickers: Tickers to attach to that company.
+            exchange: Exchange used for the ticker rows.
+            name: Company name from EDGAR.
+            industry: Industry from EDGAR.
+
+        Returns:
+            The company row, or None when the insert fails.
+        """
+        company = await self.database.companies.get_company_by_id(company_id)
+        if company is None:
+            inserted_id = await self.database.companies.insert_company(
+                CompanyCreate(name=name, industry=industry),
+                company_id=company_id,
+            )
+            if not inserted_id:
+                logger.error(
+                    "Failed to insert locked company id=%s for tickers %s",
+                    company_id,
+                    tickers,
+                )
+                return None
+            company = await self.database.companies.get_company_by_id(company_id)
+            if company is None:
+                logger.error(
+                    "Inserted locked company id=%s but could not reload it",
+                    company_id,
+                )
+                return None
+        else:
+            updated = await self.database.companies.update_company(
+                company_id=company_id,
+                company=CompanyUpdate(name=name, industry=industry),
+            )
+            if updated is not None:
+                company = updated
+
+        for ticker in tickers:
+            ok = await self.database.companies.upsert_ticker(
+                company_id=company.id,
+                ticker=ticker,
+                exchange=exchange,
+                status="active",
+            )
+            if not ok:
+                logger.warning(
+                    "Failed to upsert ticker mapping %s (%s) for company_id=%s",
+                    ticker,
+                    exchange,
+                    company.id,
+                )
+
+        logger.info(
+            "Using locked company %s (id=%s) for edgar tickers %s",
+            company.name,
+            company.id,
+            tickers,
+        )
+        return company
 
     def _calculate_fiscal_quarter(
         self, fiscal_period_end: Optional[str]

@@ -97,21 +97,30 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.data.sic_description = "Technology"
         mock_company_class.return_value = mock_edgar_company
 
-        # Mock existing company - use AsyncMock for async method
         existing_company = Mock()
         existing_company.id = 1
         existing_company.name = "Apple Inc."
-        mock_database.companies.get_company_by_ticker = AsyncMock(
+        mock_database.companies.get_company_by_id = AsyncMock(
             return_value=existing_company
         )
+        mock_database.companies.update_company = AsyncMock(
+            return_value=existing_company
+        )
+        mock_database.companies.upsert_ticker = AsyncMock(return_value=True)
 
         result = await loader._get_or_create_company(mock_edgar_company)
 
         assert result == existing_company
-        mock_database.companies.get_company_by_ticker.assert_called_once_with(
-            "AAPL", "NASDAQ"
+        mock_database.companies.get_company_by_id.assert_called_once_with(1)
+        mock_database.companies.insert_company.assert_not_called()
+        mock_database.companies.upsert_ticker.assert_called_once_with(
+            company_id=1,
+            ticker="AAPL",
+            exchange="NASDAQ",
+            status="active",
         )
 
     @patch("filings.sec_xbrl_filings_loader.Company")
@@ -124,9 +133,9 @@ class TestXBRLFilingsLoader:
         loader = SECXBRLFilingsLoader(mock_database)
 
         mock_edgar_company = Mock()
-        mock_edgar_company.tickers = ["AAPL"]
+        mock_edgar_company.tickers = ["ACME"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
-        mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.name = "Acme Inc."
         # Used to populate CompanyCreate.industry (must be a string for pydantic)
         mock_edgar_company.data.sic_description = "Technology"
         mock_company_class.return_value = mock_edgar_company
@@ -144,16 +153,50 @@ class TestXBRLFilingsLoader:
 
         assert result == new_company
         mock_database.companies.get_company_by_ticker.assert_called_once_with(
-            "AAPL", "NASDAQ"
+            "ACME", "NASDAQ"
         )
         mock_database.companies.insert_company.assert_called_once()
         mock_database.companies.get_company_by_id.assert_called_once_with(1)
         mock_database.companies.upsert_ticker.assert_called_once_with(
             company_id=1,
-            ticker="AAPL",
+            ticker="ACME",
             exchange="NASDAQ",
             status="active",
         )
+
+    @patch("filings.sec_xbrl_filings_loader.Company")
+    async def test_get_or_create_company_locked_id(self, mock_company_class):
+        """A locked ticker is inserted at its pinned id."""
+        mock_database = Mock(spec=AsyncFilingsDatabase)
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = SECXBRLFilingsLoader(mock_database)
+
+        mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["NVDA"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "NVIDIA CORP"
+        mock_edgar_company.data.sic_description = "Semiconductors"
+        mock_company_class.return_value = mock_edgar_company
+
+        new_company = Mock()
+        new_company.id = 8
+        new_company.name = "NVIDIA CORP"
+        mock_database.companies.get_company_by_id = AsyncMock(
+            side_effect=[None, new_company]
+        )
+        mock_database.companies.insert_company = AsyncMock(return_value=8)
+        mock_database.companies.upsert_ticker = AsyncMock(return_value=True)
+
+        result = await loader._get_or_create_company(mock_edgar_company)
+
+        assert result == new_company
+        mock_database.companies.insert_company.assert_called_once()
+        assert (
+            mock_database.companies.insert_company.call_args.kwargs["company_id"] == 8
+        )
+        mock_database.companies.get_company_by_ticker.assert_not_called()
 
     async def test_load_single_filing_new(self):
         """Test loading a new filing."""
@@ -389,6 +432,7 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.data.sic_description = "Technology"
         mock_edgar_company.cik = "0000320193"
         mock_filing = Mock()
         mock_filing.accession_number = "0001193125-24-000001"
@@ -399,9 +443,13 @@ class TestXBRLFilingsLoader:
             mock_company = Mock()
             mock_company.id = 1
             mock_company.name = "Apple Inc."
-            mock_database.companies.get_company_by_ticker = AsyncMock(
+            mock_database.companies.get_company_by_id = AsyncMock(
                 return_value=mock_company
             )
+            mock_database.companies.update_company = AsyncMock(
+                return_value=mock_company
+            )
+            mock_database.companies.upsert_ticker = AsyncMock(return_value=True)
             mock_database.companies.get_or_create_filing_entities_id = AsyncMock(
                 return_value=123
             )
@@ -438,6 +486,7 @@ class TestXBRLFilingsLoader:
         mock_edgar_company.tickers = ["AAPL"]
         mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
         mock_edgar_company.name = "Apple Inc."
+        mock_edgar_company.data.sic_description = "Technology"
         mock_edgar_company.cik = "0000320193"
         mock_edgar_company.get_filings.return_value = []
         mock_company_class.return_value = mock_edgar_company
@@ -445,9 +494,9 @@ class TestXBRLFilingsLoader:
         mock_company = Mock()
         mock_company.id = 1
         mock_company.name = "Apple Inc."
-        mock_database.companies.get_company_by_ticker = AsyncMock(
-            return_value=mock_company
-        )
+        mock_database.companies.get_company_by_id = AsyncMock(return_value=mock_company)
+        mock_database.companies.update_company = AsyncMock(return_value=mock_company)
+        mock_database.companies.upsert_ticker = AsyncMock(return_value=True)
         mock_database.companies.get_or_create_filing_entities_id = AsyncMock(
             return_value=123
         )
