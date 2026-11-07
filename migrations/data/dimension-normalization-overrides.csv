@@ -39,3 +39,12 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticDvdMember,,False,Product,Domestic DVD,2012-2019 DVD segment
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticStreamingMember,,False,Product,Domestic Streaming,2012-2019 streaming segment
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:InternationalStreamingMember,,False,Product,International Streaming,2012-2019 streaming segment
+4,us-gaap:StatementBusinessSegmentsAxis,amzn:AmazonWebServicesSegmentMember,,False,Product,AWS,Segment AWS revenue already sits on Product; align operating income and expenses
+4,us-gaap:ConsolidationItemsAxis,AWS,,False,Product,AWS,AWS segment member aligned with the product-line cut
+4,us-gaap:ConsolidationItemsAxis,Amazon Web Services Segment,,False,Product,AWS,2015-2016 AWS segment label
+4,us-gaap:ConsolidationItemsAxis,North America,,False,us-gaap:StatementBusinessSegmentsAxis,North America,Segment member aligned with the business-segment axis
+4,us-gaap:ConsolidationItemsAxis,North America Segment,,False,us-gaap:StatementBusinessSegmentsAxis,North America,2015-2016 North America operating-expense member
+4,us-gaap:ConsolidationItemsAxis,International,,False,us-gaap:StatementBusinessSegmentsAxis,International,Segment member aligned with the business-segment axis
+4,us-gaap:ConsolidationItemsAxis,International Segment,,False,us-gaap:StatementBusinessSegmentsAxis,International,2015-2016 International operating-expense member
+4,amzn:RegionReportingInformationByRegionAxis,amzn:NorthAmericaMember,,False,us-gaap:StatementBusinessSegmentsAxis,North America,2010 regional cost of revenue; same cut as the North America segment
+4,amzn:RegionReportingInformationByRegionAxis,amzn:InternationalRegionsMember,,False,us-gaap:StatementBusinessSegmentsAxis,International,2010 regional cost of revenue; same cut as the International segment

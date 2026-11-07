@@ -1,5 +1,6 @@
 """Tests for SEC 10-Q parser."""
 
+from datetime import date
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -543,3 +544,75 @@ class TestSECXBRLParser:
         assert fact.comparative_value == Decimal("542115000.0")
         assert fact.weight == Decimal("-1.0")
         assert fact.print_sign == Decimal("-1.0")
+
+    def test_supplement_segment_dimensions_fills_note_only_members(self):
+        """Segment-note members are added when the face statement lacks them."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenue"
+        face.period_end = None
+
+        already = Mock()
+        already.concept = "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
+        already.axis = "srt:ProductOrServiceAxis"
+        already.member = "nvda:GamingMember"
+        already.label = "Revenue"
+        already.period_end = date(2022, 1, 30)
+
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax",
+                ],
+                "label": ["Revenue", "Gaming", "Data Center", "Customer A"],
+                "abstract": [False, False, False, False],
+                "dimension": [False, True, True, True],
+                "dimension_axis": [
+                    None,
+                    "srt:ProductOrServiceAxis",
+                    "srt:ProductOrServiceAxis",
+                    "srt:MajorCustomersAxis",
+                ],
+                "dimension_member": [
+                    None,
+                    "nvda_GamingMember",
+                    "nvda_DataCenterMember",
+                    "nvda_CustomerAMember",
+                ],
+                "dimension_member_label": [None, "Gaming", "Data Center", "Customer A"],
+                "unit": ["usd", "usd", "usd", "usd"],
+                "weight": [1.0, 1.0, 1.0, 1.0],
+                "preferred_sign": [1.0, 1.0, 1.0, 1.0],
+                "point_in_time": [False, False, False, False],
+                "2022-01-30 (FY)": [100.0, 40.0, 60.0, 25.0],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure", "disclosure"],
+                "name": [
+                    "Segment Information - Schedule of Revenue by Market (Details)",
+                    "Debt - Schedule of Debt (Details)",
+                ],
+                "role_name": ["SegmentRevenue", "DebtSchedule"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = parser._supplement_segment_dimensions(xbrl, [face, already])
+
+        assert [fact.member for fact in added] == ["nvda:DataCenterMember"]
+        assert added[0].axis == "srt:ProductOrServiceAxis"
+        assert added[0].label == "Revenue"
+        assert added[0].value == Decimal("60.0")
+        xbrl.statements.get.assert_called_once_with("SegmentRevenue")

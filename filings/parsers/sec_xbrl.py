@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 class SECXBRLParser:
     """Parser for SEC XBRL (10-Q, 10-K, etc.) filings using edgartools."""
 
+    # Axes used for product, geography, and reportable-segment cuts. Disclosure
+    # tables also carry customer and residual axes; those are not series we keep.
+    _SEGMENT_AXES = frozenset(
+        {
+            "srt:ProductOrServiceAxis",
+            "srt:StatementGeographicalAxis",
+            "srt:ConsolidationItemsAxis",
+            "srt:StatementBusinessSegmentsAxis",
+            "us-gaap:ProductOrServiceAxis",
+            "us-gaap:StatementGeographicalAxis",
+            "us-gaap:ConsolidationItemsAxis",
+            "us-gaap:StatementBusinessSegmentsAxis",
+        }
+    )
+
     def __init__(self):
         """Initialize the parser."""
         pass
@@ -78,6 +93,7 @@ class SECXBRLParser:
                 include_dimensions=True,
             )
             facts.extend(income_facts)
+            facts.extend(self._supplement_segment_dimensions(xbrl, income_facts))
 
             # Parse balance sheet
             balance_facts = self._parse_statement(
@@ -141,6 +157,90 @@ class SECXBRLParser:
         except Exception as e:
             logger.error(f"Error parsing filing {filing.accession_number}: {e}")
             return []
+
+    def _supplement_segment_dimensions(
+        self,
+        xbrl,
+        income_facts: list[FinancialFactCreate],
+    ) -> list[FinancialFactCreate]:
+        """Add segment members that the face income statement did not carry.
+
+        Some filings tag market, geography, and reportable-segment amounts only
+        in the segment note. The face statement then has the total and none of
+        the members, which leaves a one-year hole in every series. A disclosure
+        row is kept when it reuses an income-statement concept or label, sits on
+        a segment axis, and is not already present from the face statement.
+
+        Args:
+            xbrl: XBRL object from edgartools
+            income_facts: Facts already parsed from the face income statement
+
+        Returns:
+            Dimension facts to add alongside the face statement
+        """
+        face_concepts = {fact.concept for fact in income_facts if not fact.axis}
+        face_labels = {
+            fact.label.strip().lower()
+            for fact in income_facts
+            if not fact.axis and fact.label
+        }
+        if not face_concepts and not face_labels:
+            return []
+
+        seen = {
+            (fact.concept, fact.axis, fact.member, fact.period_end)
+            for fact in income_facts
+            if fact.axis
+        }
+        added: list[FinancialFactCreate] = []
+        try:
+            available = xbrl.statements.list_available()
+        except Exception:
+            logger.exception("Could not list statements for segment disclosures")
+            return []
+
+        for _, row in available.iterrows():
+            if str(row.get("category", "")) != "disclosure":
+                continue
+            name = str(row.get("name", ""))
+            if "Segment" not in name:
+                continue
+            role = row.get("role_name")
+            if not role or (isinstance(role, float) and math.isnan(role)):
+                continue
+            try:
+                statement = xbrl.statements.get(role)
+                if statement is None:
+                    continue
+                frame = statement.to_dataframe(
+                    include_unit=True,
+                    include_point_in_time=True,
+                    presentation=False,
+                )
+            except Exception:
+                logger.exception("Could not read segment disclosure %s", role)
+                continue
+
+            for fact in self._parse_statement(
+                frame, "Income Statement", include_dimensions=True
+            ):
+                if not fact.axis or fact.axis not in self._SEGMENT_AXES:
+                    continue
+                label = fact.label.strip().lower() if fact.label else ""
+                if fact.concept not in face_concepts and label not in face_labels:
+                    continue
+                key = (fact.concept, fact.axis, fact.member, fact.period_end)
+                if key in seen:
+                    continue
+                seen.add(key)
+                added.append(fact)
+
+        if added:
+            logger.info(
+                "Added %s segment-disclosure facts missing from the income statement",
+                len(added),
+            )
+        return added
 
     def _parse_statement(
         self,
