@@ -55,7 +55,6 @@ class SECXBRLFilingsLoader:
                 f"Loading {form} filings for {ticker} (limit: {limit}, override: {override})"
             )
 
-            # Resolve edgar company once (used for both ticker metadata and filings)
             edgar_company = Company(ticker)
 
             # Get or create company

@@ -48,3 +48,7 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 4,us-gaap:ConsolidationItemsAxis,International Segment,,False,us-gaap:StatementBusinessSegmentsAxis,International,2015-2016 International operating-expense member
 4,amzn:RegionReportingInformationByRegionAxis,amzn:NorthAmericaMember,,False,us-gaap:StatementBusinessSegmentsAxis,North America,2010 regional cost of revenue; same cut as the North America segment
 4,amzn:RegionReportingInformationByRegionAxis,amzn:InternationalRegionsMember,,False,us-gaap:StatementBusinessSegmentsAxis,International,2010 regional cost of revenue; same cut as the International segment
+9,us-gaap:StatementBusinessSegmentsAxis,fb:FamilyOfAppsMember,,False,Product,Family of Apps,Family of Apps revenue is also tagged on ProductOrServiceAxis; keep operating income on Product
+9,us-gaap:StatementBusinessSegmentsAxis,meta:FamilyOfAppsMember,,False,Product,Family of Apps,Successor member of fb:FamilyOfAppsMember
+9,us-gaap:StatementBusinessSegmentsAxis,fb:RealityLabsMember,,False,Product,Reality Labs,Reality Labs revenue and operating income share this segment
+9,us-gaap:StatementBusinessSegmentsAxis,meta:RealityLabsMember,,False,Product,Reality Labs,Successor member of fb:RealityLabsMember

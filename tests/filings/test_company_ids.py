@@ -17,6 +17,7 @@ def test_locked_tickers_match_override_companies() -> None:
     assert mapping["UBER"] == 6
     assert mapping["NFLX"] == 7
     assert mapping["NVDA"] == 8
+    assert mapping["META"] == 9
 
 
 def test_locked_company_id_is_case_insensitive() -> None:
