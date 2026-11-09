@@ -62,10 +62,33 @@ class SECXBRLParser:
         if self._is_nullish(sign):
             return None
         try:
-            return Decimal(str(sign))
+            return self._to_decimal(sign)
         except (ValueError, TypeError):
             logger.warning(f"Invalid preferred_sign: {sign}")
             return None
+
+    @staticmethod
+    def _to_decimal(value: object) -> Decimal:
+        """Convert a statement amount to Decimal.
+
+        edgartools returns binary floats, so 54.65 can arrive as
+        54.650000000000006. The fact model allows five decimal places.
+
+        Args:
+            value: Raw amount from a statement row.
+
+        Returns:
+            The amount rounded to five decimal places when it has more.
+
+        Raises:
+            ValueError: ``value`` is not a number.
+            TypeError: ``value`` cannot be converted to a string.
+        """
+        parsed = Decimal(str(value))
+        exponent = parsed.as_tuple().exponent
+        if isinstance(exponent, int) and exponent < -5:
+            return parsed.quantize(Decimal("0.00001"))
+        return parsed
 
     def parse_filing(self, filing: Filing) -> list[FinancialFactCreate]:
         """Parse an XBRL filing and extract financial facts.
@@ -323,6 +346,7 @@ class SECXBRLParser:
                 and dimensions_df is not None
                 and not dimensions_df.empty
             ):
+                collapsed_members = self._collapsed_dimension_members(dimensions_df)
                 for _, row in dimensions_df.iterrows():
                     fact = self._create_dimension_fact(
                         row=row,
@@ -330,6 +354,7 @@ class SECXBRLParser:
                         period_col=latest_period_col,
                         comparative_period_col=comparative_period_col,
                         base_label_by_concept=base_label_by_concept,
+                        collapsed_members=collapsed_members,
                     )
                     if fact:
                         facts.append(fact)
@@ -339,6 +364,39 @@ class SECXBRLParser:
 
         return facts
 
+    def _collapsed_dimension_members(self, dimensions_df: pd.DataFrame) -> set[str]:
+        """Return member ids that edgartools reused across several children.
+
+        Args:
+            dimensions_df: Statement rows with ``dimension`` true.
+
+        Returns:
+            Member ids, in ``prefix:Name`` form, whose ``"{label} - "`` suffix
+            is not unique.
+        """
+        suffixes: dict[str, set[str]] = {}
+        if dimensions_df is None or dimensions_df.empty:
+            return set()
+
+        for _, row in dimensions_df.iterrows():
+            raw_member = row.get("dimension_member")
+            member_label = row.get("dimension_member_label")
+            label = row.get("label")
+            if raw_member is None or not isinstance(member_label, str):
+                continue
+            if not isinstance(label, str):
+                continue
+            prefix = f"{member_label} - "
+            if not label.startswith(prefix):
+                continue
+            suffix = label[len(prefix) :].strip()
+            if not suffix:
+                continue
+            member = str(raw_member).replace("_", ":")
+            suffixes.setdefault(member, set()).add(suffix)
+
+        return {member for member, found in suffixes.items() if len(found) > 1}
+
     def _create_dimension_fact(
         self,
         row,
@@ -346,6 +404,7 @@ class SECXBRLParser:
         period_col: str,
         comparative_period_col: Optional[str],
         base_label_by_concept: dict[str, str],
+        collapsed_members: Optional[set[str]] = None,
     ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact from a dimension row (dimension=True).
 
@@ -358,6 +417,8 @@ class SECXBRLParser:
             period_col: Latest period column name (e.g. "2025-06-28 (Q2)")
             comparative_period_col: Comparative period column name (if any)
             base_label_by_concept: Mapping from SEC concept -> base fact label
+            collapsed_members: Member ids reused for several children. Their
+                label suffix replaces the member.
 
         Returns:
             FinancialFactCreate or None if invalid
@@ -371,10 +432,21 @@ class SECXBRLParser:
             member = row.get("dimension_member").replace("_", ":")
             member_label = row.get("dimension_member_label")
 
-            # Hack to overcome poor dimension label in edgartools
-            if row.get("label").startswith(f"{member_label} - "):
-                member = row.get("label").replace(f"{member_label} - ", "")
-                member_label = row.get("label").replace(f"{member_label} - ", "")
+            # edgartools stamps the parent member on every child and puts the
+            # child name after "{parent label} - ". Rewrite only those reused
+            # member ids. A distinct member labeled "{member} - {group}"
+            # already names itself; the suffix is the group, not a new member.
+            label_text = row.get("label")
+            prefix = f"{member_label} - " if isinstance(member_label, str) else None
+            if (
+                collapsed_members
+                and member in collapsed_members
+                and prefix
+                and isinstance(label_text, str)
+                and label_text.startswith(prefix)
+            ):
+                member = label_text[len(prefix) :]
+                member_label = member
 
             if not axis or member is None:
                 return None
@@ -397,7 +469,7 @@ class SECXBRLParser:
             value_decimal = None
             if not is_abstract and not self._is_nullish(value):
                 try:
-                    value_decimal = Decimal(str(value))
+                    value_decimal = self._to_decimal(value)
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid value for concept {concept}: {value}")
                     return None
@@ -406,7 +478,7 @@ class SECXBRLParser:
             comparative_value_decimal = None
             if not is_abstract and not self._is_nullish(comparative_value):
                 try:
-                    comparative_value_decimal = Decimal(str(comparative_value))
+                    comparative_value_decimal = self._to_decimal(comparative_value)
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid comparative value for concept {concept}: {comparative_value}"
@@ -415,7 +487,7 @@ class SECXBRLParser:
             weight_decimal = None
             if not is_abstract and not self._is_nullish(weight):
                 try:
-                    weight_decimal = Decimal(str(weight))
+                    weight_decimal = self._to_decimal(weight)
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid weight for concept {concept}: {weight}")
 
@@ -684,7 +756,7 @@ class SECXBRLParser:
 
             # Convert value to Decimal
             try:
-                value_decimal = Decimal(str(value))
+                value_decimal = self._to_decimal(value)
             except (ValueError, TypeError):
                 logger.warning(f"Invalid value for disaggregated {metric}: {value}")
                 return None
@@ -698,7 +770,7 @@ class SECXBRLParser:
             )
             if not self._is_nullish(comparative_value):
                 try:
-                    comparative_value_decimal = Decimal(str(comparative_value))
+                    comparative_value_decimal = self._to_decimal(comparative_value)
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid comparative value for disaggregated {metric}: {comparative_value}"
@@ -707,7 +779,7 @@ class SECXBRLParser:
             weight_decimal = None
             if not self._is_nullish(weight):
                 try:
-                    weight_decimal = Decimal(str(weight))
+                    weight_decimal = self._to_decimal(weight)
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid weight for disaggregated {metric}: {weight}"
@@ -1017,7 +1089,7 @@ class SECXBRLParser:
             value_decimal = None
             if not is_abstract and not self._is_nullish(value):
                 try:
-                    value_decimal = Decimal(str(value))
+                    value_decimal = self._to_decimal(value)
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid value for concept {concept}: {value}")
                     return None
@@ -1026,7 +1098,7 @@ class SECXBRLParser:
             comparative_value_decimal = None
             if not is_abstract and not self._is_nullish(comparative_value):
                 try:
-                    comparative_value_decimal = Decimal(str(comparative_value))
+                    comparative_value_decimal = self._to_decimal(comparative_value)
                 except (ValueError, TypeError):
                     logger.warning(
                         f"Invalid comparative value for concept {concept}: {comparative_value}"
@@ -1035,7 +1107,7 @@ class SECXBRLParser:
             weight_decimal = None
             if not is_abstract and not self._is_nullish(weight):
                 try:
-                    weight_decimal = Decimal(str(weight))
+                    weight_decimal = self._to_decimal(weight)
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid weight for concept {concept}: {weight}")
 

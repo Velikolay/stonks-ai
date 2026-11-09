@@ -245,6 +245,48 @@ class TestXBRLFilingsLoader:
 
         mock_database.financial_facts.insert_financial_facts_batch.assert_called_once()
 
+    async def test_load_single_filing_uses_nearby_statement_period(self):
+        """A cover date one day off the XBRL period still keeps that period."""
+        mock_database = Mock(spec=AsyncFilingsDatabase)
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = SECXBRLFilingsLoader(mock_database)
+
+        mock_database.filings.get_filing_by_number = AsyncMock(return_value=None)
+        mock_database.filings.insert_filing = AsyncMock(return_value=1)
+        mock_database.financial_facts.insert_financial_facts_batch = AsyncMock(
+            return_value=[1]
+        )
+
+        mock_filing = Mock()
+        mock_filing.accession_number = "0001193125-13-201635"
+        mock_filing.form = "10-Q"
+        mock_filing.filing_date = "2013-05-06"
+        mock_filing.period_of_report = "2013-03-31"
+        mock_filing.url = "https://example.com/filing"
+
+        current = Mock(spec=FinancialFactCreate)
+        current.period_end = date(2013, 3, 30)
+        comparative = Mock(spec=FinancialFactCreate)
+        comparative.period_end = date(2012, 3, 31)
+        loader.parser.parse_filing = Mock(return_value=[current, comparative])
+
+        result, was_updated = await loader._load_single_filing(
+            mock_filing, 10, 1, override=False
+        )
+
+        assert result == 1
+        assert was_updated is False
+        call_args = mock_database.filings.insert_filing.call_args[0][0]
+        assert call_args.fiscal_period_end == date(2013, 3, 30)
+        assert call_args.fiscal_quarter == 1
+        assert call_args.fiscal_year == 2013
+        inserted = mock_database.financial_facts.insert_financial_facts_batch.call_args[
+            0
+        ][0]
+        assert inserted == [current]
+
     async def test_load_single_filing_new_call_args(self):
         """Verify insert_filing call args from test_load_single_filing_new."""
         mock_database = Mock(spec=AsyncFilingsDatabase)

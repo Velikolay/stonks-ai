@@ -52,3 +52,30 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 9,us-gaap:StatementBusinessSegmentsAxis,meta:FamilyOfAppsMember,,False,Product,Family of Apps,Successor member of fb:FamilyOfAppsMember
 9,us-gaap:StatementBusinessSegmentsAxis,fb:RealityLabsMember,,False,Product,Reality Labs,Reality Labs revenue and operating income share this segment
 9,us-gaap:StatementBusinessSegmentsAxis,meta:RealityLabsMember,,False,Product,Reality Labs,Successor member of fb:RealityLabsMember
+10,srt:ConsolidationItemsAxis,Client,,False,Product,Client,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Gaming,,False,Product,Gaming,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Client and Gaming,,False,Product,Client and Gaming,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Data Center,,False,Product,Data Center,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Datacenter,,False,Product,Data Center,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Embedded,,False,Product,Embedded,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Computing and Graphics,,False,Product,Computing and Graphics,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,"Enterprise, Embedded and Semi-Custom",,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,Enterprise Embedded And Semi-Customs,,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,All other,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,us-gaap:MaterialReconcilingItemsMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:ConsolidationItemsAxis,Computing and Graphics,,False,Product,Computing and Graphics,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:ConsolidationItemsAxis,"Enterprise, Embedded and Semi-Custom",,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
+10,us-gaap:ConsolidationItemsAxis,us-gaap:MaterialReconcilingItemsMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:ClientMember,,False,Product,Client,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:GamingMember,,False,Product,Gaming,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:DataCenterMember,,False,Product,Data Center,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:DatacenterMember,,False,Product,Data Center,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:EmbeddedMember,,False,Product,Embedded,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:ComputingandGraphicsMember,,False,Product,Computing and Graphics,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:ComputingSolutionsMember,,False,Product,Computing and Graphics,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:EnterpriseEmbeddedandSemiCustomMember,,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:GraphicsandVisualSolutionsMember,,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:GraphicsMember,,False,Product,Graphics and Visual Solutions,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:AllOtherMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue

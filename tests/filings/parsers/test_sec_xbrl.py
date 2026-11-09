@@ -545,6 +545,35 @@ class TestSECXBRLParser:
         assert fact.weight == Decimal("-1.0")
         assert fact.print_sign == Decimal("-1.0")
 
+    def test_statement_fact_rounds_binary_float_noise(self):
+        """Float artifacts longer than five decimals still become a fact."""
+        parser = SECXBRLParser()
+        row = pd.Series(
+            {
+                "concept": "us-gaap_EarningsPerShareDiluted",
+                "label": "Diluted earnings per share",
+                "abstract": False,
+                "unit": "usdPerShare",
+                "2023-09-30 (FY)": 54.72,
+                "2022-09-30 (FY)": 54.650000000000006,
+                "weight": 1.0,
+                "preferred_sign": 1.0,
+                "point_in_time": False,
+            }
+        )
+
+        fact = parser._create_financial_fact_with_hierarchy(
+            row,
+            "Income Statement",
+            "2023-09-30 (FY)",
+            "2022-09-30 (FY)",
+            1,
+        )
+
+        assert fact is not None
+        assert fact.value == Decimal("54.72")
+        assert fact.comparative_value == Decimal("54.65000")
+
     def test_supplement_segment_dimensions_fills_note_only_members(self):
         """Segment-note members are added when the face statement lacks them."""
         parser = SECXBRLParser()
@@ -616,3 +645,55 @@ class TestSECXBRLParser:
         assert added[0].label == "Revenue"
         assert added[0].value == Decimal("60.0")
         xbrl.statements.get.assert_called_once_with("SegmentRevenue")
+
+    def test_dimension_suffix_rewrites_only_reused_members(self):
+        """A shared parent member takes the label suffix; a distinct member does not."""
+        parser = SECXBRLParser()
+        period = "2025-03-29 (Q1)"
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax"
+                ]
+                * 4,
+                "label": [
+                    "Operating Segments - Data Center",
+                    "Operating Segments - Embedded",
+                    "Client - Client and Gaming",
+                    "Gaming - Client and Gaming",
+                ],
+                "abstract": [False] * 4,
+                "dimension": [True] * 4,
+                "dimension_axis": [
+                    "srt:ConsolidationItemsAxis",
+                    "srt:ConsolidationItemsAxis",
+                    "srt:ProductOrServiceAxis",
+                    "srt:ProductOrServiceAxis",
+                ],
+                "dimension_member": [
+                    "us-gaap_OperatingSegmentsMember",
+                    "us-gaap_OperatingSegmentsMember",
+                    "amd_ClientMember",
+                    "amd_GamingMember",
+                ],
+                "dimension_member_label": [
+                    "Operating Segments",
+                    "Operating Segments",
+                    "Client",
+                    "Gaming",
+                ],
+                "unit": ["usd"] * 4,
+                "weight": [1.0] * 4,
+                "preferred_sign": [1.0] * 4,
+                "point_in_time": [False] * 4,
+                period: [3674.0, 823.0, 2294.0, 647.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        by_member = {fact.member: fact.member_label for fact in facts}
+
+        assert by_member["Data Center"] == "Data Center"
+        assert by_member["Embedded"] == "Embedded"
+        assert by_member["amd:ClientMember"] == "Client"
+        assert by_member["amd:GamingMember"] == "Gaming"

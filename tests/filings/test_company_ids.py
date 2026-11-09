@@ -18,6 +18,9 @@ def test_locked_tickers_match_override_companies() -> None:
     assert mapping["NFLX"] == 7
     assert mapping["NVDA"] == 8
     assert mapping["META"] == 9
+    assert mapping["AMD"] == 10
+    assert mapping["V"] == 11
+    assert mapping["MA"] == 12
 
 
 def test_locked_company_id_is_case_insensitive() -> None:

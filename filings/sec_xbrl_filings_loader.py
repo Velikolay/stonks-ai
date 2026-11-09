@@ -1,8 +1,9 @@
 """Loaders for downloading and persisting SEC XBRL filings."""
 
 import logging
+from collections import Counter
 from datetime import date
-from typing import Optional
+from typing import Optional, Sequence
 
 from dotenv import load_dotenv
 from edgar import Company
@@ -16,6 +17,11 @@ from filings.parsers.sec_xbrl import SECXBRLParser
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+# A 52/53-week filer can put the calendar month-end on the submission header
+# and the last Saturday in XBRL. Six days covers that gap. A prior quarter
+# or prior year sits far outside it, so comparative columns stay excluded.
+_PERIOD_MATCH_DAYS = 6
 
 
 class SECXBRLFilingsLoader:
@@ -327,6 +333,41 @@ class SECXBRLFilingsLoader:
         )
         return company
 
+    def _reporting_period_end(
+        self,
+        facts: Sequence,
+        cover_period_end: Optional[date],
+    ) -> Optional[date]:
+        """Return the statement period that belongs to this filing.
+
+        Facts dated within :data:`_PERIOD_MATCH_DAYS` of the cover date are
+        the current period. When the cover date itself has no facts, the
+        most common nearby statement date is used instead.
+
+        Args:
+            facts: Facts parsed from the filing, including comparative columns.
+            cover_period_end: ``period_of_report`` from the submission header.
+
+        Returns:
+            The period end to store on the filing and to keep facts for.
+        """
+        if cover_period_end is None:
+            return None
+
+        near = [
+            fact.period_end
+            for fact in facts
+            if getattr(fact, "period_end", None) is not None
+            and abs((fact.period_end - cover_period_end).days) <= _PERIOD_MATCH_DAYS
+        ]
+        if not near:
+            return cover_period_end
+
+        counts = Counter(near)
+        if counts[cover_period_end] == max(counts.values()):
+            return cover_period_end
+        return counts.most_common(1)[0][0]
+
     def _calculate_fiscal_quarter(
         self, fiscal_period_end: Optional[str]
     ) -> Optional[int]:
@@ -397,8 +438,25 @@ class SECXBRLFilingsLoader:
                     f"Deleted existing filing {filing.accession_number} and its facts"
                 )
 
-            # Calculate fiscal quarter from period end date
-            fiscal_quarter = self._calculate_fiscal_quarter(filing.period_of_report)
+            # Parse before insert so the filing period follows the statements
+            # when the cover date and the XBRL date disagree by a few days.
+            facts = self.parser.parse_filing(filing)
+            cover_period_end = self._parse_date(filing.period_of_report)
+            reporting_period_end = self._reporting_period_end(facts, cover_period_end)
+            if (
+                reporting_period_end is not None
+                and reporting_period_end != cover_period_end
+            ):
+                logger.warning(
+                    "Filing %s cover period %s; using statement period %s",
+                    filing.accession_number,
+                    cover_period_end,
+                    reporting_period_end,
+                )
+
+            fiscal_quarter = self._calculate_fiscal_quarter(
+                reporting_period_end.isoformat() if reporting_period_end else None
+            )
 
             # Create filing record
             filing_data = FilingCreate(
@@ -408,11 +466,9 @@ class SECXBRLFilingsLoader:
                 number=filing.accession_number,
                 form_type=filing.form,
                 filing_date=self._parse_date(filing.filing_date),
-                fiscal_period_end=self._parse_date(filing.period_of_report),
+                fiscal_period_end=reporting_period_end,
                 fiscal_year=(
-                    self._parse_date(filing.period_of_report).year
-                    if filing.period_of_report
-                    else None
+                    reporting_period_end.year if reporting_period_end else None
                 ),
                 fiscal_quarter=fiscal_quarter,
                 public_url=filing.url,
@@ -424,10 +480,6 @@ class SECXBRLFilingsLoader:
                 logger.error(f"Failed to insert filing {filing.accession_number}")
                 return 0, False
 
-            # Parse financial facts
-            facts = self.parser.parse_filing(filing)
-
-            # Filter invalid facts
             valid_facts = [
                 fact
                 for fact in facts
@@ -442,7 +494,10 @@ class SECXBRLFilingsLoader:
 
             if len(valid_facts) != len(facts):
                 logger.warning(
-                    f"Skipped {len(facts) - len(valid_facts)} facts due to period end mismatch for filing {filing.accession_number} and period end {filing.period_of_report}"
+                    "Skipped %s facts outside period %s for filing %s",
+                    len(facts) - len(valid_facts),
+                    filing_data.fiscal_period_end,
+                    filing.accession_number,
                 )
 
             # Set filing_id for all valid facts
