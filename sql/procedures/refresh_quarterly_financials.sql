@@ -113,6 +113,7 @@ BEGIN
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
+            k.fiscal_period_end AS annual_period_end,
             -- Stocks (period NULL) and weighted-average share counts are not
             -- additive across sub-periods; never YTD-difference them. EPS stays
             -- on the normal YTD→discrete path.
@@ -123,15 +124,17 @@ BEGIN
                     'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
                 )
             ) AS is_non_additive,
+            LAG(q.period_end) OVER w AS prev_period_end,
             CASE
-                WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
-                THEN LAG(value) OVER w
+                WHEN (q.period_end - LAG(q.period_end) OVER w) BETWEEN 80 AND 100
+                THEN LAG(q.value) OVER w
                 ELSE NULL
             END AS prev_value
         FROM quarterly_filings_raw q
+        LEFT JOIN filings k ON k.id = q.fiscal_tag
         WINDOW w AS (
-            PARTITION BY company_id, statement, normalized_label, axis, member
-            ORDER BY period_end
+            PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member
+            ORDER BY q.period_end
         )
     ),
     quarterly_filings AS (
@@ -164,7 +167,26 @@ BEGIN
             position,
             is_abstract,
             is_synthetic,
-            source_type
+            source_type,
+            -- No earlier quarter in the series: this YTD cannot be reduced to
+            -- one quarter, so it is not shown. A later gap still has an earlier
+            -- quarter and stays.
+            (
+                period = 'YTD'
+                AND prev_period_end IS NULL
+                AND NOT is_non_additive
+            ) AS drop_ytd,
+            -- Raw nine-month total on the quarter before the 10-K. Used for Q4
+            -- when the dropped YTD means the discrete quarters are incomplete.
+            -- value here is the pre-difference amount.
+            CASE
+                WHEN period = 'YTD'
+                    AND NOT is_non_additive
+                    AND COALESCE(unit, '') <> 'usdPerShare'
+                    AND annual_period_end IS NOT NULL
+                    AND (annual_period_end - period_end) BETWEEN 80 AND 100
+                THEN value
+            END AS q3_ytd
         FROM quarterly_filings_with_prev
     ),
     annual_filings AS (
@@ -204,11 +226,23 @@ BEGIN
             axis,
             member,
             fiscal_tag,
-            SUM(value) AS value,
-            -- Residual Q4 is only safe when Q1–Q3 already exist. Otherwise
-            -- annual−Σquarters dumps every missing quarter into Q4 (e.g. a
-            -- geo member tagged only in Q1 + 10-K).
-            COUNT(DISTINCT fiscal_quarter) AS quarter_count
+            CASE
+                -- Three discrete quarters sum to Q1–Q3. Otherwise a dropped
+                -- opening YTD leaves a hole, and the nine-month total is the
+                -- subtrahend. Per-share rows have no q3_ytd.
+                WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
+                THEN SUM(value) FILTER (WHERE NOT drop_ytd)
+                WHEN BOOL_OR(drop_ytd)
+                THEN MAX(q3_ytd)
+                ELSE SUM(value) FILTER (WHERE NOT drop_ytd)
+            END AS value,
+            CASE
+                WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
+                THEN 3
+                WHEN BOOL_OR(drop_ytd) AND MAX(q3_ytd) IS NOT NULL
+                THEN 3
+                ELSE COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd)
+            END AS quarter_count
         FROM quarterly_filings
         GROUP BY
             company_id,
@@ -284,6 +318,7 @@ BEGIN
         is_synthetic,
         source_type
     FROM quarterly_filings
+    WHERE NOT drop_ytd
 
     UNION ALL
 
