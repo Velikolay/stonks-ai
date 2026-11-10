@@ -198,10 +198,12 @@ the previous quarter when that quarter ended 80 to 100 days earlier. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
 when all three earlier quarters already exist for that series (label + axis +
 member). A YTD with no earlier quarter in the series is not a quarter and is
-left out of the quarterly table. Q4 is then the annual figure minus the
-nine-month YTD on the quarter before the 10-K, instead of a sum of quarters
-that were never all there. A later gap in an existing series stays as its own
-quarter. Sparse series (e.g. a geo member tagged only in Q1 and
+left out of the quarterly table, unless the next year's filing reports that
+missing period as a comparative. That comparative is added as a
+`comparative_backfill` prior period, so the opening YTD reduces to one
+quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
+figure minus the nine-month YTD on the quarter before the 10-K. A later gap
+in an existing series stays as its own quarter. Sparse series (e.g. a geo member tagged only in Q1 and
 the 10-K) are left without a calculated Q4 rather than dumping the residual
 into the year-end quarter. Balance Sheet and share-count lines are
 point-in-time and come from the annual filing instead of being summed. Per-share

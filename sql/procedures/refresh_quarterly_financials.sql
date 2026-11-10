@@ -61,6 +61,8 @@ BEGIN
             ff.member,
             ff.period_end,
             ff.period,
+            ff.comparative_period_end,
+            ff.comparative_value,
             ff.is_abstract,
             ff.is_synthetic,
             ff.form_type AS source_type,
@@ -104,11 +106,69 @@ BEGIN
             latest_position AS position,
             period_end,
             period,
+            comparative_period_end,
+            comparative_value,
             is_abstract,
             is_synthetic,
-            source_type
+            source_type,
+            false AS is_comparative_backfill
         FROM all_filings_data
         WHERE source_type IN ('10-Q', '10-Q/A')
+    ),
+    series_start AS (
+        SELECT DISTINCT ON (company_id, statement, normalized_label, axis, member) *
+        FROM quarterly_filings_raw
+        ORDER BY company_id, statement, normalized_label, axis, member, period_end
+    ),
+    -- The period before a series opens, taken from the next year's comparative.
+    -- It only feeds the differencing below and is filtered from the output.
+    comparative_backfill AS (
+        SELECT DISTINCT ON (s.company_id, s.statement, s.normalized_label, s.axis, s.member)
+            s.company_id,
+            n.filing_id,
+            abs(hashtextextended(
+                'quarterly-prior|' || s.company_id::text || '|' || s.statement
+                || '|' || s.normalized_label || '|' || s.axis || '|' || s.member
+                || '|' || n.comparative_period_end::text,
+                0
+            )) AS id,
+            s.parent_id,
+            s.fiscal_year,
+            n.fiscal_quarter,
+            s.fiscal_tag,
+            s.label,
+            s.normalized_label,
+            n.comparative_value AS value,
+            s.unit,
+            s.statement,
+            s.concept,
+            s.axis,
+            s.member,
+            s.abstract_id,
+            s.weight,
+            s.print_sign,
+            s.position,
+            n.comparative_period_end AS period_end,
+            n.period,
+            NULL::date AS comparative_period_end,
+            NULL::numeric AS comparative_value,
+            false AS is_abstract,
+            true AS is_synthetic,
+            'calculated' AS source_type,
+            true AS is_comparative_backfill
+        FROM series_start s
+        JOIN quarterly_filings_raw n
+            ON n.company_id = s.company_id
+            AND n.statement = s.statement
+            AND n.normalized_label = s.normalized_label
+            AND n.axis = s.axis
+            AND n.member = s.member
+            AND n.comparative_value IS NOT NULL
+            AND (s.period_end - n.comparative_period_end) BETWEEN 80 AND 100
+        WHERE s.period = 'YTD'
+        ORDER BY
+            s.company_id, s.statement, s.normalized_label, s.axis, s.member,
+            n.period_end
     ),
     quarterly_filings_with_prev AS (
         SELECT
@@ -130,7 +190,11 @@ BEGIN
                 THEN LAG(q.value) OVER w
                 ELSE NULL
             END AS prev_value
-        FROM quarterly_filings_raw q
+        FROM (
+            SELECT * FROM quarterly_filings_raw
+            UNION ALL
+            SELECT * FROM comparative_backfill
+        ) q
         LEFT JOIN filings k ON k.id = q.fiscal_tag
         WINDOW w AS (
             PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member
@@ -149,10 +213,8 @@ BEGIN
             label,
             normalized_label,
             CASE
-                WHEN is_non_additive THEN value
-                WHEN period = 'Q' THEN value
-                WHEN period = 'YTD' AND prev_value IS NULL THEN value
-                WHEN period = 'YTD' AND prev_value IS NOT NULL THEN value - prev_value
+                WHEN period = 'YTD' AND NOT is_non_additive AND prev_value IS NOT NULL
+                THEN value - prev_value
                 ELSE value
             END AS value,
             weight,
@@ -168,9 +230,9 @@ BEGIN
             is_abstract,
             is_synthetic,
             source_type,
-            -- No earlier quarter in the series: this YTD cannot be reduced to
-            -- one quarter, so it is not shown. A later gap still has an earlier
-            -- quarter and stays.
+            is_comparative_backfill,
+            -- No earlier quarter: this YTD cannot be reduced to one quarter,
+            -- so it is not shown. A later gap stays.
             (
                 period = 'YTD'
                 AND prev_period_end IS NULL
@@ -226,23 +288,13 @@ BEGIN
             axis,
             member,
             fiscal_tag,
+            -- Three discrete quarters sum to Q1–Q3. Otherwise subtract the
+            -- nine-month total. Per-share rows have no q3_ytd, so no Q4.
             CASE
-                -- Three discrete quarters sum to Q1–Q3. Otherwise a dropped
-                -- opening YTD leaves a hole, and the nine-month total is the
-                -- subtrahend. Per-share rows have no q3_ytd.
                 WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
                 THEN SUM(value) FILTER (WHERE NOT drop_ytd)
-                WHEN BOOL_OR(drop_ytd)
-                THEN MAX(q3_ytd)
-                ELSE SUM(value) FILTER (WHERE NOT drop_ytd)
-            END AS value,
-            CASE
-                WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
-                THEN 3
-                WHEN BOOL_OR(drop_ytd) AND MAX(q3_ytd) IS NOT NULL
-                THEN 3
-                ELSE COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd)
-            END AS quarter_count
+                ELSE MAX(q3_ytd)
+            END AS value
         FROM quarterly_filings
         GROUP BY
             company_id,
@@ -292,7 +344,8 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
-            AND q.quarter_count = 3
+            -- Abstracts have no value but children point at the 10-K header.
+            AND (q.value IS NOT NULL OR a.is_abstract)
     )
     SELECT
         id,
@@ -319,6 +372,7 @@ BEGIN
         source_type
     FROM quarterly_filings
     WHERE NOT drop_ytd
+        AND NOT is_comparative_backfill
 
     UNION ALL
 
