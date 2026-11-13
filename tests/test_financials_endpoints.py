@@ -1,6 +1,7 @@
 """Tests for financials endpoints."""
 
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -250,6 +251,54 @@ def client() -> TestClient:
     from app import app
 
     return TestClient(app)
+
+
+class TestGetFinancialsBreakdowns:
+    """Test that get_financials exposes dimension breakdowns."""
+
+    @patch("api.financials.filings_db")
+    def test_values_carry_their_breakdowns(self, mock_filings_db, client):
+        """Each yearly value lists the member sets that add up to it."""
+        mock_company = Mock()
+        mock_company.id = 1
+        mock_filings_db.companies.get_company_by_ticker = AsyncMock(
+            return_value=mock_company
+        )
+        split = [
+            {"axis": "Product", "members": ["Products", "Services"]},
+            {"axis": "Geographical", "members": ["Americas", "Europe"]},
+        ]
+
+        def row(row_id: int, year: int, breakdowns) -> SimpleNamespace:
+            return SimpleNamespace(
+                id=row_id,
+                normalized_label="Revenue",
+                label="Revenue",
+                statement="Income Statement",
+                axis=None,
+                member=None,
+                value=125.0,
+                weight=None,
+                print_sign=None,
+                unit="usd",
+                is_abstract=False,
+                abstract_id=None,
+                fiscal_year=year,
+                period_end=date(year, 9, 28),
+                breakdowns=breakdowns,
+            )
+
+        mock_filings_db.yearly_financials.get_yearly_financials = AsyncMock(
+            return_value=[row(1, 2024, split), row(2, 2023, None)]
+        )
+
+        response = client.get(
+            "/financials/?ticker=AAPL&granularity=yearly&normalized_labels=Revenue"
+        )
+
+        assert response.status_code == 200
+        values = response.json()[0]["values"]
+        assert [v.get("breakdowns") for v in values] == [split, None]
 
 
 class TestGetFilingsEndpoint:

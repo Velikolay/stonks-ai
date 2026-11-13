@@ -65,6 +65,7 @@ BEGIN
             ff.comparative_value,
             ff.is_abstract,
             ff.is_synthetic,
+            ff.breakdowns,
             ff.form_type AS source_type,
             f.fiscal_year,
             f.fiscal_quarter,
@@ -111,7 +112,8 @@ BEGIN
             is_abstract,
             is_synthetic,
             source_type,
-            false AS is_comparative_backfill
+            false AS is_comparative_backfill,
+            breakdowns
         FROM all_filings_data
         WHERE source_type IN ('10-Q', '10-Q/A')
     ),
@@ -155,7 +157,8 @@ BEGIN
             false AS is_abstract,
             true AS is_synthetic,
             'calculated' AS source_type,
-            true AS is_comparative_backfill
+            true AS is_comparative_backfill,
+            NULL::jsonb AS breakdowns
         FROM series_start s
         JOIN quarterly_filings_raw n
             ON n.company_id = s.company_id
@@ -231,6 +234,7 @@ BEGIN
             is_synthetic,
             source_type,
             is_comparative_backfill,
+            breakdowns,
             -- No earlier quarter: this YTD cannot be reduced to one quarter,
             -- so it is not shown. A later gap stays.
             (
@@ -276,6 +280,7 @@ BEGIN
             latest_position AS position,
             is_abstract,
             is_synthetic,
+            breakdowns,
             source_type
         FROM all_filings_data
         WHERE source_type IN ('10-K', '10-K/A')
@@ -327,6 +332,7 @@ BEGIN
             a.position,
             a.is_abstract,
             a.is_synthetic,
+            a.breakdowns,
             'calculated' AS source_type
         FROM annual_filings a
         JOIN quarterly_aggregation q
@@ -369,6 +375,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     FROM quarterly_filings
     WHERE NOT drop_ytd
@@ -398,6 +405,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     FROM annual_filings
     WHERE
@@ -438,8 +446,36 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     FROM missing_quarters;
+
+    -- A breakdown carried from the source fact can stop adding up once quarters
+    -- are derived, e.g. a member with no calculated Q4. Keep only the ones whose
+    -- members are all present and still sum to the row.
+    CREATE INDEX ON tmp_quarterly_financials_new (
+        company_id, statement, normalized_label, axis, period_end
+    );
+    ANALYZE tmp_quarterly_financials_new;
+
+    UPDATE tmp_quarterly_financials_new t
+    SET breakdowns = (
+        SELECT jsonb_agg(x.e ORDER BY x.ord)
+        FROM jsonb_array_elements(t.breakdowns) WITH ORDINALITY AS x(e, ord)
+        WHERE t.value = (
+            SELECT SUM(m.value)
+            FROM tmp_quarterly_financials_new m
+            WHERE
+                m.company_id = t.company_id
+                AND m.statement = t.statement
+                AND m.normalized_label = t.normalized_label
+                AND m.axis = x.e->>'axis'
+                AND m.period_end = t.period_end
+                AND m.member IN (SELECT jsonb_array_elements_text(x.e->'members'))
+            HAVING COUNT(*) = jsonb_array_length(x.e->'members')
+        )
+    )
+    WHERE t.breakdowns IS NOT NULL;
 
     DELETE FROM quarterly_financials qf
     WHERE
@@ -472,6 +508,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     )
     SELECT
@@ -496,6 +533,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     FROM tmp_quarterly_financials_new
     ON CONFLICT (id) DO UPDATE
@@ -520,6 +558,7 @@ BEGIN
         position = EXCLUDED.position,
         is_abstract = EXCLUDED.is_abstract,
         is_synthetic = EXCLUDED.is_synthetic,
+        breakdowns = EXCLUDED.breakdowns,
         source_type = EXCLUDED.source_type;
 END;
 $$;

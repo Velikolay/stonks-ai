@@ -30,6 +30,7 @@ BEGIN
             ff.period_end,
             ff.is_abstract,
             ff.is_synthetic,
+            ff.breakdowns,
             f.fiscal_year,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
             FIRST_VALUE(ff.position) OVER w AS latest_position
@@ -68,6 +69,7 @@ BEGIN
         latest_position AS position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         '10-K' AS source_type
     FROM all_filings_data;
 
@@ -101,6 +103,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     )
     SELECT
@@ -124,6 +127,7 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
+        breakdowns,
         source_type
     FROM tmp_yearly_financials_new
     ON CONFLICT (id) DO UPDATE
@@ -147,6 +151,7 @@ BEGIN
         position = EXCLUDED.position,
         is_abstract = EXCLUDED.is_abstract,
         is_synthetic = EXCLUDED.is_synthetic,
+        breakdowns = EXCLUDED.breakdowns,
         source_type = EXCLUDED.source_type;
 END;
 $$;

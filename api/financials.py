@@ -98,6 +98,13 @@ def _resolve_abstract_hierarchies(
     return abstracts_by_metric_id, abstract_concepts_by_metric_id
 
 
+class BreakdownResponse(BaseModel):
+    """Members of one axis that add up exactly to the value."""
+
+    axis: str
+    members: List[str]
+
+
 class FinancialMetricValue(BaseModel):
     """Model for individual financial metric values."""
 
@@ -108,6 +115,7 @@ class FinancialMetricValue(BaseModel):
     fiscal_quarter: Optional[int] = None
     source_type: Optional[str] = None
     is_synthetic: Optional[bool] = None
+    breakdowns: Optional[List[BreakdownResponse]] = None
 
 
 class FinancialMetricResponse(BaseModel):
@@ -300,6 +308,7 @@ async def get_financials(
                 period_end=period_end_str,
                 source_type=getattr(metric, "source_type", None) if debug else None,
                 is_synthetic=getattr(metric, "is_synthetic", None) if debug else None,
+                breakdowns=metric.breakdowns,
             )
             metric_groups[key]["values"].append(value_obj)
 

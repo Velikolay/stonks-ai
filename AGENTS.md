@@ -30,7 +30,7 @@ flowchart TD
 
 Raw facts are never modified. Every correction is expressed as an override row
 and applied by re-running the procedures, so the whole derived state is
-reproducible from EDGAR plus three CSVs.
+reproducible from EDGAR plus four CSVs.
 
 ## Setup
 
@@ -157,7 +157,7 @@ chains all seven.
 | `refresh_concept_normalization` | `concept_normalization` | Infers a canonical label per concept, then applies concept overrides |
 | `refresh_hierarchy_normalization` | `hierarchy_normalization` | Expands `parent_concept` edges from overrides across every concept in the same group |
 | `refresh_dimension_normalization` | `dimension_normalization` | Infers canonical axis and member labels, then applies dimension overrides |
-| `refresh_financial_facts_normalized` | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates |
+| `refresh_financial_facts_normalized` | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates, attaches breakdowns |
 | `refresh_quarterly_financials` | `quarterly_financials` | Converts YTD to discrete quarters and derives missing quarters |
 | `refresh_yearly_financials` | `yearly_financials` | Annual presentation layer from 10-K facts |
 
@@ -186,6 +186,25 @@ a row whose id is a hash of statement, concept, filing and company. Its value is
 the weighted rollup of its children. This is how subtotals that a company never
 tagged get created.
 
+**Breakdowns.** Summing every member of an axis over-counts, for two reasons.
+An axis can hold a subtotal beside its parts (Apple's Products beside iPhone,
+iPad, Mac and Wearables), and it can hold two splits of the same amount
+(Amazon's product and service sales beside its seven product lines; regions
+beside countries). A breakdown is a set of members on one axis that adds up
+exactly to a row in the same period, which is another member or the
+undimensioned line. After dedup, `refresh_financial_facts_normalized` keeps a
+set that adds up in at least two 10-Ks and writes it into the `breakdowns`
+column of every row where it adds up, 10-Q rows included; a set that only
+expands another one (iPhone, iPad, Mac, Wearables and Services beside Products
+and Services) is dropped. `yearly_financials` copies the column, and
+`quarterly_financials` keeps a breakdown only where it still adds up after
+quarters are derived. Several breakdowns on one row are alternatives. When a
+request filters by `labels` or `normalized_labels`, the API returns
+`breakdowns` on each value: show one at a time, sum its members for
+that period, and drill down through a member's own `breakdowns`. A member in no
+breakdown is not additive. Axes wider than 16 members and per-share amounts are
+skipped.
+
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
 member and period, then ranked: amendments first, then longest comparative-value
 chain, then lowest id. Losers get `is_duplicate = true`, and both
@@ -211,7 +230,7 @@ amounts are not residualled from an unsplit YTD.
 
 ## Override cookbook
 
-Three CSVs in [migrations/data/](migrations/data/), each the source of truth for
+Four CSVs in [migrations/data/](migrations/data/), each the source of truth for
 its table. `make overrides-load` replaces the table contents with the CSV, so
 deleting a line removes the override. Always follow with `make refresh`.
 
@@ -229,6 +248,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Expense reported positive in some years, negative in others | `concept-normalization-overrides.csv` | `weight` |
 | Segment or product members named differently across years | `dimension-normalization-overrides.csv` | `normalized_member_label` |
 | Same segment on Product for Revenue but ConsolidationItems for Operating Income | `dimension-normalization-overrides.csv` | `normalized_axis_label=Product` on the ConsolidationItems members |
+| A set of members that adds up to a subtotal or to the line is missing, or one is a coincidence | `dimension-breakdown-overrides.csv` | `parent_member`, `members` |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
 
@@ -303,6 +323,34 @@ per metric, so inference will not pull OI onto Product — override the members
 (and legacy names like Rides / Eats) explicitly. `13_dimension_axis_splits.sql`
 flags these splits.
 
+### `dimension-breakdown-overrides.csv`
+
+`company_id,normalized_label,axis,parent_member,members`
+
+One row is one breakdown, written with normalized axis and member labels.
+`members` is semicolon-separated. A blank `parent_member` is the undimensioned
+line. A blank `normalized_label` applies the row to every metric that reports
+the members on that axis. There are no global rows.
+
+The rows for one parent on one axis are its complete list of breakdowns: they
+replace everything inferred for that parent on that axis, and other axes keep
+their inferred breakdowns. Restate any inferred alternative you want to keep. A
+row with blank `members` leaves the parent without breakdowns.
+
+```csv
+1,Revenue,Geographical,,U.S.;China;Other countries
+1,Revenue,Geographical,,Americas;Asia-Pacific;China;Europe;Japan
+5,Revenue,Product,Automotive Revenues,Automotive sales;Automotive regulatory credits;Automotive leasing
+5,Revenue,Product,Total revenues from sales and services,
+```
+
+The first two pin Apple's two geographic splits. The third declares a split
+that inference missed (it needs two matching 10-K years). The fourth removes
+every breakdown of a subtotal. A declared breakdown skips the two-year and
+expansion rules but, like an inferred one, only lands on rows where its members
+add up, so a wrong one shows in `14`. Overriding a parent also hides any split
+that inference would find for it later.
+
 ### `financial-facts-overrides.csv`
 
 `id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global`
@@ -361,6 +409,7 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
+| `14_dimension_breakdowns.sql` | Breakdowns that do not add up in the presentation tables, axes with years no breakdown covers, added overrides that never add up, every breakdown with its years |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -379,6 +428,15 @@ Revenue is on `Product` while Operating Income (or similar) is still on
 `ConsolidationItemsAxis`. Filter-by-Product then looks empty for that metric.
 Remap the ConsolidationItems members to `Product` in
 `dimension-normalization-overrides.csv` (see the cookbook example).
+
+`14` checks the breakdowns. Its first query must stay empty: a row there means
+the members no longer add up in `yearly_financials` or `quarterly_financials`,
+which is a procedure bug. The second
+lists axes with 10-K years that no breakdown of the line covers. Treat those as
+candidates: add a row to `dimension-breakdown-overrides.csv` only for a split
+you confirmed in the filing. Partial disclosures (one country beside regions),
+segment profit before unallocated corporate costs, and equity-component or
+share-class axes are expected and stay listed.
 
 `09` deserves attention because nothing else surfaces it: the normalization
 procedure silently discards every fact whose group reports more than one distinct

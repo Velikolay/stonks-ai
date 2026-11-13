@@ -1,4 +1,4 @@
-"""Add dimension normalization overrides table
+"""Add dimension normalization and dimension breakdown overrides tables
 
 Revision ID: 0005
 Revises: 0004
@@ -122,8 +122,47 @@ def upgrade() -> None:
     if rows:
         connection.execute(table.insert(), rows)
 
+    # One row per breakdown: members of one axis that add up to a parent member,
+    # or to the undimensioned line when parent_member is ''. A parent's rows
+    # replace its inferred breakdowns; empty members leaves it without any.
+    breakdowns = op.create_table(
+        "dimension_breakdown_overrides",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("normalized_label", sa.String(), nullable=True),
+        sa.Column("axis", sa.String(), nullable=False),
+        sa.Column("parent_member", sa.String(), nullable=False),
+        sa.Column("members", sa.ARRAY(sa.String()), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["companies.id"],
+            name="fk_dimension_breakdown_overrides_company_id",
+        ),
+    )
+
+    csv_path = migration_dir.parent / "data" / "dimension-breakdown-overrides.csv"
+    with open(csv_path, "r", encoding="utf-8") as f:
+        breakdown_rows = [
+            {
+                "company_id": int(row["company_id"]),
+                "normalized_label": row["normalized_label"].strip() or None,
+                "axis": row["axis"].strip(),
+                "parent_member": row["parent_member"].strip(),
+                "members": [
+                    m.strip() for m in (row["members"] or "").split(";") if m.strip()
+                ],
+            }
+            for row in csv.DictReader(f)
+            if any(value for value in row.values())
+        ]
+    if breakdown_rows:
+        connection.execute(breakdowns.insert(), breakdown_rows)
+
 
 def downgrade() -> None:
+    op.drop_table("dimension_breakdown_overrides")
+
     # Drop triggers
     op.execute(
         "DROP TRIGGER IF EXISTS update_dimension_normalization_overrides_updated_at ON dimension_normalization_overrides"

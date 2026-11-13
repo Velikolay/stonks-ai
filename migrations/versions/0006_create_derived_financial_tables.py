@@ -121,6 +121,7 @@ def upgrade() -> None:
         sa.Column("abstract_id", sa.BigInteger(), nullable=True),
         sa.Column("is_synthetic", sa.Boolean(), nullable=False),
         sa.Column("is_duplicate", sa.Boolean(), nullable=False),
+        sa.Column("breakdowns", postgresql.JSONB(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -157,6 +158,7 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=True),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("is_synthetic", sa.Boolean(), nullable=False),
+        sa.Column("breakdowns", postgresql.JSONB(), nullable=True),
         sa.Column("source_type", sa.String(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -208,6 +210,7 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=True),
         sa.Column("is_abstract", sa.Boolean(), nullable=False),
         sa.Column("is_synthetic", sa.Boolean(), nullable=False),
+        sa.Column("breakdowns", postgresql.JSONB(), nullable=True),
         sa.Column("source_type", sa.String(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )

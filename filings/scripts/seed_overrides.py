@@ -5,8 +5,8 @@ its CSV, so removing a row from a CSV removes it from the database. This makes
 the edit-override / refresh loop repeatable without a full ``make db-reset``.
 
 Usage:
-    python -m filings.scripts.seed_overrides [--tables concept,dimension,facts]
-                                             [--dry-run]
+    python -m filings.scripts.seed_overrides
+        [--tables concept,dimension,facts,breakdowns] [--dry-run]
 """
 
 import argparse
@@ -34,15 +34,18 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "migrations" / "data"
 CONCEPT_CSV = DATA_DIR / "concept-normalization-overrides.csv"
 DIMENSION_CSV = DATA_DIR / "dimension-normalization-overrides.csv"
 FACTS_CSV = DATA_DIR / "financial-facts-overrides.csv"
+BREAKDOWNS_CSV = DATA_DIR / "dimension-breakdown-overrides.csv"
 
 CONCEPT_TABLE = "concept_normalization_overrides"
 DIMENSION_TABLE = "dimension_normalization_overrides"
 FACTS_TABLE = "financial_facts_overrides"
+BREAKDOWNS_TABLE = "dimension_breakdown_overrides"
 
 TABLE_CHOICES = {
     "concept": (CONCEPT_TABLE, CONCEPT_CSV),
     "dimension": (DIMENSION_TABLE, DIMENSION_CSV),
     "facts": (FACTS_TABLE, FACTS_CSV),
+    "breakdowns": (BREAKDOWNS_TABLE, BREAKDOWNS_CSV),
 }
 
 # CSV encoding (must match api/admin.py): empty -> None, __EMPTY__ -> ''
@@ -235,6 +238,32 @@ def parse_facts_rows(path: Path = FACTS_CSV) -> List[dict]:
     return parsed
 
 
+def parse_breakdown_rows(path: Path = BREAKDOWNS_CSV) -> List[dict]:
+    """Parse the dimension breakdown overrides CSV.
+
+    A blank ``parent_member`` is the undimensioned line; a blank
+    ``normalized_label`` applies the row to every metric. Blank ``members``
+    leaves the parent without breakdowns.
+    """
+    parsed = []
+    for row_num, row in _read_csv(path):
+        _require(row, ["company_id", "axis"], row_num)
+        members = [m.strip() for m in (row.get("members") or "").split(";")]
+        members = [m for m in members if m]
+        if len(members) == 1:
+            raise SeedError(f"Row {row_num}: members needs two entries or none")
+        parsed.append(
+            {
+                "company_id": _parse_int(row["company_id"], row_num, "company_id"),
+                "normalized_label": _optional(row.get("normalized_label")),
+                "axis": row["axis"].strip(),
+                "parent_member": _optional(row.get("parent_member")) or "",
+                "members": members,
+            }
+        )
+    return parsed
+
+
 async def _known_company_ids(conn: AsyncConnection, companies: Table) -> Set[int]:
     """Return the set of company ids that exist in the database."""
     result = await conn.execute(select(companies.c.id))
@@ -333,6 +362,7 @@ async def seed(tables: Sequence[str], dry_run: bool) -> None:
         "concept": (CONCEPT_TABLE, parse_concept_rows),
         "dimension": (DIMENSION_TABLE, parse_dimension_rows),
         "facts": (FACTS_TABLE, parse_facts_rows),
+        "breakdowns": (BREAKDOWNS_TABLE, parse_breakdown_rows),
     }
     parsed = {name: (parsers[name][0], parsers[name][1]()) for name in tables}
 

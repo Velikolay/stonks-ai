@@ -318,6 +318,23 @@ Yearly Data:
 ]
 ```
 
+Pass `axis` to get the member series of one axis. When you filter by `labels`
+or `normalized_labels`, a value can carry `breakdowns`: sets of members on one
+axis that add up exactly to it in that period.
+
+```json
+{"normalized_label": "Revenue", "values": [
+  {"value": 416161000000, "period_end": "2025-09-27", "breakdowns": [
+    {"axis": "Geographical", "members": ["China", "Other countries", "U.S."]},
+    {"axis": "Product", "members": ["Products", "Services"]}
+  ]}
+]}
+```
+
+Several breakdowns on one value are alternative splits of the same amount, so
+show one at a time. To drill down, request that axis and use a member's own
+`breakdowns`. A member in no breakdown is not additive.
+
 #### Get Normalized Labels
 ```
 GET /financials/normalized-labels?granularity=quarterly

@@ -551,13 +551,24 @@ class TestXBRLFilingsLoader:
         assert "message" in result
         assert "No 10-Q filings found" in result["message"]
 
-    async def test_load_company_filings_company_error(self):
+    @patch("filings.sec_xbrl_filings_loader.Company")
+    async def test_load_company_filings_company_error(self, mock_company_class):
         """Test loading when company creation fails."""
         mock_database = Mock(spec=AsyncFilingsDatabase)
         mock_database.companies = Mock()
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)
+
+        # Mock edgar Company so we exercise the DB create-failure path
+        # (not the live edgar "Company not found" exception).
+        mock_edgar_company = Mock()
+        mock_edgar_company.tickers = ["INVALID"]
+        mock_edgar_company.get_exchanges.return_value = ["NASDAQ"]
+        mock_edgar_company.name = "Invalid Co."
+        mock_edgar_company.data.sic_description = "Unknown"
+        mock_edgar_company.cik = "0000000000"
+        mock_company_class.return_value = mock_edgar_company
 
         # Mock company creation failure - use AsyncMock for async methods
         mock_database.companies.get_company_by_ticker = AsyncMock(return_value=None)
