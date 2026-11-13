@@ -258,15 +258,19 @@ class TestGetFinancialsBreakdowns:
 
     @patch("api.financials.filings_db")
     def test_values_carry_their_breakdowns(self, mock_filings_db, client):
-        """Each yearly value lists the member sets that add up to it."""
+        """Each yearly value lists the member sets that add up to it, or fall short."""
         mock_company = Mock()
         mock_company.id = 1
         mock_filings_db.companies.get_company_by_ticker = AsyncMock(
             return_value=mock_company
         )
         split = [
-            {"axis": "Product", "members": ["Products", "Services"]},
-            {"axis": "Geographical", "members": ["Americas", "Europe"]},
+            {"axis": "Product", "members": ["Products", "Services"], "partial": False},
+            {
+                "axis": "Geographical",
+                "members": ["Americas", "Europe"],
+                "partial": True,
+            },
         ]
 
         def row(row_id: int, year: int, breakdowns) -> SimpleNamespace:

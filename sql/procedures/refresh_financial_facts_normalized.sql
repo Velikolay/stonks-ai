@@ -468,7 +468,8 @@ BEGIN
     -- Breakdowns: sets of members on one axis that add up exactly to another
     -- row in the same period, either a member or the undimensioned line. Only
     -- rows that survive dedup take part, so a breakdown holds on the values the
-    -- presentation tables show. Per-share amounts are not additive.
+    -- presentation tables show. Per-share amounts are not additive. A known set
+    -- that falls short in some period is attached there as partial.
     CREATE TEMP TABLE tmp_breakdown_rows ON COMMIT DROP AS
     SELECT
         id,
@@ -578,6 +579,27 @@ BEGIN
         ) s
         WHERE cardinality(s.members) >= 2
     ),
+    ties AS (
+        -- Members with the same value in the same period, e.g. a region and a
+        -- country that happen to coincide.
+        SELECT
+            x.company_id,
+            x.statement,
+            x.normalized_label,
+            x.axis,
+            x.period_end,
+            x.member,
+            y.member AS twin
+        FROM members x
+        JOIN members y
+            ON y.company_id = x.company_id
+            AND y.statement = x.statement
+            AND y.normalized_label = x.normalized_label
+            AND y.axis = x.axis
+            AND y.period_end = x.period_end
+            AND y.value = x.value
+            AND y.member <> x.member
+    ),
     matches AS (
         SELECT
             t.id,
@@ -588,7 +610,22 @@ BEGIN
             t.period_end,
             t.is_annual,
             t.parent_member,
-            s.members
+            s.members,
+            -- Swapping a member for its twin gives the same sum, so this
+            -- period cannot tell the two sets apart.
+            EXISTS (
+                SELECT 1
+                FROM ties x
+                WHERE
+                    x.company_id = t.company_id
+                    AND x.statement = t.statement
+                    AND x.normalized_label = t.normalized_label
+                    AND x.axis = t.axis
+                    AND x.period_end = t.period_end
+                    AND x.member = ANY(s.members)
+                    AND NOT (x.twin = ANY(s.members))
+                    AND x.twin <> t.parent_member
+            ) AS is_ambiguous
         FROM subsets s
         JOIN targets t
             ON t.company_id = s.company_id
@@ -601,14 +638,15 @@ BEGIN
     ),
     kept AS (
         -- A single matching 10-K can be a coincidence, so the same set must
-        -- match in at least two. It then holds in every period where it adds up.
+        -- match in at least two, not counting ambiguous ones. It then holds in
+        -- every period where it adds up.
         SELECT m.*
         FROM matches m
         JOIN (
             SELECT company_id, statement, normalized_label, axis, parent_member, members
             FROM matches
             GROUP BY company_id, statement, normalized_label, axis, parent_member, members
-            HAVING COUNT(*) FILTER (WHERE is_annual) >= 2
+            HAVING COUNT(*) FILTER (WHERE is_annual AND NOT is_ambiguous) >= 2
         ) e
             USING (company_id, statement, normalized_label, axis, parent_member, members)
     ),
@@ -662,7 +700,14 @@ BEGIN
         -- Override rows for a parent on an axis are its complete list of
         -- breakdowns, so they replace everything inferred for it. A row with
         -- no members leaves the parent without breakdowns.
-        SELECT i.id, i.axis, i.members
+        SELECT
+            i.id,
+            i.company_id,
+            i.statement,
+            i.normalized_label,
+            i.axis,
+            i.parent_member,
+            i.members
         FROM immediate i
         WHERE NOT EXISTS (
             SELECT 1
@@ -677,7 +722,14 @@ BEGIN
     declared AS (
         -- A declared breakdown skips the two-10-K rule and the expansion rule,
         -- but like any other it only lands where its members add up.
-        SELECT t.id, t.axis, o.members
+        SELECT
+            t.id,
+            t.company_id,
+            t.statement,
+            t.normalized_label,
+            t.axis,
+            t.parent_member,
+            o.members
         FROM overrides o
         JOIN axis_groups g
             ON g.company_id = o.company_id
@@ -699,17 +751,56 @@ BEGIN
                 WHERE u.name = ANY(o.members)
             )
     ),
+    exact AS (
+        SELECT * FROM inferred
+        UNION
+        SELECT * FROM declared
+    ),
+    partial AS (
+        -- A set that adds up elsewhere but falls short in this period, so a
+        -- split stays continuous across years. The members present (at least
+        -- two, none negative) are below the parent; the rest is unallocated.
+        SELECT t.id, t.axis, array_agg(u.name ORDER BY u.name) AS members
+        FROM (
+            SELECT DISTINCT
+                company_id, statement, normalized_label, axis, parent_member, members
+            FROM exact
+        ) k
+        JOIN targets t
+            ON t.company_id = k.company_id
+            AND t.statement = k.statement
+            AND t.normalized_label = k.normalized_label
+            AND t.axis = k.axis
+            AND t.parent_member = k.parent_member
+        JOIN axis_groups g
+            ON g.company_id = t.company_id
+            AND g.statement = t.statement
+            AND g.normalized_label = t.normalized_label
+            AND g.axis = t.axis
+            AND g.period_end = t.period_end
+        CROSS JOIN LATERAL unnest(g.names, g.amounts) AS u(name, amount)
+        WHERE
+            u.name = ANY(k.members)
+            AND t.value > 0
+        GROUP BY t.id, t.axis, t.value, k.members
+        HAVING
+            COUNT(*) >= 2
+            AND MIN(u.amount) >= 0
+            AND SUM(u.amount) < t.value
+    ),
     breakdowns AS (
         SELECT
             id,
             jsonb_agg(
-                jsonb_build_object('axis', axis, 'members', to_jsonb(members))
-                ORDER BY axis, cardinality(members), members
+                jsonb_build_object(
+                    'axis', axis, 'members', to_jsonb(members), 'partial', partial
+                )
+                ORDER BY partial, axis, cardinality(members), members
             ) AS breakdowns
         FROM (
-            SELECT * FROM inferred
+            SELECT DISTINCT id, axis, members, false AS partial FROM exact
             UNION
-            SELECT * FROM declared
+            SELECT id, axis, members, true FROM partial
         ) b
         GROUP BY id
     )

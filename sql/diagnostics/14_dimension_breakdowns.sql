@@ -3,7 +3,9 @@
 -- member or the undimensioned line. refresh_financial_facts_normalized keeps a
 -- set when it adds up in at least two 10-Ks and attaches it wherever it adds
 -- up. Several breakdowns on one row are alternatives (regions and countries),
--- so summing every member of an axis over-counts.
+-- so summing every member of an axis over-counts. In a period where a known
+-- set falls short, it is attached with partial = true; the shortfall is
+-- unallocated and may be a mapping gap.
 --
 -- Fix with dimension-breakdown-overrides.csv: list a parent's breakdowns to
 -- replace what was inferred for it. Confirm in the filing first.
@@ -46,7 +48,11 @@ checked AS (
 SELECT source, company_id, statement, normalized_label, axis, member, period_end,
        value, members_total, b AS breakdown
 FROM checked
-WHERE members_total IS DISTINCT FROM value
+WHERE CASE
+    WHEN (b->>'partial')::boolean
+        THEN members_total IS NULL OR members_total >= value
+    ELSE members_total IS DISTINCT FROM value
+END
 ORDER BY company_id, statement, normalized_label, period_end
 LIMIT 50;
 
@@ -72,6 +78,7 @@ covered AS (
               AND y.fiscal_year = a.fiscal_year
               AND y.axis = ''
               AND b->>'axis' = a.axis
+              AND NOT (b->>'partial')::boolean
         ) AS has_breakdown
     FROM axis_years a
 )
@@ -102,13 +109,14 @@ WHERE cardinality(o.members) >= 2
         AND (o.normalized_label IS NULL OR y.normalized_label = o.normalized_label)
         AND y.member = o.parent_member
         AND b->>'axis' = o.axis
+        AND NOT (b->>'partial')::boolean
         AND b->'members' @> to_jsonb(o.members)
         AND jsonb_array_length(b->'members') = cardinality(o.members)
   )
 ORDER BY o.company_id, o.axis, o.parent_member
 LIMIT 50;
 
-\echo '--- Every breakdown with the 10-K years it adds up in ---'
+\echo '--- Partial breakdowns in 10-K years: the unallocated share is often a member left off the axis ---'
 SELECT
     y.company_id,
     y.statement,
@@ -116,9 +124,37 @@ SELECT
     b->>'axis' AS axis,
     y.member AS parent_member,
     b->'members' AS members,
+    y.fiscal_year,
+    y.value,
+    round((100 * (1 - (
+        SELECT SUM(m.value)
+        FROM yearly_financials m
+        WHERE m.company_id = y.company_id
+          AND m.statement = y.statement
+          AND m.normalized_label = y.normalized_label
+          AND m.fiscal_year = y.fiscal_year
+          AND m.axis = b->>'axis'
+          AND m.member IN (SELECT jsonb_array_elements_text(b->'members'))
+    ) / y.value))::numeric, 1) AS unallocated_pct
+FROM yearly_financials y
+CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
+WHERE (b->>'partial')::boolean
+ORDER BY y.company_id, y.statement, y.normalized_label, axis, parent_member, y.fiscal_year
+LIMIT 50;
+
+\echo '--- Every breakdown with the 10-K years it adds up in, or is partial in ---'
+SELECT
+    y.company_id,
+    y.statement,
+    y.normalized_label,
+    b->>'axis' AS axis,
+    y.member AS parent_member,
+    b->'members' AS members,
+    (b->>'partial')::boolean AS partial,
     array_agg(y.fiscal_year ORDER BY y.fiscal_year) AS fiscal_years
 FROM yearly_financials y
 CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-GROUP BY y.company_id, y.statement, y.normalized_label, b->>'axis', y.member, b->'members'
+GROUP BY y.company_id, y.statement, y.normalized_label, b->>'axis', y.member,
+         b->'members', b->>'partial'
 ORDER BY y.company_id, y.statement, y.normalized_label, axis, parent_member, fiscal_years
 LIMIT 50;

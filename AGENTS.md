@@ -193,17 +193,22 @@ iPad, Mac and Wearables), and it can hold two splits of the same amount
 beside countries). A breakdown is a set of members on one axis that adds up
 exactly to a row in the same period, which is another member or the
 undimensioned line. After dedup, `refresh_financial_facts_normalized` keeps a
-set that adds up in at least two 10-Ks and writes it into the `breakdowns`
+set that adds up in at least two 10-Ks (a year where one of its members could
+be swapped for another member of equal value does not count, so a region and a
+country that coincide never mix) and writes it into the `breakdowns`
 column of every row where it adds up, 10-Q rows included; a set that only
 expands another one (iPhone, iPad, Mac, Wearables and Services beside Products
-and Services) is dropped. `yearly_financials` copies the column, and
-`quarterly_financials` keeps a breakdown only where it still adds up after
-quarters are derived. Several breakdowns on one row are alternatives. When a
-request filters by `labels` or `normalized_labels`, the API returns
-`breakdowns` on each value: show one at a time, sum its members for
-that period, and drill down through a member's own `breakdowns`. A member in no
-breakdown is not additive. Axes wider than 16 members and per-share amounts are
-skipped.
+and Services) is dropped. In a period where a set does not add up, it is still
+attached, with `partial: true`, when at least two of its members are present,
+none negative, and they fall short of a positive row; the shortfall is
+unallocated. That keeps each split continuous across years. `yearly_financials` copies the
+column, and `quarterly_financials` keeps a breakdown only where it still holds
+after quarters are derived. Several breakdowns on one row are alternatives.
+When a request filters by `labels` or `normalized_labels`, the API returns
+`breakdowns` on each value: show one at a time, sum its members for that
+period, show a partial one's remainder as the unallocated line, and drill down
+through a member's own `breakdowns`. A member in no breakdown is not additive.
+Axes wider than 16 members and per-share amounts are skipped.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
 member and period, then ranked: amendments first, then longest comparative-value
@@ -409,7 +414,7 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
-| `14_dimension_breakdowns.sql` | Breakdowns that do not add up in the presentation tables, axes with years no breakdown covers, added overrides that never add up, every breakdown with its years |
+| `14_dimension_breakdowns.sql` | Breakdowns that do not add up in the presentation tables, axes with years no breakdown covers, added overrides that never add up, partial breakdowns with their unallocated share, every breakdown with its years |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -430,9 +435,12 @@ Remap the ConsolidationItems members to `Product` in
 `dimension-normalization-overrides.csv` (see the cookbook example).
 
 `14` checks the breakdowns. Its first query must stay empty: a row there means
-the members no longer add up in `yearly_financials` or `quarterly_financials`,
-which is a procedure bug. The second
-lists axes with 10-K years that no breakdown of the line covers. Treat those as
+the members no longer add up (or a partial one no longer falls short) in
+`yearly_financials` or `quarterly_financials`, which is a procedure bug. The
+second lists axes with 10-K years that no exact breakdown of the line covers.
+The partial-years query shows the unallocated share; it is often a member left
+off the axis or two members colliding on one label, so fix the dimension
+mapping before accepting the gap. Treat the second query's axes as
 candidates: add a row to `dimension-breakdown-overrides.csv` only for a split
 you confirmed in the filing. Partial disclosures (one country beside regions),
 segment profit before unallocated corporate costs, and equity-component or

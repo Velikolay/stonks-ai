@@ -73,13 +73,23 @@ BEGIN
         '10-K' AS source_type
     FROM all_filings_data;
 
+    -- A row whose unique key changed is deleted and reinserted: two rows can
+    -- swap keys (a member relabelled), which an in-place upsert would reject.
     DELETE FROM yearly_financials yf
     WHERE
         yf.company_id = ANY(company_ids)
         AND NOT EXISTS (
             SELECT 1
             FROM tmp_yearly_financials_new t
-            WHERE t.id = yf.id
+            WHERE
+                t.id = yf.id
+                AND t.company_id = yf.company_id
+                AND t.statement = yf.statement
+                AND t.concept = yf.concept
+                AND t.normalized_label = yf.normalized_label
+                AND t.period_end = yf.period_end
+                AND t.axis = yf.axis
+                AND t.member = yf.member
         );
 
     INSERT INTO yearly_financials (

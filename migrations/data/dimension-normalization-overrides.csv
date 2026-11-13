@@ -17,7 +17,7 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 0,us-gaap:ProductOrServiceAxis,,,True,Product,,
 0,srt:StatementGeographicalAxis,,,True,Geographical,,
 0,us-gaap:StatementGeographicalAxis,,,True,Geographical,,
-0,us-gaap:StatementBusinessSegmentsAxis,,Greater China,True,Geographical,China,
+0,us-gaap:StatementBusinessSegmentsAxis,,Greater China,True,Geographical,Greater China,Region not the country: AAPL FY2015 segment 58715 vs country China 56547
 0,us-gaap:StatementBusinessSegmentsAxis,,China,True,Geographical,China,
 6,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
 6,srt:ConsolidationItemsAxis,Delivery,,False,Product,Delivery,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product

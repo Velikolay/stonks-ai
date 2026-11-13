@@ -320,13 +320,15 @@ Yearly Data:
 
 Pass `axis` to get the member series of one axis. When you filter by `labels`
 or `normalized_labels`, a value can carry `breakdowns`: sets of members on one
-axis that add up exactly to it in that period.
+axis that add up exactly to it in that period. A `partial` breakdown is a split
+that adds up in other periods but falls short here; the remainder (value minus
+its members) is unallocated.
 
 ```json
 {"normalized_label": "Revenue", "values": [
   {"value": 416161000000, "period_end": "2025-09-27", "breakdowns": [
-    {"axis": "Geographical", "members": ["China", "Other countries", "U.S."]},
-    {"axis": "Product", "members": ["Products", "Services"]}
+    {"axis": "Geographical", "members": ["China", "Other countries", "U.S."], "partial": false},
+    {"axis": "Product", "members": ["Products", "Services"], "partial": false}
   ]}
 ]}
 ```

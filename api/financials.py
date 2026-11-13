@@ -99,10 +99,11 @@ def _resolve_abstract_hierarchies(
 
 
 class BreakdownResponse(BaseModel):
-    """Members of one axis that add up exactly to the value."""
+    """Members of one axis that add up to the value, or fall short if partial."""
 
     axis: str
     members: List[str]
+    partial: bool = False
 
 
 class FinancialMetricValue(BaseModel):

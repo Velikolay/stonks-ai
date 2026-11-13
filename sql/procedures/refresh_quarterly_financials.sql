@@ -452,7 +452,8 @@ BEGIN
 
     -- A breakdown carried from the source fact can stop adding up once quarters
     -- are derived, e.g. a member with no calculated Q4. Keep only the ones whose
-    -- members are all present and still sum to the row.
+    -- members are all present and still sum to the row, or for a partial one
+    -- are non-negative and still fall short of a positive row.
     CREATE INDEX ON tmp_quarterly_financials_new (
         company_id, statement, normalized_label, axis, period_end
     );
@@ -462,8 +463,8 @@ BEGIN
     SET breakdowns = (
         SELECT jsonb_agg(x.e ORDER BY x.ord)
         FROM jsonb_array_elements(t.breakdowns) WITH ORDINALITY AS x(e, ord)
-        WHERE t.value = (
-            SELECT SUM(m.value)
+        WHERE EXISTS (
+            SELECT 1
             FROM tmp_quarterly_financials_new m
             WHERE
                 m.company_id = t.company_id
@@ -472,18 +473,36 @@ BEGIN
                 AND m.axis = x.e->>'axis'
                 AND m.period_end = t.period_end
                 AND m.member IN (SELECT jsonb_array_elements_text(x.e->'members'))
-            HAVING COUNT(*) = jsonb_array_length(x.e->'members')
+            HAVING
+                COUNT(*) = jsonb_array_length(x.e->'members')
+                AND CASE
+                    WHEN (x.e->>'partial')::boolean
+                        THEN t.value > 0
+                        AND MIN(m.value) >= 0
+                        AND SUM(m.value) < t.value
+                    ELSE SUM(m.value) = t.value
+                END
         )
     )
     WHERE t.breakdowns IS NOT NULL;
 
+    -- A row whose unique key changed is deleted and reinserted: two rows can
+    -- swap keys (a member relabelled), which an in-place upsert would reject.
     DELETE FROM quarterly_financials qf
     WHERE
         qf.company_id = ANY(company_ids)
         AND NOT EXISTS (
             SELECT 1
             FROM tmp_quarterly_financials_new t
-            WHERE t.id = qf.id
+            WHERE
+                t.id = qf.id
+                AND t.company_id = qf.company_id
+                AND t.statement = qf.statement
+                AND t.concept = qf.concept
+                AND t.normalized_label = qf.normalized_label
+                AND t.period_end = qf.period_end
+                AND t.axis = qf.axis
+                AND t.member = qf.member
         );
 
     INSERT INTO quarterly_financials (

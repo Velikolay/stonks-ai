@@ -127,6 +127,52 @@ def test_refresh_skips_breakdown_seen_in_one_year(test_engine: Engine) -> None:
         assert _breakdowns(conn) == {}
 
 
+def test_refresh_attaches_known_sets_that_fall_short_as_partial(
+    test_engine: Engine,
+) -> None:
+    """A known set that falls short shows as partial beside one that adds up."""
+    short_year = {
+        "": 1500,
+        "Products": 1000,
+        "iPhone": 600,
+        "iPad": 400,
+        "Services": 300,
+        "Domestic": 1100,
+        "International": 400,
+    }
+    with test_engine.begin() as conn:
+        _seed(conn, {**REVENUE, 2025: short_year})
+        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+        line = conn.execute(
+            text(
+                "SELECT breakdowns FROM yearly_financials "
+                "WHERE company_id = 1 AND fiscal_year = 2025 AND member = ''"
+            )
+        ).scalar_one()
+        products = _breakdowns(conn)[(2025, "Products")]
+
+    assert line == [
+        {"axis": AXIS, "members": ["Domestic", "International"], "partial": False},
+        {"axis": AXIS, "members": ["Products", "Services"], "partial": True},
+    ]
+    assert products == [(AXIS, ("iPad", "iPhone"))]
+
+
+def test_refresh_ignores_years_where_a_tied_member_could_swap_in(
+    test_engine: Engine,
+) -> None:
+    """A set that only adds up because two members share a value is not kept."""
+    tied = {**REVENUE[2024], "Region": REVENUE[2024]["Domestic"]}
+    with test_engine.begin() as conn:
+        _seed(conn, {**REVENUE, 2025: tied, 2026: tied})
+        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+        breakdowns = _breakdowns(conn)
+
+    line = [(AXIS, ("Domestic", "International")), (AXIS, ("Products", "Services"))]
+    assert breakdowns[(2025, "")] == line
+    assert breakdowns[(2026, "")] == line
+
+
 def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
     """A parent's override rows are its only breakdowns, where they add up."""
     with test_engine.begin() as conn:
