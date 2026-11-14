@@ -275,6 +275,7 @@ GET /financials?ticker=AAPL&granularity=quarterly
 - `label` (optional): Filter by metric label
 - `normalized_label` (optional): Filter by normalized label
 - `statement` (optional): Filter by financial statement
+- `breakdowns` (optional): Include each series' breakdowns. Defaults to false
 
 **Example Responses:**
 
@@ -318,8 +319,8 @@ Yearly Data:
 ]
 ```
 
-Pass `axis` to get the member series of one axis. When you filter by `labels`
-or `normalized_labels`, the series carries `breakdowns`: the sets of members
+Pass `axis` to get the member series of one axis. With `breakdowns=true`, the
+series carries `breakdowns`: the sets of members
 that split it in the current presentation. An earlier set that does not share
 a year with the latest one is left out, and so is a set whose members are not
 reported at the requested granularity. The sets that remain are alternatives,

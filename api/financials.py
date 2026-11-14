@@ -227,6 +227,9 @@ async def get_financials(
     ),
     statement: Optional[str] = Query(None, description="Filter by financial statement"),
     axis: Optional[str] = Query(None, description="Filter by axis"),
+    breakdowns: bool = Query(
+        False, description="Include the series breakdowns in the response"
+    ),
     short: bool = Query(False, description="Return minimal response"),
     debug: bool = Query(
         False, description="Include extra debug fields in the response"
@@ -311,11 +314,9 @@ async def get_financials(
             all_rows=rows,
             metric_rows=metric_rows,
         )
-        # Breakdowns are only loaded when the request names labels.
-        include_breakdowns = labels is not None or normalized_labels is not None
         breakdowns_by_series: Dict[Tuple[str, str, str, str], List] = {}
         reported_members: Set[Tuple[str, str, str, str]] = set()
-        if include_breakdowns:
+        if breakdowns:
             breakdowns_by_series = await filings_db.dimension_breakdowns.get_breakdowns(
                 company.id
             )
@@ -356,7 +357,7 @@ async def get_financials(
                     group_data["abstract_concepts"] = (
                         abstract_concepts if abstract_concepts else None
                     )
-                if include_breakdowns:
+                if breakdowns:
                     series_key = (
                         metric.statement or "",
                         metric.normalized_label,

@@ -327,12 +327,19 @@ class TestGetFinancialsBreakdowns:
 
         response = client.get(
             "/financials/?ticker=AAPL&granularity=yearly&normalized_labels=Revenue"
+            "&breakdowns=true"
         )
 
         assert response.status_code == 200
         metric = response.json()[0]
         assert metric["breakdowns"] == expected
         assert all("breakdowns" not in value for value in metric["values"])
+
+        omitted = client.get(
+            "/financials/?ticker=AAPL&granularity=yearly&normalized_labels=Revenue"
+        )
+        assert omitted.status_code == 200
+        assert "breakdowns" not in omitted.json()[0]
 
 
 class TestGetFilingsEndpoint:

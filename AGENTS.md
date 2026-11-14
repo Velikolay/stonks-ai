@@ -209,8 +209,8 @@ parent are alternatives when their years overlap. A set that ends before
 another on the same axis begins is an earlier presentation, and the API leaves
 it out. The API also leaves out a set when fewer than two of its members exist
 at the requested granularity, so a split reported only in the 10-K is absent
-from a quarterly response. When a request filters by `labels` or
-`normalized_labels`, the API returns `breakdowns` once on the series: each
+from a quarterly response. With `breakdowns=true`, the API returns
+`breakdowns` once on the series: each
 entry is an axis and its members. Show one at a time. For a
 period, sum the members that have a value; a shortfall is unallocated and a
 sum past the line means that split does not apply there. Drill down through a
