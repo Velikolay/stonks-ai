@@ -1,7 +1,7 @@
 """Async yearly financial metrics database operations."""
 
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from sqlalchemy import MetaData, and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -20,26 +20,13 @@ class YearlyFinancialsOperationsAsync:
         self.engine = engine
         self.yearly_financials_view = metadata.tables["yearly_financials"]
 
-    def _columns(self, include_breakdowns: bool) -> List[Any]:
-        """Return the columns to select, leaving out breakdowns unless asked."""
-        if include_breakdowns:
-            return [self.yearly_financials_view]
-        return [c for c in self.yearly_financials_view.c if c.name != "breakdowns"]
-
     async def get_yearly_financials(
         self, filter_params: YearlyFinancialsFilter
     ) -> List[YearlyFinancial]:
-        """Get yearly financial metrics based on filter parameters.
-
-        Breakdowns are only read when the filter names labels.
-        """
-        include_breakdowns = (
-            filter_params.labels is not None
-            or filter_params.normalized_labels is not None
-        )
+        """Get yearly financial metrics based on filter parameters."""
         try:
             async with self.engine.connect() as conn:
-                stmt = select(*self._columns(include_breakdowns))
+                stmt = select(self.yearly_financials_view)
                 conditions = []
 
                 conditions.append(
@@ -120,7 +107,6 @@ class YearlyFinancialsOperationsAsync:
                         abstract_id=row.abstract_id,
                         is_abstract=row.is_abstract,
                         is_synthetic=row.is_synthetic,
-                        breakdowns=row.breakdowns if include_breakdowns else None,
                         period_end=row.period_end,
                         fiscal_year=row.fiscal_year,
                         source_type=row.source_type,
@@ -237,7 +223,7 @@ class YearlyFinancialsOperationsAsync:
         try:
             async with self.engine.connect() as conn:
                 stmt = (
-                    select(*self._columns(False))
+                    select(self.yearly_financials_view)
                     .where(self.yearly_financials_view.c.company_id == company_id)
                     .order_by(self.yearly_financials_view.c.period_end.desc())
                     .limit(limit * 50)

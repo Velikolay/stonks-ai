@@ -1,11 +1,9 @@
 """Tests for yearly financials database operations."""
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Table
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
 
 from filings.db.yearly_financials import YearlyFinancialsOperations
@@ -15,7 +13,7 @@ from filings.models.yearly_financials import YearlyFinancial, YearlyFinancialsFi
 def _make_operations():
     """Create operations instance with mocked engine and metadata."""
     mock_engine = Mock()
-    mock_table = MagicMock()
+    mock_table = Mock()
     mock_metadata = Mock()
     mock_metadata.tables = {"yearly_financials": mock_table}
     return YearlyFinancialsOperations(mock_engine, mock_metadata)
@@ -354,41 +352,3 @@ class TestYearlyFinancialsOperations:
         assert result[0]["normalized_label"] == "Total Assets"
         assert result[0]["statement"] == "BalanceSheet"
         assert result[0]["count"] == 15
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "filters, selected",
-    [({}, False), ({"normalized_labels": ["Revenue"]}, True)],
-)
-async def test_get_yearly_financials_reads_breakdowns_only_for_labels(
-    filters, selected
-):
-    """The breakdowns column is selected only when the filter names labels."""
-    metadata = MetaData()
-    Table(
-        "yearly_financials",
-        metadata,
-        *(
-            Column(name, String)
-            for name in ("statement", "axis", "label", "normalized_label")
-        ),
-        *(
-            Column(name, Integer)
-            for name in ("company_id", "position", "period_end", "is_abstract")
-        ),
-        Column("breakdowns", JSONB),
-    )
-    mock_conn = AsyncMock()
-    mock_conn.execute = AsyncMock(return_value=Mock(fetchall=Mock(return_value=[])))
-    mock_engine = Mock()
-    mock_engine.connect.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__aexit__ = AsyncMock(return_value=None)
-    operations = YearlyFinancialsOperations(mock_engine, metadata)
-
-    await operations.get_yearly_financials(
-        YearlyFinancialsFilter(company_id=1, **filters)
-    )
-
-    stmt = mock_conn.execute.call_args.args[0]
-    assert ("breakdowns" in stmt.selected_columns.keys()) is selected

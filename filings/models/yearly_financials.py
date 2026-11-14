@@ -2,7 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -25,7 +25,6 @@ class YearlyFinancial(BaseModel):
     abstract_id: Optional[int] = None
     is_abstract: bool
     is_synthetic: bool
-    breakdowns: Optional[List[Dict[str, Any]]] = None
     period_end: Optional[date] = None
     fiscal_year: int
     # Debug fields

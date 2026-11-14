@@ -1,62 +1,63 @@
--- Dimension breakdowns: each row's breakdowns column lists sets of members on
--- one axis that add up exactly to that row in that period. The row is another
--- member or the undimensioned line. refresh_financial_facts_normalized keeps a
--- set when it adds up in at least two 10-Ks and attaches it wherever it adds
--- up. Several breakdowns on one row are alternatives (regions and countries),
--- so summing every member of an axis over-counts. In a period where a known
--- set falls short, it is attached with partial = true; the shortfall is
--- unallocated and may be a mapping gap.
+-- Dimension breakdowns: each row of dimension_breakdowns lists a set of
+-- members on one axis that add up exactly to a parent (another member or the
+-- undimensioned line) in fiscal_years. refresh_dimension_breakdowns keeps a
+-- set when it adds up in at least two 10-Ks (a year where one of its members
+-- could be swapped for another member of equal value does not count). A year
+-- where that set falls short is not stored; the query below finds it by
+-- comparing the members to yearly_financials. Several
+-- breakdowns of one parent are alternatives (regions and countries), so
+-- summing every member of an axis over-counts.
 --
 -- Fix with dimension-breakdown-overrides.csv: list a parent's breakdowns to
 -- replace what was inferred for it. Confirm in the filing first.
 
-\echo '--- Breakdowns that do not add up in yearly_financials or quarterly_financials (should be empty) ---'
-WITH breakdowns AS (
-    SELECT 'yearly' AS source, y.company_id, y.statement, y.normalized_label,
-           y.axis, y.member, y.period_end, y.value, b
-    FROM yearly_financials y
-    CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-    UNION ALL
-    SELECT 'quarterly', q.company_id, q.statement, q.normalized_label,
-           q.axis, q.member, q.period_end, q.value, b
-    FROM quarterly_financials q
-    CROSS JOIN LATERAL jsonb_array_elements(q.breakdowns) AS b
+\echo '--- Exact breakdown years that do not add up in yearly_financials (should be empty) ---'
+WITH breakdown_years AS (
+    SELECT b.*, fy AS fiscal_year
+    FROM dimension_breakdowns b
+    CROSS JOIN LATERAL unnest(b.fiscal_years) AS fy
 ),
 checked AS (
     SELECT
-        bd.*,
+        bd.company_id,
+        bd.statement,
+        bd.normalized_label,
+        bd.axis,
+        bd.parent_member,
+        bd.members,
+        bd.source,
+        bd.fiscal_year,
         (
-            SELECT SUM(m.value)
-            FROM (
-                SELECT company_id, statement, normalized_label, axis, member, period_end, value
-                FROM yearly_financials
-                WHERE bd.source = 'yearly'
-                UNION ALL
-                SELECT company_id, statement, normalized_label, axis, member, period_end, value
-                FROM quarterly_financials
-                WHERE bd.source = 'quarterly'
-            ) m
-            WHERE m.company_id = bd.company_id
-              AND m.statement = bd.statement
-              AND m.normalized_label = bd.normalized_label
-              AND m.period_end = bd.period_end
-              AND m.axis = bd.b->>'axis'
-              AND m.member IN (SELECT jsonb_array_elements_text(bd.b->'members'))
-        ) AS members_total
-    FROM breakdowns bd
+            SELECT SUM(y.value)
+            FROM yearly_financials y
+            WHERE y.company_id = bd.company_id
+              AND y.statement = bd.statement
+              AND y.normalized_label = bd.normalized_label
+              AND y.fiscal_year = bd.fiscal_year
+              AND y.axis = bd.axis
+              AND y.member = ANY(bd.members)
+        ) AS members_total,
+        (
+            SELECT MAX(y.value)
+            FROM yearly_financials y
+            WHERE y.company_id = bd.company_id
+              AND y.statement = bd.statement
+              AND y.normalized_label = bd.normalized_label
+              AND y.fiscal_year = bd.fiscal_year
+              AND COALESCE(y.axis, '') = CASE
+                  WHEN bd.parent_member = '' THEN '' ELSE bd.axis
+              END
+              AND COALESCE(y.member, '') = bd.parent_member
+        ) AS parent_value
+    FROM breakdown_years bd
 )
-SELECT source, company_id, statement, normalized_label, axis, member, period_end,
-       value, members_total, b AS breakdown
+SELECT *
 FROM checked
-WHERE CASE
-    WHEN (b->>'partial')::boolean
-        THEN members_total IS NULL OR members_total >= value
-    ELSE members_total IS DISTINCT FROM value
-END
-ORDER BY company_id, statement, normalized_label, period_end
+WHERE members_total IS DISTINCT FROM parent_value
+ORDER BY company_id, statement, normalized_label, axis, parent_member, fiscal_year
 LIMIT 50;
 
-\echo '--- Axes with 10-K years where no breakdown adds up to the line: members there are not additive ---'
+\echo '--- Axes with 10-K years where no exact breakdown covers the line ---'
 WITH axis_years AS (
     SELECT company_id, statement, normalized_label, axis, fiscal_year
     FROM yearly_financials
@@ -70,15 +71,13 @@ covered AS (
         a.*,
         EXISTS (
             SELECT 1
-            FROM yearly_financials y
-            CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-            WHERE y.company_id = a.company_id
-              AND y.statement = a.statement
-              AND y.normalized_label = a.normalized_label
-              AND y.fiscal_year = a.fiscal_year
-              AND y.axis = ''
-              AND b->>'axis' = a.axis
-              AND NOT (b->>'partial')::boolean
+            FROM dimension_breakdowns b
+            WHERE b.company_id = a.company_id
+              AND b.statement = a.statement
+              AND b.normalized_label = a.normalized_label
+              AND b.axis = a.axis
+              AND b.parent_member = ''
+              AND a.fiscal_year = ANY(b.fiscal_years)
         ) AS has_breakdown
     FROM axis_years a
 )
@@ -103,58 +102,91 @@ FROM dimension_breakdown_overrides o
 WHERE cardinality(o.members) >= 2
   AND NOT EXISTS (
       SELECT 1
-      FROM yearly_financials y
-      CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-      WHERE y.company_id = o.company_id
-        AND (o.normalized_label IS NULL OR y.normalized_label = o.normalized_label)
-        AND y.member = o.parent_member
-        AND b->>'axis' = o.axis
-        AND NOT (b->>'partial')::boolean
-        AND b->'members' @> to_jsonb(o.members)
-        AND jsonb_array_length(b->'members') = cardinality(o.members)
+      FROM dimension_breakdowns b
+      WHERE b.company_id = o.company_id
+        AND (o.normalized_label IS NULL OR b.normalized_label = o.normalized_label)
+        AND b.parent_member = o.parent_member
+        AND b.axis = o.axis
+        AND b.members = o.members
+        AND b.source = 'override'
+        AND cardinality(b.fiscal_years) > 0
   )
 ORDER BY o.company_id, o.axis, o.parent_member
 LIMIT 50;
 
-\echo '--- Partial breakdowns in 10-K years: the unallocated share is often a member left off the axis ---'
+\echo '--- Years a known breakdown falls short: the unallocated share is often a member left off the axis ---'
+WITH parents AS (
+    SELECT
+        company_id,
+        statement,
+        normalized_label,
+        axis,
+        member,
+        fiscal_year,
+        MAX(value) AS value
+    FROM yearly_financials
+    WHERE value IS NOT NULL
+    GROUP BY company_id, statement, normalized_label, axis, member, fiscal_year
+),
+member_totals AS (
+    SELECT
+        company_id,
+        statement,
+        normalized_label,
+        axis,
+        fiscal_year,
+        member,
+        MAX(value) AS value
+    FROM yearly_financials
+    WHERE axis <> '' AND value IS NOT NULL
+    GROUP BY company_id, statement, normalized_label, axis, fiscal_year, member
+)
 SELECT
-    y.company_id,
-    y.statement,
-    y.normalized_label,
-    b->>'axis' AS axis,
-    y.member AS parent_member,
-    b->'members' AS members,
-    y.fiscal_year,
-    y.value,
-    round((100 * (1 - (
-        SELECT SUM(m.value)
-        FROM yearly_financials m
-        WHERE m.company_id = y.company_id
-          AND m.statement = y.statement
-          AND m.normalized_label = y.normalized_label
-          AND m.fiscal_year = y.fiscal_year
-          AND m.axis = b->>'axis'
-          AND m.member IN (SELECT jsonb_array_elements_text(b->'members'))
-    ) / y.value))::numeric, 1) AS unallocated_pct
-FROM yearly_financials y
-CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-WHERE (b->>'partial')::boolean
-ORDER BY y.company_id, y.statement, y.normalized_label, axis, parent_member, y.fiscal_year
+    b.company_id,
+    b.statement,
+    b.normalized_label,
+    b.axis,
+    b.parent_member,
+    b.members,
+    p.fiscal_year,
+    p.value AS parent_value,
+    round((100 * (1 - s.total / p.value))::numeric, 1) AS unallocated_pct
+FROM dimension_breakdowns b
+JOIN parents p
+    ON p.company_id = b.company_id
+    AND p.statement = b.statement
+    AND p.normalized_label = b.normalized_label
+    AND p.axis = CASE WHEN b.parent_member = '' THEN '' ELSE b.axis END
+    AND p.member = b.parent_member
+    AND NOT (p.fiscal_year = ANY(b.fiscal_years))
+CROSS JOIN LATERAL (
+    SELECT COUNT(*) AS n, MIN(m.value) AS min_value, SUM(m.value) AS total
+    FROM member_totals m
+    WHERE m.company_id = b.company_id
+      AND m.statement = b.statement
+      AND m.normalized_label = b.normalized_label
+      AND m.axis = b.axis
+      AND m.fiscal_year = p.fiscal_year
+      AND m.member = ANY(b.members)
+) s
+WHERE p.value > 0
+  AND s.n >= 2
+  AND s.min_value >= 0
+  AND s.total < p.value
+ORDER BY b.company_id, b.statement, b.normalized_label, b.axis, b.parent_member,
+         p.fiscal_year
 LIMIT 50;
 
-\echo '--- Every breakdown with the 10-K years it adds up in, or is partial in ---'
+\echo '--- Every breakdown with the 10-K years it adds up in ---'
 SELECT
-    y.company_id,
-    y.statement,
-    y.normalized_label,
-    b->>'axis' AS axis,
-    y.member AS parent_member,
-    b->'members' AS members,
-    (b->>'partial')::boolean AS partial,
-    array_agg(y.fiscal_year ORDER BY y.fiscal_year) AS fiscal_years
-FROM yearly_financials y
-CROSS JOIN LATERAL jsonb_array_elements(y.breakdowns) AS b
-GROUP BY y.company_id, y.statement, y.normalized_label, b->>'axis', y.member,
-         b->'members', b->>'partial'
-ORDER BY y.company_id, y.statement, y.normalized_label, axis, parent_member, fiscal_years
+    company_id,
+    statement,
+    normalized_label,
+    axis,
+    parent_member,
+    members,
+    source,
+    fiscal_years
+FROM dimension_breakdowns
+ORDER BY company_id, statement, normalized_label, axis, parent_member, fiscal_years
 LIMIT 50;

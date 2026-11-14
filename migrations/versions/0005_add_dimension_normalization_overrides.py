@@ -1,4 +1,4 @@
-"""Add dimension normalization and dimension breakdown overrides tables
+"""Add dimension normalization, breakdown overrides, and dimension_breakdowns
 
 Revision ID: 0005
 Revises: 0004
@@ -159,8 +159,31 @@ def upgrade() -> None:
     if breakdown_rows:
         connection.execute(breakdowns.insert(), breakdown_rows)
 
+    # Derived breakdowns: sets of members that add up to a parent in the listed
+    # fiscal years.
+    op.create_table(
+        "dimension_breakdowns",
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("statement", sa.String(), nullable=False),
+        sa.Column("normalized_label", sa.String(), nullable=False),
+        sa.Column("axis", sa.String(), nullable=False),
+        sa.Column("parent_member", sa.String(), nullable=False),
+        sa.Column("members", sa.ARRAY(sa.String()), nullable=False),
+        sa.Column("fiscal_years", sa.ARRAY(sa.Integer()), nullable=False),
+        sa.Column("source", sa.String(), nullable=False),
+        sa.PrimaryKeyConstraint(
+            "company_id",
+            "statement",
+            "normalized_label",
+            "axis",
+            "parent_member",
+            "members",
+        ),
+    )
+
 
 def downgrade() -> None:
+    op.drop_table("dimension_breakdowns")
     op.drop_table("dimension_breakdown_overrides")
 
     # Drop triggers

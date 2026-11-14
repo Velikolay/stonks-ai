@@ -18,6 +18,7 @@ flowchart TD
     p2 --> p3[refresh_hierarchy_normalization]
     p3 --> p4[refresh_dimension_normalization]
     p4 --> p5[refresh_financial_facts_normalized]
+    p5 --> p5b[refresh_dimension_breakdowns]
     p5 --> p6[refresh_quarterly_financials]
     p5 --> p7[refresh_yearly_financials]
     csv["migrations/data/*.csv"] --> overrides[override tables]
@@ -26,6 +27,7 @@ flowchart TD
     overrides --> p3
     overrides --> p4
     overrides --> p5
+    overrides --> p5b
 ```
 
 Raw facts are never modified. Every correction is expressed as an override row
@@ -149,7 +151,7 @@ is what you need after fixing a parser bug.
 
 Run in this order; each stage reads the previous one. `refresh_financials(int[])`
 in [sql/procedures/refresh_financials.sql](sql/procedures/refresh_financials.sql)
-chains all seven.
+chains all eight.
 
 | Procedure | Writes | What it does |
 | --- | --- | --- |
@@ -157,7 +159,8 @@ chains all seven.
 | `refresh_concept_normalization` | `concept_normalization` | Infers a canonical label per concept, then applies concept overrides |
 | `refresh_hierarchy_normalization` | `hierarchy_normalization` | Expands `parent_concept` edges from overrides across every concept in the same group |
 | `refresh_dimension_normalization` | `dimension_normalization` | Infers canonical axis and member labels, then applies dimension overrides |
-| `refresh_financial_facts_normalized` | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates, attaches breakdowns |
+| `refresh_financial_facts_normalized` | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates |
+| `refresh_dimension_breakdowns` | `dimension_breakdowns` | Infers which sets of members add up to another member or to the undimensioned line, then applies breakdown overrides |
 | `refresh_quarterly_financials` | `quarterly_financials` | Converts YTD to discrete quarters and derives missing quarters |
 | `refresh_yearly_financials` | `yearly_financials` | Annual presentation layer from 10-K facts |
 
@@ -191,24 +194,28 @@ An axis can hold a subtotal beside its parts (Apple's Products beside iPhone,
 iPad, Mac and Wearables), and it can hold two splits of the same amount
 (Amazon's product and service sales beside its seven product lines; regions
 beside countries). A breakdown is a set of members on one axis that adds up
-exactly to a row in the same period, which is another member or the
-undimensioned line. After dedup, `refresh_financial_facts_normalized` keeps a
-set that adds up in at least two 10-Ks (a year where one of its members could
-be swapped for another member of equal value does not count, so a region and a
-country that coincide never mix) and writes it into the `breakdowns`
-column of every row where it adds up, 10-Q rows included; a set that only
-expands another one (iPhone, iPad, Mac, Wearables and Services beside Products
-and Services) is dropped. In a period where a set does not add up, it is still
-attached, with `partial: true`, when at least two of its members are present,
-none negative, and they fall short of a positive row; the shortfall is
-unallocated. That keeps each split continuous across years. `yearly_financials` copies the
-column, and `quarterly_financials` keeps a breakdown only where it still holds
-after quarters are derived. Several breakdowns on one row are alternatives.
-When a request filters by `labels` or `normalized_labels`, the API returns
-`breakdowns` on each value: show one at a time, sum its members for that
-period, show a partial one's remainder as the unallocated line, and drill down
-through a member's own `breakdowns`. A member in no breakdown is not additive.
-Axes wider than 16 members and per-share amounts are skipped.
+exactly to a parent, which is another member or the undimensioned line
+(`parent_member = ''`), with the fiscal years where that held in the 10-K.
+After dedup, `refresh_dimension_breakdowns` keeps a set that adds up in at
+least two 10-Ks (a year where one of its members could be swapped for another
+member of equal value does not count, so a region and a country that coincide
+never mix) and writes it into `dimension_breakdowns`; a set that only expands
+another one (iPhone, iPad, Mac, Wearables and Services beside Products and
+Services) is dropped. A year where the set falls short is not stored.
+Diagnostic 14 finds those years by comparing the members to
+`yearly_financials`: at least two members present, none negative, and short of
+a positive parent. The shortfall is unallocated. Several breakdowns of one
+parent are alternatives when their years overlap. A set that ends before
+another on the same axis begins is an earlier presentation, and the API leaves
+it out. The API also leaves out a set when fewer than two of its members exist
+at the requested granularity, so a split reported only in the 10-K is absent
+from a quarterly response. When a request filters by `labels` or
+`normalized_labels`, the API returns `breakdowns` once on the series: each
+entry is an axis and its members. Show one at a time. For a
+period, sum the members that have a value; a shortfall is unallocated and a
+sum past the line means that split does not apply there. Drill down through a
+member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
+than 16 members and per-share amounts are skipped.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
 member and period, then ranked: amendments first, then longest comparative-value
@@ -414,7 +421,7 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
-| `14_dimension_breakdowns.sql` | Breakdowns that do not add up in the presentation tables, axes with years no breakdown covers, added overrides that never add up, partial breakdowns with their unallocated share, every breakdown with its years |
+| `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, every breakdown with its years |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -435,16 +442,16 @@ Remap the ConsolidationItems members to `Product` in
 `dimension-normalization-overrides.csv` (see the cookbook example).
 
 `14` checks the breakdowns. Its first query must stay empty: a row there means
-the members no longer add up (or a partial one no longer falls short) in
-`yearly_financials` or `quarterly_financials`, which is a procedure bug. The
-second lists axes with 10-K years that no exact breakdown of the line covers.
-The partial-years query shows the unallocated share; it is often a member left
-off the axis or two members colliding on one label, so fix the dimension
-mapping before accepting the gap. Treat the second query's axes as
-candidates: add a row to `dimension-breakdown-overrides.csv` only for a split
-you confirmed in the filing. Partial disclosures (one country beside regions),
-segment profit before unallocated corporate costs, and equity-component or
-share-class axes are expected and stay listed.
+an exact `fiscal_years` entry no longer adds up in `yearly_financials`, which
+is a procedure bug. The second lists axes with 10-K years that no exact
+breakdown of the line covers. The shortfall query compares each breakdown's
+members to the 10-K years outside `fiscal_years` and shows the unallocated
+share; it is often a member left off the axis or two members colliding on one
+label, so fix the dimension mapping before accepting the gap. Treat the second
+query's axes as candidates: add a row to `dimension-breakdown-overrides.csv`
+only for a split you confirmed in the filing. Partial disclosures (one country
+beside regions), segment profit before unallocated corporate costs, and
+equity-component or share-class axes are expected and stay listed.
 
 `09` deserves attention because nothing else surfaces it: the normalization
 procedure silently discards every fact whose group reports more than one distinct

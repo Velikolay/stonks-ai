@@ -12,6 +12,7 @@ from .companies import CompanyOperationsAsync
 from .concept_normalization_overrides import (
     ConceptNormalizationOverridesOperationsAsync,
 )
+from .dimension_breakdowns import DimensionBreakdownsOperationsAsync
 from .dimension_normalization_overrides import (
     DimensionNormalizationOverridesOperationsAsync,
 )
@@ -63,6 +64,9 @@ class AsyncFilingsDatabase:
         self.yearly_financials = YearlyFinancialsOperationsAsync(
             self._engine, self._metadata
         )
+        self.dimension_breakdowns = DimensionBreakdownsOperationsAsync(
+            self._engine, self._metadata
+        )
         self.concept_normalization_overrides = (
             ConceptNormalizationOverridesOperationsAsync(self._engine, self._metadata)
         )
@@ -98,6 +102,7 @@ __all__ = [
     "AsyncFilingsDatabase",
     "CompanyOperationsAsync",
     "ConceptNormalizationOverridesOperationsAsync",
+    "DimensionBreakdownsOperationsAsync",
     "DimensionNormalizationOverridesOperationsAsync",
     "FilingOperationsAsync",
     "FinancialFactOperationsAsync",

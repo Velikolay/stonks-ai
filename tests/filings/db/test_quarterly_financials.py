@@ -1,7 +1,7 @@
 """Tests for quarterly financial metrics operations."""
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +16,7 @@ from filings.models.quarterly_financials import (
 def _make_operations():
     """Create operations instance with mocked engine and metadata."""
     mock_engine = Mock()
-    mock_table = MagicMock()
+    mock_table = Mock()
     mock_metadata = Mock()
     mock_metadata.tables = {"quarterly_financials": mock_table}
     return QuarterlyFinancialsOperations(mock_engine, mock_metadata)

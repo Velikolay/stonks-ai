@@ -257,23 +257,19 @@ class TestGetFinancialsBreakdowns:
     """Test that get_financials exposes dimension breakdowns."""
 
     @patch("api.financials.filings_db")
-    def test_values_carry_their_breakdowns(self, mock_filings_db, client):
-        """Each yearly value lists the member sets that add up to it, or fall short."""
+    def test_series_lists_its_breakdowns(self, mock_filings_db, client):
+        """A series lists current splits whose members this granularity reports."""
         mock_company = Mock()
         mock_company.id = 1
         mock_filings_db.companies.get_company_by_ticker = AsyncMock(
             return_value=mock_company
         )
-        split = [
-            {"axis": "Product", "members": ["Products", "Services"], "partial": False},
-            {
-                "axis": "Geographical",
-                "members": ["Americas", "Europe"],
-                "partial": True,
-            },
+        expected = [
+            {"axis": "Product", "members": ["Products", "Services"]},
+            {"axis": "Geographical", "members": ["Americas", "Europe"]},
         ]
 
-        def row(row_id: int, year: int, breakdowns) -> SimpleNamespace:
+        def row(row_id: int, year: int) -> SimpleNamespace:
             return SimpleNamespace(
                 id=row_id,
                 normalized_label="Revenue",
@@ -289,11 +285,44 @@ class TestGetFinancialsBreakdowns:
                 abstract_id=None,
                 fiscal_year=year,
                 period_end=date(year, 9, 28),
-                breakdowns=breakdowns,
             )
 
         mock_filings_db.yearly_financials.get_yearly_financials = AsyncMock(
-            return_value=[row(1, 2024, split), row(2, 2023, None)]
+            return_value=[row(1, 2024), row(2, 2023)]
+        )
+        mock_filings_db.dimension_breakdowns.get_breakdowns = AsyncMock(
+            return_value={
+                ("Income Statement", "Revenue", "", ""): [
+                    {
+                        "axis": "Product",
+                        "members": ["Products", "Services"],
+                        "fiscal_years": [2019, 2024],
+                    },
+                    {
+                        "axis": "Product",
+                        "members": ["iPad", "iPhone", "Mac", "Services"],
+                        "fiscal_years": [2015, 2018],
+                    },
+                    {
+                        "axis": "Geographical",
+                        "members": ["Americas", "Europe"],
+                        "fiscal_years": [2015, 2024],
+                    },
+                    {
+                        "axis": "Geographical",
+                        "members": ["China", "U.S."],
+                        "fiscal_years": [2011, 2024],
+                    },
+                ]
+            }
+        )
+        mock_filings_db.dimension_breakdowns.get_reported_members = AsyncMock(
+            return_value={
+                ("Income Statement", "Revenue", "Product", "Products"),
+                ("Income Statement", "Revenue", "Product", "Services"),
+                ("Income Statement", "Revenue", "Geographical", "Americas"),
+                ("Income Statement", "Revenue", "Geographical", "Europe"),
+            }
         )
 
         response = client.get(
@@ -301,8 +330,9 @@ class TestGetFinancialsBreakdowns:
         )
 
         assert response.status_code == 200
-        values = response.json()[0]["values"]
-        assert [v.get("breakdowns") for v in values] == [split, None]
+        metric = response.json()[0]
+        assert metric["breakdowns"] == expected
+        assert all("breakdowns" not in value for value in metric["values"])
 
 
 class TestGetFilingsEndpoint:

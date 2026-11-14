@@ -11,6 +11,7 @@ BEGIN
     CALL refresh_hierarchy_normalization(company_ids);
     CALL refresh_dimension_normalization(company_ids);
     CALL refresh_financial_facts_normalized(company_ids);
+    CALL refresh_dimension_breakdowns(company_ids);
     CALL refresh_quarterly_financials(company_ids);
     CALL refresh_yearly_financials(company_ids);
 END;

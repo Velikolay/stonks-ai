@@ -79,3 +79,12 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 10,us-gaap:StatementBusinessSegmentsAxis,amd:GraphicsMember,,False,Product,Graphics and Visual Solutions,AMD segment cut; put operating income on Product with revenue
 10,us-gaap:StatementBusinessSegmentsAxis,amd:AllOtherMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
 10,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+1,us-gaap:StatementBusinessSegmentsAxis,,iPhone and related products and services,False,Product,iPhone,AAPL 2010-2012 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,iPad and related products and services,False,Product,iPad,AAPL 2010-2012 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,iPod,False,Product,iPod,AAPL 2010-2014 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,Other music related products and services,False,Product,Other music related products and services,AAPL 2010-2012 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,Peripherals and Other Hardware,False,Product,Peripherals and Other Hardware,AAPL 2010-2012 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,"Software, service and other net sales",False,Product,"Software, service and other net sales",AAPL 2010-2012 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,Accessories,False,Product,Accessories,AAPL 2013-2014 product line
+1,us-gaap:StatementBusinessSegmentsAxis,,Desktops,False,us-gaap:StatementBusinessSegmentsAxis,Desktops,Part of Total Mac net sales
+1,us-gaap:StatementBusinessSegmentsAxis,,Mac desktops,False,us-gaap:StatementBusinessSegmentsAxis,Mac desktops,Part of Total Mac net sales

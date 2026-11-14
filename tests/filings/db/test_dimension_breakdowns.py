@@ -1,6 +1,6 @@
-"""Integration tests for the breakdowns column on the financials tables."""
+"""Integration tests for refresh_dimension_breakdowns."""
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
@@ -30,7 +30,7 @@ REVENUE = {
     },
 }
 
-Breakdowns = List[Tuple[str, Tuple[str, ...]]]
+Breakdown = Tuple[str, Tuple[str, ...], Tuple[int, ...], str]
 
 
 def _seed(conn: Connection, revenue: Dict[int, Dict[str, int]]) -> None:
@@ -78,30 +78,19 @@ def _seed(conn: Connection, revenue: Dict[int, Dict[str, int]]) -> None:
             )
 
 
-def _breakdowns(conn: Connection) -> Dict[Tuple[int, str], Breakdowns]:
-    """Return (axis, members) per (fiscal year, member) from yearly_financials."""
+def _breakdowns(conn: Connection) -> List[Breakdown]:
+    """Return (parent, members, fiscal years, source) for company 1."""
     rows = conn.execute(
         text(
-            "SELECT fiscal_year, member, breakdowns FROM yearly_financials "
-            "WHERE company_id = 1 AND breakdowns IS NOT NULL"
+            "SELECT parent_member, members, fiscal_years, source "
+            "FROM dimension_breakdowns WHERE company_id = 1 "
+            "ORDER BY parent_member, members"
         )
     ).all()
-    return {
-        (row.fiscal_year, row.member): [
-            (b["axis"], tuple(b["members"])) for b in row.breakdowns
-        ]
+    return [
+        (row.parent_member, tuple(row.members), tuple(row.fiscal_years), row.source)
         for row in rows
-    }
-
-
-def _expected(line: Breakdowns, products: Optional[Breakdowns] = None) -> Dict:
-    """Expect the same breakdowns on the line and on Products in both years."""
-    expected = {}
-    for year in REVENUE:
-        expected[(year, "")] = line
-        if products:
-            expected[(year, "Products")] = products
-    return expected
+    ]
 
 
 def test_refresh_infers_subtotal_and_alternative_breakdowns(
@@ -113,10 +102,11 @@ def test_refresh_infers_subtotal_and_alternative_breakdowns(
         conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
         breakdowns = _breakdowns(conn)
 
-    assert breakdowns == _expected(
-        line=[(AXIS, ("Domestic", "International")), (AXIS, ("Products", "Services"))],
-        products=[(AXIS, ("iPad", "iPhone"))],
-    )
+    assert breakdowns == [
+        ("", ("Domestic", "International"), (2023, 2024), "inferred"),
+        ("", ("Products", "Services"), (2023, 2024), "inferred"),
+        ("Products", ("iPad", "iPhone"), (2023, 2024), "inferred"),
+    ]
 
 
 def test_refresh_skips_breakdown_seen_in_one_year(test_engine: Engine) -> None:
@@ -124,13 +114,13 @@ def test_refresh_skips_breakdown_seen_in_one_year(test_engine: Engine) -> None:
     with test_engine.begin() as conn:
         _seed(conn, {2023: REVENUE[2023]})
         conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
-        assert _breakdowns(conn) == {}
+        assert _breakdowns(conn) == []
 
 
-def test_refresh_attaches_known_sets_that_fall_short_as_partial(
+def test_refresh_omits_a_year_where_a_known_set_falls_short(
     test_engine: Engine,
 ) -> None:
-    """A known set that falls short shows as partial beside one that adds up."""
+    """A year that falls short stays out of fiscal_years; the set is kept."""
     short_year = {
         "": 1500,
         "Products": 1000,
@@ -143,19 +133,13 @@ def test_refresh_attaches_known_sets_that_fall_short_as_partial(
     with test_engine.begin() as conn:
         _seed(conn, {**REVENUE, 2025: short_year})
         conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
-        line = conn.execute(
-            text(
-                "SELECT breakdowns FROM yearly_financials "
-                "WHERE company_id = 1 AND fiscal_year = 2025 AND member = ''"
-            )
-        ).scalar_one()
-        products = _breakdowns(conn)[(2025, "Products")]
+        by_members = {row[1]: row for row in _breakdowns(conn)}
 
-    assert line == [
-        {"axis": AXIS, "members": ["Domestic", "International"], "partial": False},
-        {"axis": AXIS, "members": ["Products", "Services"], "partial": True},
-    ]
-    assert products == [(AXIS, ("iPad", "iPhone"))]
+    assert by_members[("Domestic", "International")][2:] == (
+        (2023, 2024, 2025),
+        "inferred",
+    )
+    assert by_members[("Products", "Services")][2:] == ((2023, 2024), "inferred")
 
 
 def test_refresh_ignores_years_where_a_tied_member_could_swap_in(
@@ -166,11 +150,9 @@ def test_refresh_ignores_years_where_a_tied_member_could_swap_in(
     with test_engine.begin() as conn:
         _seed(conn, {**REVENUE, 2025: tied, 2026: tied})
         conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
-        breakdowns = _breakdowns(conn)
+        members = {row[1] for row in _breakdowns(conn) if row[0] == ""}
 
-    line = [(AXIS, ("Domestic", "International")), (AXIS, ("Products", "Services"))]
-    assert breakdowns[(2025, "")] == line
-    assert breakdowns[(2026, "")] == line
+    assert members == {("Domestic", "International"), ("Products", "Services")}
 
 
 def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
@@ -191,6 +173,7 @@ def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
         conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
         breakdowns = _breakdowns(conn)
 
-    assert breakdowns == _expected(
-        line=[(AXIS, ("Products", "Services")), (AXIS, ("iPad", "iPhone", "Services"))]
-    )
+    assert breakdowns == [
+        ("", ("iPad", "iPhone", "Services"), (2023, 2024), "override"),
+        ("", ("Products", "Services"), (2023, 2024), "override"),
+    ]

@@ -2,7 +2,7 @@
 
 import logging
 from decimal import Decimal
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -99,11 +99,55 @@ def _resolve_abstract_hierarchies(
 
 
 class BreakdownResponse(BaseModel):
-    """Members of one axis that add up to the value, or fall short if partial."""
+    """A set of members on one axis that splits this series."""
 
     axis: str
     members: List[str]
-    partial: bool = False
+
+
+def _breakdowns_to_show(
+    items: List[Dict[str, Any]],
+    reported: Set[Tuple[str, str, str, str]],
+    statement: str,
+    label: str,
+) -> Optional[List[BreakdownResponse]]:
+    """Choose the breakdowns a response should list.
+
+    Sets on one axis that never share a year are successive presentations, so
+    only those that meet the latest one are alternatives. A set is omitted when
+    this granularity reports fewer than two of its members.
+    """
+    by_axis: Dict[str, List[Dict[str, Any]]] = {}
+    for item in items:
+        by_axis.setdefault(item["axis"], []).append(item)
+    current_years: Dict[str, Set[int]] = {}
+    for axis, sets in by_axis.items():
+        latest = max(
+            (year for item in sets for year in item.get("fiscal_years") or []),
+            default=None,
+        )
+        if latest is None:
+            continue
+        current_years[axis] = {
+            year
+            for item in sets
+            if latest in (item.get("fiscal_years") or [])
+            for year in item["fiscal_years"]
+        }
+    chosen: List[BreakdownResponse] = []
+    for item in items:
+        years = set(item.get("fiscal_years") or [])
+        if not years & current_years.get(item["axis"], set()):
+            continue
+        present = sum(
+            (statement, label, item["axis"], member) in reported
+            for member in item["members"]
+        )
+        if present >= 2:
+            chosen.append(
+                BreakdownResponse(axis=item["axis"], members=list(item["members"]))
+            )
+    return chosen or None
 
 
 class FinancialMetricValue(BaseModel):
@@ -116,7 +160,6 @@ class FinancialMetricValue(BaseModel):
     fiscal_quarter: Optional[int] = None
     source_type: Optional[str] = None
     is_synthetic: Optional[bool] = None
-    breakdowns: Optional[List[BreakdownResponse]] = None
 
 
 class FinancialMetricResponse(BaseModel):
@@ -130,6 +173,7 @@ class FinancialMetricResponse(BaseModel):
     statement: Optional[str] = None
     axis: Optional[str] = None
     member: Optional[str] = None
+    breakdowns: Optional[List[BreakdownResponse]] = None
     values: List[FinancialMetricValue]
     concept: Optional[str] = None
     abstracts: Optional[List[str]] = None
@@ -267,6 +311,24 @@ async def get_financials(
             all_rows=rows,
             metric_rows=metric_rows,
         )
+        # Breakdowns are only loaded when the request names labels.
+        include_breakdowns = labels is not None or normalized_labels is not None
+        breakdowns_by_series: Dict[Tuple[str, str, str, str], List] = {}
+        reported_members: Set[Tuple[str, str, str, str]] = set()
+        if include_breakdowns:
+            breakdowns_by_series = await filings_db.dimension_breakdowns.get_breakdowns(
+                company.id
+            )
+            financials_table = (
+                filings_db.quarterly_financials.quarterly_financials_view
+                if granularity == "quarterly"
+                else filings_db.yearly_financials.yearly_financials_view
+            )
+            reported_members = (
+                await filings_db.dimension_breakdowns.get_reported_members(
+                    company.id, financials_table
+                )
+            )
 
         # Group metrics by label, statement, etc. to reduce payload size
         metric_groups = {}
@@ -294,6 +356,19 @@ async def get_financials(
                     group_data["abstract_concepts"] = (
                         abstract_concepts if abstract_concepts else None
                     )
+                if include_breakdowns:
+                    series_key = (
+                        metric.statement or "",
+                        metric.normalized_label,
+                        metric.axis or "",
+                        metric.member or "",
+                    )
+                    group_data["breakdowns"] = _breakdowns_to_show(
+                        breakdowns_by_series.get(series_key, []),
+                        reported_members,
+                        series_key[0],
+                        series_key[1],
+                    )
                 metric_groups[key] = group_data
 
             # Create the value object
@@ -309,7 +384,6 @@ async def get_financials(
                 period_end=period_end_str,
                 source_type=getattr(metric, "source_type", None) if debug else None,
                 is_synthetic=getattr(metric, "is_synthetic", None) if debug else None,
-                breakdowns=metric.breakdowns,
             )
             metric_groups[key]["values"].append(value_obj)
 
@@ -332,6 +406,7 @@ async def get_financials(
                 member=member,
                 abstracts=group_data["abstracts"],
                 abstract_concepts=group_data["abstract_concepts"] if debug else None,
+                breakdowns=group_data.get("breakdowns"),
                 values=group_data["values"],
             )
             response_metrics.append(response_metric)

@@ -319,23 +319,24 @@ Yearly Data:
 ```
 
 Pass `axis` to get the member series of one axis. When you filter by `labels`
-or `normalized_labels`, a value can carry `breakdowns`: sets of members on one
-axis that add up exactly to it in that period. A `partial` breakdown is a split
-that adds up in other periods but falls short here; the remainder (value minus
-its members) is unallocated.
+or `normalized_labels`, the series carries `breakdowns`: the sets of members
+that split it in the current presentation. An earlier set that does not share
+a year with the latest one is left out, and so is a set whose members are not
+reported at the requested granularity. The sets that remain are alternatives,
+so show one at a time. For a
+period, sum the members that have a value. The difference from the series
+value is unallocated; a sum past the value means the split does not apply in
+that period. To drill down, request that axis and use a member's own
+`breakdowns`. A member in no breakdown is not additive.
 
 ```json
-{"normalized_label": "Revenue", "values": [
-  {"value": 416161000000, "period_end": "2025-09-27", "breakdowns": [
-    {"axis": "Geographical", "members": ["China", "Other countries", "U.S."], "partial": false},
-    {"axis": "Product", "members": ["Products", "Services"], "partial": false}
-  ]}
+{"normalized_label": "Revenue", "breakdowns": [
+  {"axis": "Geographical", "members": ["China", "Other countries", "U.S."]},
+  {"axis": "Product", "members": ["Products", "Services"]}
+], "values": [
+  {"value": 416161000000, "period_end": "2025-09-27"}
 ]}
 ```
-
-Several breakdowns on one value are alternative splits of the same amount, so
-show one at a time. To drill down, request that axis and use a member's own
-`breakdowns`. A member in no breakdown is not additive.
 
 #### Get Normalized Labels
 ```
