@@ -28,11 +28,13 @@ flowchart TD
     overrides --> p4
     overrides --> p5
     overrides --> p5b
+    overrides --> p6
+    overrides --> p7
 ```
 
 Raw facts are never modified. Every correction is expressed as an override row
 and applied by re-running the procedures, so the whole derived state is
-reproducible from EDGAR plus four CSVs.
+reproducible from EDGAR plus five CSVs.
 
 ## Setup
 
@@ -225,7 +227,9 @@ vanishes from the presentation layer, this is usually why — check
 `financial_facts_normalized` before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
-the previous quarter when that quarter ended 80 to 100 days earlier. Q4 is
+the previous quarter when that quarter ended 80 to 100 days earlier. A dimension
+column marked as a quarter is stored as that quarter, and its year-to-date
+total is kept only so Q4 can subtract the nine-month figure. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
 when all three earlier quarters already exist for that series (label + axis +
 member). A YTD with no earlier quarter in the series is not a quarter and is
@@ -234,7 +238,12 @@ missing period as a comparative. That comparative is added as a
 `comparative_backfill` prior period, so the opening YTD reduces to one
 quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
 figure minus the nine-month YTD on the quarter before the 10-K. A later gap
-in an existing series stays as its own quarter. Sparse series (e.g. a geo member tagged only in Q1 and
+in an existing series stays as its own quarter. Rows in
+`financial-rewrites.csv` then delete, replace, or add one member for one
+period. `granularity=quarterly` is applied while building
+`quarterly_financials`, and `granularity=yearly` while building
+`yearly_financials`. A quarterly row leaves the annual figure as filed.
+Sparse series (e.g. a geo member tagged only in Q1 and
 the 10-K) are left without a calculated Q4 rather than dumping the residual
 into the year-end quarter. Balance Sheet and share-count lines are
 point-in-time and come from the annual filing instead of being summed. Per-share
@@ -242,7 +251,7 @@ amounts are not residualled from an unsplit YTD.
 
 ## Override cookbook
 
-Four CSVs in [migrations/data/](migrations/data/), each the source of truth for
+Five CSVs in [migrations/data/](migrations/data/), each the source of truth for
 its table. `make overrides-load` replaces the table contents with the CSV, so
 deleting a line removes the override. Always follow with `make refresh`.
 
@@ -261,6 +270,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Segment or product members named differently across years | `dimension-normalization-overrides.csv` | `normalized_member_label` |
 | Same segment on Product for Revenue but ConsolidationItems for Operating Income | `dimension-normalization-overrides.csv` | `normalized_axis_label=Product` on the ConsolidationItems members |
 | A set of members that adds up to a subtotal or to the line is missing, or one is a coincidence | `dimension-breakdown-overrides.csv` | `parent_member`, `members` |
+| One member is wrong for one period on the quarterly or yearly layer | `financial-rewrites.csv` | `granularity`, `action`, `period_end`, `value` |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
 
@@ -268,6 +278,16 @@ Reach for `concept-normalization-overrides.csv` first. It is declarative and
 global-capable, so one row can fix every company at once. Use
 `financial-facts-overrides.csv` only when the fact itself is wrong, since it
 rewrites raw data and is almost always company-specific.
+
+### `financial-rewrites.csv`
+
+`company_id,statement,normalized_label,axis,member,period_end,granularity,action,value`
+
+One row edits one member on one layer. `granularity` is `quarterly` or `yearly`. `delete` removes it, `set` replaces its value, and `add` inserts a member copied from another member of that axis and period. Blank `axis` and `member` are the undimensioned line. `value` is set for `set` and `add` only. A quarterly row leaves the annual figure as filed.
+
+```csv
+8,Income Statement,Revenue,Geographical,Other,2023-07-30,quarterly,delete,
+```
 
 ### `concept-normalization-overrides.csv`
 
@@ -596,7 +616,7 @@ ORDER BY period_end;
 normalized row is wrong in a way no override can express, or when the same
 override behaves differently for two companies. Procedures live in
 [sql/procedures/](sql/procedures/) and are installed by migration
-[0007](migrations/versions/0007_add_financials_procedures.py). Editing a `.sql`
+[0008](migrations/versions/0008_add_financials_procedures.py). Editing a `.sql`
 file does nothing until it is reinstalled: apply it with
 `psql "$DATABASE_URL" -f sql/procedures/<name>.sql`, then `make refresh`. Add a
 new migration to make the change permanent.

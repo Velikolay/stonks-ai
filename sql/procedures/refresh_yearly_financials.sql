@@ -71,6 +71,101 @@ BEGIN
         '10-K' AS source_type
     FROM all_filings_data;
 
+    -- Rows in financial_rewrites with granularity yearly. Quarterly rows
+    -- are applied by refresh_quarterly_financials. delete removes a member
+    -- for one period, set replaces its value, and add copies a sibling.
+    DELETE FROM tmp_yearly_financials_new t
+    USING financial_rewrites o
+    WHERE
+        o.granularity = 'yearly'
+        AND o.action = 'delete'
+        AND o.company_id = ANY(company_ids)
+        AND t.company_id = o.company_id
+        AND t.statement = o.statement
+        AND t.normalized_label = o.normalized_label
+        AND t.axis = o.axis
+        AND t.member = o.member
+        AND t.period_end = o.period_end;
+
+    UPDATE tmp_yearly_financials_new t
+    SET
+        value = o.value,
+        is_synthetic = true,
+        source_type = 'calculated'
+    FROM financial_rewrites o
+    WHERE
+        o.granularity = 'yearly'
+        AND o.action = 'set'
+        AND o.company_id = ANY(company_ids)
+        AND t.company_id = o.company_id
+        AND t.statement = o.statement
+        AND t.normalized_label = o.normalized_label
+        AND t.axis = o.axis
+        AND t.member = o.member
+        AND t.period_end = o.period_end;
+
+    INSERT INTO tmp_yearly_financials_new (
+        id, parent_id, company_id, filing_id, concept, label, normalized_label,
+        value, unit, weight, print_sign, axis, member, statement, abstract_id,
+        period_end, fiscal_year, position, is_abstract, is_synthetic, source_type
+    )
+    SELECT
+        abs(hashtextextended(
+            'financial-rewrite|yearly|' || o.company_id::text || '|'
+            || o.statement || '|' || o.normalized_label || '|' || o.axis
+            || '|' || o.member || '|' || o.period_end::text,
+            0
+        )),
+        s.parent_id,
+        o.company_id,
+        s.filing_id,
+        s.concept,
+        s.label,
+        o.normalized_label,
+        o.value,
+        s.unit,
+        s.weight,
+        s.print_sign,
+        o.axis,
+        o.member,
+        o.statement,
+        s.abstract_id,
+        o.period_end,
+        s.fiscal_year,
+        s.position,
+        false,
+        true,
+        'calculated'
+    FROM financial_rewrites o
+    JOIN LATERAL (
+        SELECT *
+        FROM tmp_yearly_financials_new t
+        WHERE
+            t.company_id = o.company_id
+            AND t.statement = o.statement
+            AND t.normalized_label = o.normalized_label
+            AND t.axis = o.axis
+            AND t.period_end = o.period_end
+            AND NOT t.is_abstract
+        ORDER BY t.member
+        LIMIT 1
+    ) s ON true
+    WHERE
+        o.granularity = 'yearly'
+        AND o.action = 'add'
+        AND o.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_yearly_financials_new t
+            WHERE
+                t.company_id = o.company_id
+                AND t.statement = o.statement
+                AND t.normalized_label = o.normalized_label
+                AND t.axis = o.axis
+                AND t.member = o.member
+                AND t.period_end = o.period_end
+        );
+
     -- A row whose unique key changed is deleted and reinserted: two rows can
     -- swap keys (a member relabelled), which an in-place upsert would reject.
     -- A row whose unique key changed is deleted and reinserted: two rows can

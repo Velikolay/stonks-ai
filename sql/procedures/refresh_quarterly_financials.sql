@@ -201,55 +201,100 @@ BEGIN
             ORDER BY q.period_end
         )
     ),
-    quarterly_filings AS (
-        SELECT
+    -- Year-to-date total kept beside a published quarter of the same date.
+    -- It is a duplicate of that quarter, so it is not shown; Q4 still
+    -- subtracts it from the annual figure.
+    ytd_anchor AS (
+        SELECT DISTINCT ON (
+            company_id, statement, normalized_label, axis, member, period_end
+        )
             company_id,
-            filing_id,
-            id,
-            parent_id,
-            fiscal_year,
-            fiscal_quarter,
-            fiscal_tag,
-            label,
-            normalized_label,
-            CASE
-                WHEN period = 'YTD' AND NOT is_non_additive AND prev_value IS NOT NULL
-                THEN value - prev_value
-                ELSE value
-            END AS value,
-            weight,
-            print_sign,
-            unit,
             statement,
-            concept,
+            normalized_label,
             axis,
             member,
-            abstract_id,
             period_end,
-            position,
-            is_abstract,
-            is_synthetic,
-            source_type,
-            is_comparative_backfill,
+            value
+        FROM financial_facts_normalized
+        WHERE
+            company_id = ANY(company_ids)
+            AND is_duplicate = true
+            AND period = 'YTD'
+            AND NOT is_abstract
+        ORDER BY
+            company_id, statement, normalized_label, axis, member, period_end, id
+    ),
+    quarterly_filings AS (
+        SELECT
+            q.company_id,
+            q.filing_id,
+            q.id,
+            q.parent_id,
+            q.fiscal_year,
+            q.fiscal_quarter,
+            q.fiscal_tag,
+            q.label,
+            q.normalized_label,
+            CASE
+                WHEN q.period = 'YTD' AND NOT q.is_non_additive AND q.prev_value IS NOT NULL
+                THEN q.value - q.prev_value
+                ELSE q.value
+            END AS value,
+            q.weight,
+            q.print_sign,
+            q.unit,
+            q.statement,
+            q.concept,
+            q.axis,
+            q.member,
+            q.abstract_id,
+            q.period_end,
+            q.position,
+            q.is_abstract,
+            q.is_synthetic,
+            q.source_type,
+            q.is_comparative_backfill,
             -- No earlier quarter: this YTD cannot be reduced to one quarter,
             -- so it is not shown. A later gap stays.
             (
-                period = 'YTD'
-                AND prev_period_end IS NULL
-                AND NOT is_non_additive
+                q.period = 'YTD'
+                AND q.prev_period_end IS NULL
+                AND NOT q.is_non_additive
             ) AS drop_ytd,
-            -- Raw nine-month total on the quarter before the 10-K. Used for Q4
-            -- when the dropped YTD means the discrete quarters are incomplete.
-            -- value here is the pre-difference amount.
+            -- Raw nine-month total on the quarter before the 10-K. A published
+            -- quarter keeps that total on its duplicate row. Otherwise value
+            -- here is the pre-difference amount.
             CASE
-                WHEN period = 'YTD'
-                    AND NOT is_non_additive
-                    AND COALESCE(unit, '') <> 'usdPerShare'
-                    AND annual_period_end IS NOT NULL
-                    AND (annual_period_end - period_end) BETWEEN 80 AND 100
-                THEN value
-            END AS q3_ytd
-        FROM quarterly_filings_with_prev
+                WHEN q.period = 'Q'
+                    AND a.value IS NOT NULL
+                    AND NOT q.is_non_additive
+                    AND COALESCE(q.unit, '') <> 'usdPerShare'
+                    AND q.annual_period_end IS NOT NULL
+                    AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
+                THEN a.value
+                WHEN q.period = 'YTD'
+                    AND NOT q.is_non_additive
+                    AND COALESCE(q.unit, '') <> 'usdPerShare'
+                    AND q.annual_period_end IS NOT NULL
+                    AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
+                THEN q.value
+            END AS q3_ytd,
+            (
+                q.period = 'Q'
+                AND a.value IS NOT NULL
+                AND NOT q.is_non_additive
+                AND COALESCE(q.unit, '') <> 'usdPerShare'
+                AND q.annual_period_end IS NOT NULL
+                AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
+            ) AS prefer_ytd_anchor
+        FROM quarterly_filings_with_prev q
+        LEFT JOIN ytd_anchor a
+            ON a.company_id = q.company_id
+            AND a.statement = q.statement
+            AND a.normalized_label = q.normalized_label
+            AND a.axis = q.axis
+            AND a.member = q.member
+            AND a.period_end = q.period_end
     ),
     annual_filings AS (
         SELECT
@@ -288,10 +333,13 @@ BEGIN
             axis,
             member,
             fiscal_tag,
-            -- Three discrete quarters sum to Q1–Q3. Otherwise subtract the
-            -- nine-month total. Per-share rows have no q3_ytd, so no Q4.
+            -- Three discrete quarters sum to Q1–Q3. A published quarter keeps
+            -- the nine-month total for Q4, because the earlier quarters can be
+            -- on the previous classification. Otherwise subtract that total
+            -- when a quarter is missing. Per-share rows have no q3_ytd.
             CASE
                 WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
+                    AND NOT COALESCE(bool_or(prefer_ytd_anchor), false)
                 THEN SUM(value) FILTER (WHERE NOT drop_ytd)
                 ELSE MAX(q3_ytd)
             END AS value
@@ -440,6 +488,103 @@ BEGIN
         is_synthetic,
         source_type
     FROM missing_quarters;
+
+    -- Rows in financial_rewrites with granularity quarterly. Yearly rows
+    -- are applied by refresh_yearly_financials. delete removes a member
+    -- for one period, set replaces its value, and add copies a sibling.
+    DELETE FROM tmp_quarterly_financials_new t
+    USING financial_rewrites o
+    WHERE
+        o.granularity = 'quarterly'
+        AND o.action = 'delete'
+        AND o.company_id = ANY(company_ids)
+        AND t.company_id = o.company_id
+        AND t.statement = o.statement
+        AND t.normalized_label = o.normalized_label
+        AND t.axis = o.axis
+        AND t.member = o.member
+        AND t.period_end = o.period_end;
+
+    UPDATE tmp_quarterly_financials_new t
+    SET
+        value = o.value,
+        is_synthetic = true,
+        source_type = 'calculated'
+    FROM financial_rewrites o
+    WHERE
+        o.granularity = 'quarterly'
+        AND o.action = 'set'
+        AND o.company_id = ANY(company_ids)
+        AND t.company_id = o.company_id
+        AND t.statement = o.statement
+        AND t.normalized_label = o.normalized_label
+        AND t.axis = o.axis
+        AND t.member = o.member
+        AND t.period_end = o.period_end;
+
+    INSERT INTO tmp_quarterly_financials_new (
+        id, parent_id, company_id, filing_id, concept, label, normalized_label,
+        value, weight, print_sign, unit, axis, member, statement, abstract_id,
+        period_end, fiscal_year, fiscal_quarter, position, is_abstract,
+        is_synthetic, source_type
+    )
+    SELECT
+        abs(hashtextextended(
+            'financial-rewrite|quarterly|' || o.company_id::text || '|'
+            || o.statement || '|' || o.normalized_label || '|' || o.axis
+            || '|' || o.member || '|' || o.period_end::text,
+            0
+        )),
+        s.parent_id,
+        o.company_id,
+        s.filing_id,
+        s.concept,
+        s.label,
+        o.normalized_label,
+        o.value,
+        s.weight,
+        s.print_sign,
+        s.unit,
+        o.axis,
+        o.member,
+        o.statement,
+        s.abstract_id,
+        o.period_end,
+        s.fiscal_year,
+        s.fiscal_quarter,
+        s.position,
+        false,
+        true,
+        'calculated'
+    FROM financial_rewrites o
+    JOIN LATERAL (
+        SELECT *
+        FROM tmp_quarterly_financials_new t
+        WHERE
+            t.company_id = o.company_id
+            AND t.statement = o.statement
+            AND t.normalized_label = o.normalized_label
+            AND t.axis = o.axis
+            AND t.period_end = o.period_end
+            AND NOT t.is_abstract
+        ORDER BY t.member
+        LIMIT 1
+    ) s ON true
+    WHERE
+        o.granularity = 'quarterly'
+        AND o.action = 'add'
+        AND o.company_id = ANY(company_ids)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tmp_quarterly_financials_new t
+            WHERE
+                t.company_id = o.company_id
+                AND t.statement = o.statement
+                AND t.normalized_label = o.normalized_label
+                AND t.axis = o.axis
+                AND t.member = o.member
+                AND t.period_end = o.period_end
+        );
 
     -- A row whose unique key changed is deleted and reinserted: two rows can
     -- swap keys (a member relabelled), which an in-place upsert would reject.

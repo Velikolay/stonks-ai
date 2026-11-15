@@ -1,0 +1,6 @@
+company_id,statement,normalized_label,axis,member,period_end,granularity,action,value
+8,Income Statement,Revenue,Geographical,Other,2022-01-30,quarterly,delete,
+8,Income Statement,Revenue,Geographical,Other,2023-07-30,quarterly,delete,
+8,Income Statement,Revenue,Geographical,Other,2023-10-29,quarterly,delete,
+8,Income Statement,Revenue,Geographical,Singapore,2023-10-29,quarterly,delete,
+8,Income Statement,Revenue,Geographical,Other,2024-01-28,quarterly,delete,

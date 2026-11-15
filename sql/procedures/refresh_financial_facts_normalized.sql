@@ -41,7 +41,7 @@ BEGIN
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
         FROM financial_facts_base
-        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type
+        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type, period
         HAVING COUNT(DISTINCT value) > 1
     ),
     financial_facts_overridden_cte AS (
@@ -427,6 +427,8 @@ BEGIN
                 ORDER BY
                     -- prefer amendments over original filings
                     CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
+                    -- a published quarter beats the year-to-date total of the same date
+                    CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
                     -- prefer longer chains
                     COALESCE(cs.chain_size, 1) DESC,
                     r.id ASC

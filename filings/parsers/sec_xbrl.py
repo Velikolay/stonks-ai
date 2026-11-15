@@ -305,10 +305,26 @@ class SECXBRLParser:
                 logger.warning(f"No period columns found in {statement_type}")
                 return facts
 
-            # Sort by date string (YYYY-MM-DD format sorts lexicographically)
+            # Face rows keep the latest column. A year-to-date column sorts
+            # after the quarter column of the same date, and the quarterly
+            # procedure reduces that total. Dimension rows use the quarter
+            # column when the filing published one, and keep the year-to-date
+            # total beside it for the annual-minus-nine-month quarter.
             latest_period_col = sorted(period_columns)[-1]
             comparative_period_col = self._extract_comparative_period_column(
                 period_columns, latest_period_col
+            )
+            quarter_period_col = self._select_current_period_column(period_columns)
+            quarter_comparative_col = self._extract_comparative_period_column(
+                period_columns, quarter_period_col
+            )
+            ytd_period_col = self._same_date_ytd_column(
+                period_columns, quarter_period_col
+            )
+            ytd_comparative_col = (
+                self._extract_comparative_period_column(period_columns, ytd_period_col)
+                if ytd_period_col
+                else None
             )
 
             # Track global fact position (only for facts, not abstracts)
@@ -351,11 +367,41 @@ class SECXBRLParser:
                     fact = self._create_dimension_fact(
                         row=row,
                         statement_type=statement_type,
-                        period_col=latest_period_col,
-                        comparative_period_col=comparative_period_col,
+                        period_col=quarter_period_col,
+                        comparative_period_col=quarter_comparative_col,
                         base_label_by_concept=base_label_by_concept,
                         collapsed_members=collapsed_members,
                     )
+                    if (
+                        fact is None
+                        and ytd_period_col
+                        and ytd_period_col != quarter_period_col
+                    ):
+                        fact = self._create_dimension_fact(
+                            row=row,
+                            statement_type=statement_type,
+                            period_col=ytd_period_col,
+                            comparative_period_col=ytd_comparative_col,
+                            base_label_by_concept=base_label_by_concept,
+                            collapsed_members=collapsed_members,
+                        )
+                    elif (
+                        fact is not None
+                        and fact.period == PeriodType.Q
+                        and ytd_period_col
+                        and ytd_period_col != quarter_period_col
+                    ):
+                        ytd_fact = self._create_dimension_fact(
+                            row=row,
+                            statement_type=statement_type,
+                            period_col=ytd_period_col,
+                            comparative_period_col=ytd_comparative_col,
+                            base_label_by_concept=base_label_by_concept,
+                            collapsed_members=collapsed_members,
+                        )
+                        if ytd_fact is not None and ytd_fact.period == PeriodType.YTD:
+                            ytd_fact.key = f"{ytd_fact.key}|ytd"
+                            facts.append(ytd_fact)
                     if fact:
                         facts.append(fact)
 
@@ -926,6 +972,58 @@ class SECXBRLParser:
 
         # Duration facts without a quarter marker default to YTD
         return PeriodType.YTD
+
+    def _select_current_period_column(self, period_columns: list[str]) -> str:
+        """Choose the column for the filing's current period.
+
+        A quarter column and a year-to-date column often share an end date,
+        and the year-to-date name sorts last. The quarter is the period the
+        column reports.
+
+        Args:
+            period_columns: Period column names that contain values.
+
+        Returns:
+            The quarter column for the latest end date, or the latest column.
+        """
+        latest_end = max(column.split(" ")[0] for column in period_columns)
+        current = [
+            column for column in period_columns if column.split(" ")[0] == latest_end
+        ]
+        quarters = [column for column in current if self._is_quarter_column(column)]
+        if quarters:
+            return sorted(quarters)[-1]
+        return sorted(current)[-1]
+
+    def _same_date_ytd_column(
+        self, period_columns: list[str], quarter_column: str
+    ) -> Optional[str]:
+        """Return the year-to-date column that ends on the quarter column's date.
+
+        Args:
+            period_columns: Period column names that contain values.
+            quarter_column: Column selected for the current period.
+
+        Returns:
+            The matching year-to-date column, or None.
+        """
+        if not self._is_quarter_column(quarter_column):
+            return None
+        end = quarter_column.split(" ")[0]
+        ytd_columns = [
+            column
+            for column in period_columns
+            if column.split(" ")[0] == end and not self._is_quarter_column(column)
+        ]
+        if not ytd_columns:
+            return None
+        return sorted(ytd_columns)[-1]
+
+    @staticmethod
+    def _is_quarter_column(period_col: str) -> bool:
+        """Return True when a column name marks a single quarter."""
+        lowered = period_col.lower()
+        return any(token in lowered for token in ("q1", "q2", "q3", "q4", "quarter"))
 
     def _extract_comparative_period_column(
         self, period_columns: list[str], latest_period_col: str

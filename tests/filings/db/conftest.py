@@ -6,50 +6,47 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError
 
 from filings import CompanyCreate, FilingCreate, FinancialFact, PeriodType
 from filings.db import AsyncFilingsDatabase
 
 
-def create_test_database_if_not_exists():
-    """Create test database if it doesn't exist."""
-    # Connect to default postgres database to create test database
+def recreate_test_database() -> None:
+    """Drop and recreate the test database so migrations run from the base.
+
+    ``alembic upgrade head`` skips a revision inserted below the stamped
+    version, which leaves tables such as ``financial_rewrites`` missing.
+    """
     default_db_url = "postgresql://rag_user:rag_password@localhost:5432/postgres"
     test_db_name = "rag_db_test"
-
+    default_engine = create_engine(default_db_url, isolation_level="AUTOCOMMIT")
     try:
-        # Try to connect to the test database first
-        test_db_url = (
-            f"postgresql://rag_user:rag_password@localhost:5432/{test_db_name}"
-        )
-        test_engine = create_engine(test_db_url)
-        test_engine.connect()
-        test_engine.dispose()
-        print(f"✅ Test database '{test_db_name}' already exists")
-        return
-    except OperationalError:
-        # Test database doesn't exist, create it
-        try:
-            # Use autocommit mode to avoid transaction block issues
-            default_engine = create_engine(default_db_url, isolation_level="AUTOCOMMIT")
-            with default_engine.connect() as conn:
-                conn.execute(text(f"CREATE DATABASE {test_db_name}"))
-            default_engine.dispose()
-            print(f"✅ Created test database '{test_db_name}'")
-        except Exception as e:
-            print(f"❌ Failed to create test database: {e}")
-            print("Please create the test database manually:")
-            print(
-                f'  docker compose exec postgres psql -U rag_user -d postgres -c "CREATE DATABASE {test_db_name};"'
+        with default_engine.connect() as conn:
+            conn.execute(
+                text(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = :name AND pid <> pg_backend_pid()"
+                ),
+                {"name": test_db_name},
             )
-            raise
+            conn.execute(text(f"DROP DATABASE IF EXISTS {test_db_name}"))
+            conn.execute(text(f"CREATE DATABASE {test_db_name}"))
+    except Exception as e:
+        print(f"❌ Failed to recreate test database: {e}")
+        print("Please recreate the test database manually:")
+        print(
+            "  docker compose exec postgres psql -U rag_user -d postgres "
+            f'-c "DROP DATABASE IF EXISTS {test_db_name};"'
+        )
+        raise
+    finally:
+        default_engine.dispose()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
-    """Setup test database before running tests."""
-    create_test_database_if_not_exists()
+    """Rebuild the test database before running tests."""
+    recreate_test_database()
 
 
 @pytest.fixture(scope="session")

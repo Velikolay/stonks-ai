@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 
+from filings.models import PeriodType
 from filings.parsers.sec_xbrl import SECXBRLParser
 
 
@@ -697,3 +698,38 @@ class TestSECXBRLParser:
         assert by_member["Embedded"] == "Embedded"
         assert by_member["amd:ClientMember"] == "Client"
         assert by_member["amd:GamingMember"] == "Gaming"
+
+    def test_dimension_uses_quarter_column_and_keeps_ytd(self):
+        """A same-date year-to-date column does not replace the published quarter."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Revenues", "us-gaap_Revenues"],
+                "label": ["Revenue", "Revenue - United States"],
+                "abstract": [False, False],
+                "dimension": [False, True],
+                "dimension_axis": [None, "srt:StatementGeographicalAxis"],
+                "dimension_member": [None, "country_US"],
+                "dimension_member_label": [None, "United States"],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                "2024-10-27 (Q3)": [35082.0, 19620.0],
+                "2024-10-27 (YTD)": [91166.0, 53873.0],
+                "2025-10-26 (Q3)": [57006.0, 39177.0],
+                "2025-10-26 (YTD)": [147811.0, 97759.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        face = [fact for fact in facts if not fact.axis]
+        geo = {fact.period: fact for fact in facts if fact.member == "country:US"}
+
+        assert len(face) == 1
+        assert face[0].period == PeriodType.YTD
+        assert face[0].value == Decimal("147811")
+        assert geo[PeriodType.Q].value == Decimal("39177")
+        assert geo[PeriodType.Q].comparative_value == Decimal("19620")
+        assert geo[PeriodType.YTD].value == Decimal("97759")
+        assert geo[PeriodType.YTD].key.endswith("|ytd")

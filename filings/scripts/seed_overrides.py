@@ -6,7 +6,7 @@ the edit-override / refresh loop repeatable without a full ``make db-reset``.
 
 Usage:
     python -m filings.scripts.seed_overrides
-        [--tables concept,dimension,facts,breakdowns] [--dry-run]
+        [--tables concept,dimension,facts,breakdowns,rewrites] [--dry-run]
 """
 
 import argparse
@@ -35,17 +35,20 @@ CONCEPT_CSV = DATA_DIR / "concept-normalization-overrides.csv"
 DIMENSION_CSV = DATA_DIR / "dimension-normalization-overrides.csv"
 FACTS_CSV = DATA_DIR / "financial-facts-overrides.csv"
 BREAKDOWNS_CSV = DATA_DIR / "dimension-breakdown-overrides.csv"
+REWRITES_CSV = DATA_DIR / "financial-rewrites.csv"
 
 CONCEPT_TABLE = "concept_normalization_overrides"
 DIMENSION_TABLE = "dimension_normalization_overrides"
 FACTS_TABLE = "financial_facts_overrides"
 BREAKDOWNS_TABLE = "dimension_breakdown_overrides"
+REWRITES_TABLE = "financial_rewrites"
 
 TABLE_CHOICES = {
     "concept": (CONCEPT_TABLE, CONCEPT_CSV),
     "dimension": (DIMENSION_TABLE, DIMENSION_CSV),
     "facts": (FACTS_TABLE, FACTS_CSV),
     "breakdowns": (BREAKDOWNS_TABLE, BREAKDOWNS_CSV),
+    "rewrites": (REWRITES_TABLE, REWRITES_CSV),
 }
 
 # CSV encoding (must match api/admin.py): empty -> None, __EMPTY__ -> ''
@@ -238,6 +241,61 @@ def parse_facts_rows(path: Path = FACTS_CSV) -> List[dict]:
     return parsed
 
 
+def parse_rewrite_rows(path: Path = REWRITES_CSV) -> List[dict]:
+    """Parse financial rewrites.
+
+    ``granularity`` is ``quarterly`` or ``yearly``. ``delete`` removes one
+    member for one period. ``set`` replaces its value. ``add`` inserts a
+    member copied from a sibling in that period. Blank ``axis`` and
+    ``member`` are the undimensioned line. ``value`` is required for ``set``
+    and ``add`` and must be blank for ``delete``.
+    """
+    parsed = []
+    for row_num, row in _read_csv(path):
+        _require(
+            row,
+            [
+                "company_id",
+                "statement",
+                "normalized_label",
+                "period_end",
+                "granularity",
+                "action",
+            ],
+            row_num,
+        )
+        action = row["action"].strip().lower()
+        granularity = row["granularity"].strip().lower()
+        if action not in ("delete", "set", "add"):
+            raise SeedError(
+                f"Row {row_num}: action must be delete, set, or add, not {action!r}"
+            )
+        if granularity not in ("quarterly", "yearly"):
+            raise SeedError(
+                f"Row {row_num}: granularity must be quarterly or yearly, "
+                f"not {granularity!r}"
+            )
+        amount = _parse_decimal(row.get("value"), row_num, "value")
+        if action == "delete" and amount is not None:
+            raise SeedError(f"Row {row_num}: delete must not set a value")
+        if action != "delete" and amount is None:
+            raise SeedError(f"Row {row_num}: {action} requires a value")
+        parsed.append(
+            {
+                "company_id": _parse_int(row["company_id"], row_num, "company_id"),
+                "statement": row["statement"].strip(),
+                "normalized_label": row["normalized_label"].strip(),
+                "axis": _optional(row.get("axis")) or "",
+                "member": _optional(row.get("member")) or "",
+                "period_end": _parse_date(row["period_end"], row_num, "period_end"),
+                "granularity": granularity,
+                "action": action,
+                "value": amount,
+            }
+        )
+    return parsed
+
+
 def parse_breakdown_rows(path: Path = BREAKDOWNS_CSV) -> List[dict]:
     """Parse the dimension breakdown overrides CSV.
 
@@ -363,6 +421,7 @@ async def seed(tables: Sequence[str], dry_run: bool) -> None:
         "dimension": (DIMENSION_TABLE, parse_dimension_rows),
         "facts": (FACTS_TABLE, parse_facts_rows),
         "breakdowns": (BREAKDOWNS_TABLE, parse_breakdown_rows),
+        "rewrites": (REWRITES_TABLE, parse_rewrite_rows),
     }
     parsed = {name: (parsers[name][0], parsers[name][1]()) for name in tables}
 
