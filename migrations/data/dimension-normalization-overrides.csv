@@ -5,6 +5,12 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleCloudSegmentMember,,False,Product,Google Cloud,2021-2022 segment member id
 2,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,,False,Product,Other Bets,
 2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleInc.Member,,False,Product,Google,Pre-2021 Google segment; filing label is Google
+2,us-gaap:StatementBusinessSegmentsAxis,goog:HomeSegmentMember,,False,Product,Motorola Home,2012 Q2-Q3 Motorola Home segment
+2,us-gaap:StatementBusinessSegmentsAxis,goog:MobileSegmentMember,,False,Product,Motorola Mobile,2012-2013 Motorola Mobile segment
+2,us-gaap:StatementBusinessSegmentsAxis,goog:MotorolaRemainderMember,,False,Product,Motorola,2012 10-K Motorola remainder; not the quarterly Home or Mobile lines
+2,dei:LegalEntityAxis,goog:MotorolaEntityMember,,False,dei:LegalEntityAxis,Motorola entity,2012 legal-entity total; Home and Mobile already add up
+2,dei:LegalEntityAxis,Hardware and other,,False,dei:LegalEntityAxis,Hardware and other,2013 legal-entity hardware line; same amount as the Motorola Mobile segment
+2,us-gaap:ConsolidationItemsAxis,goog:MotorolaConsolidationMember,,False,us-gaap:ConsolidationItemsAxis,Motorola consolidation,2013 reconciliation line; the segment member is the one that adds up
 2,us-gaap:StatementBusinessSegmentsAxis,goog:OtherRevenueHedgingGainLossMember,,False,Product,Hedging gains (losses),Unallocated foreign-currency hedge cloned onto Product
 2,srt:StatementGeographicalAxis,goog:GeographicRevenueHedgingGainLossMember,,False,Geographical,Hedging gains (losses),Same hedge cloned onto Geographical
 2,us-gaap:StatementBusinessSegmentsAxis,Other sales,,False,Product,Other revenues including Google Cloud,2015-2018 Google revenue other than advertising; includes Google Cloud
@@ -20,6 +26,7 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 2,us-gaap:ConsolidationItemsAxis,Google Cloud,,False,Product,Google Cloud,Segment operating income
 2,us-gaap:ConsolidationItemsAxis,Other Bets,,False,Product,Other Bets,Segment operating income
 2,us-gaap:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Product,Reconciling items,Corporate costs in the segment operating-income reconciliation
+2,us-gaap:ProductOrServiceAxis,goog:RepeatedTotalMember,,False,us-gaap:ProductOrServiceAxis,Repeated total,2014 10-K copy of total revenue filed on the advertising member
 2,us-gaap:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising,2018 advertising subtotal
 2,srt:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising,2018 advertising subtotal
 2,srt:ProductOrServiceAxis,goog:GoogleAdvertisingRevenueMember,,False,Product,Google advertising,

@@ -2,8 +2,8 @@
 
 import logging
 from collections import Counter
-from datetime import date
-from typing import Optional, Sequence
+from datetime import date, datetime
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 from dotenv import load_dotenv
 from edgar import Company
@@ -22,6 +22,136 @@ load_dotenv()
 # and the last Saturday in XBRL. Six days covers that gap. A prior quarter
 # or prior year sits far outside it, so comparative columns stay excluded.
 _PERIOD_MATCH_DAYS = 6
+_PERIODIC_FORMS = ("10-K", "10-Q")
+
+
+def _cik_number(value: Any) -> Optional[int]:
+    """Return a CIK as an int, ignoring blank and non-numeric values."""
+    if value is None or isinstance(value, bool):
+        return None
+    text = str(value).strip()
+    if not text.isdigit():
+        return None
+    return int(text)
+
+
+def _report_period(filing: Any) -> Optional[date]:
+    """Return the period a filing reports, when the filing exposes one."""
+    for attr in ("report_date", "period_of_report"):
+        value = getattr(filing, attr, None)
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str) and value:
+            return date.fromisoformat(value[:10])
+    return None
+
+
+def _accession(filing: Any) -> str:
+    """Return the filing's accession number."""
+    return str(
+        getattr(filing, "accession_number", None)
+        or getattr(filing, "accession_no", "")
+        or ""
+    )
+
+
+def _filer_ciks(filing: Any) -> Tuple[int, ...]:
+    """Return the CIKs named as filers on one submission."""
+    raw = getattr(filing, "all_ciks", None)
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    ciks = []
+    for item in raw:
+        cik = _cik_number(item)
+        if cik is not None:
+            ciks.append(cik)
+    return tuple(ciks)
+
+
+def _periodic_filings(company: Any) -> list:
+    """Return the company's 10-K and 10-Q filings, including amendments."""
+    filings = company.get_filings(form=list(_PERIODIC_FORMS))
+    if not filings:
+        return []
+    return list(filings)
+
+
+def earlier_registrant_ciks(
+    company: Any, resolve: Optional[Callable[[int], Any]] = None
+) -> Tuple[str, ...]:
+    """Return CIKs this company filed under before its current registrant.
+
+    The earliest 10-K lists every filer on that submission. Another filer is
+    the previous registrant when its own 10-K and 10-Q periods end at or
+    before this company's first period. A co-registrant that keeps filing its
+    own reports is left out. The earliest 10-Q is checked when the 10-K does
+    not name an earlier filer.
+
+    Args:
+        company: EDGAR company for the current registrant.
+        resolve: Builds the EDGAR company for a candidate CIK.
+
+    Returns:
+        CIK strings, without leading zeros, in discovery order.
+    """
+    lookup = resolve or Company
+    found: list[str] = []
+    seen = set()
+    pending = [company]
+    while pending:
+        current = pending.pop(0)
+        current_cik = _cik_number(getattr(current, "cik", None))
+        if current_cik is None or current_cik in seen:
+            continue
+        seen.add(current_cik)
+        filings = _periodic_filings(current)
+        if not filings:
+            continue
+        periods = [period for period in map(_report_period, filings) if period]
+        if not periods:
+            continue
+        first_period = min(periods)
+        accessions = {_accession(filing) for filing in filings}
+        handoff = _earliest_handoff(filings)
+        if handoff is None:
+            continue
+        for other_cik in _filer_ciks(handoff):
+            if other_cik in seen:
+                continue
+            other = lookup(other_cik)
+            other_filings = _periodic_filings(other)
+            own_filings = [
+                filing
+                for filing in other_filings
+                if _accession(filing) not in accessions
+            ]
+            own_periods = [
+                period for period in map(_report_period, own_filings) if period
+            ]
+            if not own_periods or max(own_periods) > first_period:
+                continue
+            found.append(str(other_cik))
+            pending.append(other)
+    return tuple(found)
+
+
+def _earliest_handoff(filings: Sequence[Any]) -> Any:
+    """Return the earliest 10-K, or the earliest 10-Q when there is no 10-K."""
+    ten_ks = [
+        filing
+        for filing in filings
+        if str(getattr(filing, "form", "")).startswith("10-K")
+    ]
+    chosen = ten_ks or [
+        filing
+        for filing in filings
+        if str(getattr(filing, "form", "")).startswith("10-Q")
+    ]
+    if not chosen:
+        return None
+    return min(chosen, key=lambda filing: filing.filing_date)
 
 
 class SECXBRLFilingsLoader:
@@ -85,6 +215,18 @@ class SECXBRLFilingsLoader:
                 return {
                     "error": f"Failed to get or create filing_entities for ticker {ticker}"
                 }
+            for number in earlier_registrant_ciks(edgar_company):
+                logger.info("Attaching earlier registrant SEC:%s to %s", number, ticker)
+                filing_entity_id = (
+                    await self.database.companies.get_or_create_filing_entities_id(
+                        company_id=company.id,
+                        registry="SEC",
+                        number=number,
+                        status="active",
+                    )
+                )
+                if filing_entity_id is None:
+                    return {"error": f"Failed to attach SEC:{number} to {ticker}"}
             filing_entities = (
                 await self.database.companies.get_filing_entities_by_company_id(
                     company_id=company.id, registry="SEC", status=status

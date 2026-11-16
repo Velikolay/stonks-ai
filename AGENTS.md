@@ -122,7 +122,10 @@ Company ids that the override CSVs use are pinned in
 fresh database lands Apple on 1, Alphabet on 2, Amazon on 3, Microsoft on 4,
 Tesla on 5, Uber on 6, Netflix on 7, and NVIDIA on 8. Company 0 stays the
 global override owner. Add a row there before writing a company-specific
-override for a new ticker.
+override for a new ticker. Ingest also attaches an earlier CIK when the
+earliest 10-K lists that filer and that filer's own reports stop at or before
+this company's first period. Alphabet picks up Google Inc., CIK 1288776, that
+way, through the quarter before the October 2015 reorganization.
 
 **Always load a company's complete XBRL history the first time you ingest it.**
 That is what the default `LIMIT=0` does, and it is not optional: normalization
