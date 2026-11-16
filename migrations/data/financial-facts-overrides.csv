@@ -78,3 +78,5 @@ id,company_id,concept,statement,axis,member,label,form_type,from_period,to_perio
 77,2,us-gaap:Revenues,Income Statement,us-gaap:ConsolidationItemsAxis,Google,,,2013-12-31,2013-12-31,us-gaap:Revenues,us-gaap:ConsolidationItemsAxis,goog:GoogleConsolidatedMember,Google consolidated,,False,rewrite
 78,2,us-gaap:Revenues,Income Statement,dei:LegalEntityAxis,Total Google revenues (advertising and other),,,2013-12-31,2013-12-31,us-gaap:Revenues,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleSegmentMember,Google,,False,rewrite
 79,2,us-gaap:Revenues,Income Statement,us-gaap:ProductOrServiceAxis,goog:AdvertisingMember,,,2014-12-31,2014-12-31,us-gaap:Revenues,us-gaap:ProductOrServiceAxis,goog:RepeatedTotalMember,Repeated total,,False,rewrite
+80,9,us-gaap:AdvertisingRevenue,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,srt:ProductOrServiceAxis,us-gaap:AdvertisingMember,Advertising,,False
+81,9,us-gaap:OtherSalesRevenueNet,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,srt:ProductOrServiceAxis,us-gaap:ServiceOtherMember,Other revenue,,False

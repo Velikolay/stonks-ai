@@ -46,6 +46,8 @@ class SECXBRLParser:
         }
     )
     # Pieces of that total. Kept when they name a member the total does not.
+    # An undimensioned pair that adds up to the face total is stored as filed.
+    # A fact override places the lines on the product axis.
     _COMPONENT_REVENUE_CONCEPTS = frozenset(
         {
             "us-gaap:AdvertisingRevenue",
@@ -217,10 +219,13 @@ class SECXBRLParser:
         are rewritten to the face line so the member joins that series. A
         member the face already reports is not added again. Other sales tagged
         on a segment member that already carries the total is the residual of
-        that segment, so it is stored as its own member. An undimensioned row
-        is kept only when it is the plug between the face total and one axis
-        of members for that period. A repeated total, and any other note line,
-        stays out of the income statement.
+        that segment, so it is stored as its own member. Undimensioned
+        advertising and other-revenue lines that add up to the face total are
+        kept as filed, with no axis, so a fact override can place them on the
+        product axis. An undimensioned row is otherwise kept only when it is
+        the plug between the face total and one axis of members for that
+        period. A repeated total, and any other note line, stays out of the
+        income statement.
 
         Args:
             xbrl: XBRL object from edgartools
@@ -323,6 +328,13 @@ class SECXBRLParser:
                     added,
                     origin,
                 )
+            self._keep_revenue_components(
+                undimensioned,
+                income_facts,
+                face_revenue,
+                face_revenue_by_period,
+                added,
+            )
             members = [
                 fact
                 for fact in income_facts
@@ -423,6 +435,69 @@ class SECXBRLParser:
         if not candidates:
             return None
         return max(candidates, key=lambda fact: abs(fact.value))
+
+    def _keep_revenue_components(
+        self,
+        undimensioned: list[FinancialFactCreate],
+        income_facts: list[FinancialFactCreate],
+        face_revenue: Optional[FinancialFactCreate],
+        face_revenue_by_period: dict[tuple, object],
+        added: dict,
+    ) -> None:
+        """Keep undimensioned advertising and other-revenue lines from a note.
+
+        The lines stay on their filed concepts, with no axis. A fact override
+        places them on the product axis. A line is kept only when the
+        components for that period add up to the face total and that period
+        has no product split yet.
+
+        Args:
+            undimensioned: Disclosure rows with no axis.
+            income_facts: Facts already parsed from the face income statement.
+            face_revenue: Undimensioned revenue total, when the face has one.
+            face_revenue_by_period: Face revenue by period end and period type.
+            added: Facts accepted so far.
+        """
+        if face_revenue is None:
+            return
+
+        product_axes = {
+            "srt:ProductOrServiceAxis",
+            "us-gaap:ProductOrServiceAxis",
+        }
+        grouped: dict[tuple, list[FinancialFactCreate]] = {}
+        for fact in undimensioned:
+            if fact.is_abstract or fact.concept not in self._COMPONENT_REVENUE_CONCEPTS:
+                continue
+            if not isinstance(fact.value, Decimal) or fact.value == 0:
+                continue
+            grouped.setdefault((fact.period_end, fact.period), []).append(fact)
+
+        for key, components in grouped.items():
+            if len(components) < 2:
+                continue
+            face_value = face_revenue_by_period.get(key)
+            if not isinstance(face_value, Decimal):
+                continue
+            if sum((component.value for component in components), Decimal("0")) != (
+                face_value
+            ):
+                continue
+            period_end, period = key
+            already_split = any(
+                fact.period_end == period_end
+                and fact.period == period
+                and fact.concept == face_revenue.concept
+                and fact.axis in product_axes
+                and isinstance(fact.value, Decimal)
+                for fact in list(income_facts) + list(added.values())
+            )
+            if already_split:
+                continue
+            for component in components:
+                stored_key = (component.concept, component.period_end, component.period)
+                if stored_key not in added:
+                    added[stored_key] = component
 
     def _adopt_segment_fact(
         self,

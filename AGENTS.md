@@ -276,6 +276,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | One member is wrong for one period on the quarterly or yearly layer | `financial-rewrites.csv` | `granularity`, `action`, `period_end`, `value` |
 | The same fact must also appear on another axis, and the original line stays | `financial-facts-overrides.csv` | `action=clone` |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
+| Advertising and other revenue filed as their own concepts, with no axis | `financial-facts-overrides.csv` | `to_concept` is the face revenue concept, plus `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
 
 Reach for `concept-normalization-overrides.csv` first. It is declarative and
@@ -410,6 +411,13 @@ Turn a company-specific revenue concept into a dimension of the standard one:
 
 ```csv
 5,tsla:AutomotiveRevenues,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:AutomotiveRevenuesMember,Automotive Revenue,,False
+```
+
+A revenue note sometimes lists the product split as its own concepts, with no axis. The parser keeps those lines as filed when they add up to the face total. Rewrite them onto the product axis. `to_concept` is the revenue line on the face, and `to_member` is the member later filings use for that line, so the years join one series:
+
+```csv
+9,us-gaap:AdvertisingRevenue,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,srt:ProductOrServiceAxis,us-gaap:AdvertisingMember,Advertising,,False
+9,us-gaap:OtherSalesRevenueNet,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,srt:ProductOrServiceAxis,us-gaap:ServiceOtherMember,Other revenue,,False
 ```
 
 Flip a sign for one form type only:
