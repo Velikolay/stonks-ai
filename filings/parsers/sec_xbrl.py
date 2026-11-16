@@ -33,6 +33,26 @@ class SECXBRLParser:
         }
     )
 
+    # Concepts that are the total revenue line, whatever a filing calls it.
+    # A note often tags the same line with a different concept than the face.
+    _TOTAL_REVENUE_CONCEPTS = frozenset(
+        {
+            "us-gaap:Revenues",
+            "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax",
+            "us-gaap:SalesRevenueNet",
+            "us-gaap:SalesRevenueGoodsNet",
+            "us-gaap:SalesRevenueServicesNet",
+        }
+    )
+    # Pieces of that total. Kept when they name a member the total does not.
+    _COMPONENT_REVENUE_CONCEPTS = frozenset(
+        {
+            "us-gaap:AdvertisingRevenue",
+            "us-gaap:OtherSalesRevenueNet",
+        }
+    )
+
     def __init__(self):
         """Initialize the parser."""
         pass
@@ -189,17 +209,25 @@ class SECXBRLParser:
         """Add segment members that the face income statement did not carry.
 
         Some filings tag market, geography, and reportable-segment amounts only
-        in the segment note. The face statement then has the total and none of
-        the members, which leaves a one-year hole in every series. A disclosure
-        row is kept when it reuses an income-statement concept or label, sits on
-        a segment axis, and is not already present from the face statement.
+        in a note. The face statement then has the total and none of the
+        members, which leaves a one-year hole in every series. A disclosure row
+        is kept when it sits on a segment axis and either reuses an
+        income-statement concept or label, or tags the revenue line with a
+        different revenue concept than the face. The revenue concept and label
+        are rewritten to the face line so the member joins that series. A
+        member the face already reports is not added again. Other sales tagged
+        on a segment member that already carries the total is the residual of
+        that segment, so it is stored as its own member. An undimensioned row
+        is kept only when it is the plug between the face total and one axis
+        of members for that period. A repeated total, and any other note line,
+        stays out of the income statement.
 
         Args:
             xbrl: XBRL object from edgartools
             income_facts: Facts already parsed from the face income statement
 
         Returns:
-            Dimension facts to add alongside the face statement
+            Facts to add alongside the face statement
         """
         face_concepts = {fact.concept for fact in income_facts if not fact.axis}
         face_labels = {
@@ -210,12 +238,43 @@ class SECXBRLParser:
         if not face_concepts and not face_labels:
             return []
 
-        seen = {
-            (fact.concept, fact.axis, fact.member, fact.period_end)
+        face_revenue = self._face_revenue_fact(income_facts)
+        revenue_concepts = (
+            self._TOTAL_REVENUE_CONCEPTS | self._COMPONENT_REVENUE_CONCEPTS
+        )
+        seen: set[tuple] = set()
+        for fact in income_facts:
+            if not fact.axis:
+                continue
+            seen.add((fact.concept, fact.axis, fact.member, fact.period_end))
+            # A member already reported under another revenue concept is the
+            # same member once both are rewritten onto the face revenue line.
+            if (
+                face_revenue is not None
+                and fact.concept in revenue_concepts
+                and fact.concept != face_revenue.concept
+            ):
+                seen.add(
+                    (
+                        face_revenue.concept,
+                        fact.axis,
+                        fact.member,
+                        fact.period_end,
+                    )
+                )
+        face_revenue_by_period = {
+            (fact.period_end, fact.period): fact.value
             for fact in income_facts
-            if fact.axis
+            if face_revenue is not None
+            and not fact.axis
+            and not fact.is_abstract
+            and fact.concept == face_revenue.concept
+            and fact.value is not None
         }
-        added: list[FinancialFactCreate] = []
+        added: dict[tuple, FinancialFactCreate] = {}
+        # Concept each added fact had before it was rewritten onto the face line.
+        # A revenue total replaces a component that claimed the same member first.
+        origin: dict[tuple, str] = {}
         try:
             available = xbrl.statements.list_available()
         except Exception:
@@ -226,7 +285,7 @@ class SECXBRLParser:
             if str(row.get("category", "")) != "disclosure":
                 continue
             name = str(row.get("name", ""))
-            if "Segment" not in name:
+            if not self._is_segment_disclosure(name):
                 continue
             role = row.get("role_name")
             if not role or (isinstance(role, float) and math.isnan(role)):
@@ -244,26 +303,232 @@ class SECXBRLParser:
                 logger.exception("Could not read segment disclosure %s", role)
                 continue
 
-            for fact in self._parse_statement(
+            parsed = self._parse_statement(
                 frame, "Income Statement", include_dimensions=True
+            )
+            undimensioned = []
+            before = set(added)
+            for fact in parsed:
+                if not fact.axis:
+                    undimensioned.append(fact)
+                    continue
+                if fact.axis not in self._SEGMENT_AXES:
+                    continue
+                self._adopt_segment_fact(
+                    fact,
+                    face_concepts,
+                    face_labels,
+                    face_revenue,
+                    seen,
+                    added,
+                    origin,
+                )
+            members = [
+                fact
+                for fact in income_facts
+                if face_revenue is not None
+                and fact.axis
+                and fact.concept == face_revenue.concept
+                and isinstance(fact.value, Decimal)
+            ]
+            members.extend(
+                added[key]
+                for key in added.keys() - before
+                if face_revenue is not None
+                and added[key].concept == face_revenue.concept
+            )
+            for fact in self._undimensioned_plugs(
+                undimensioned, members, face_revenue_by_period
             ):
-                if not fact.axis or fact.axis not in self._SEGMENT_AXES:
-                    continue
-                label = fact.label.strip().lower() if fact.label else ""
-                if fact.concept not in face_concepts and label not in face_labels:
-                    continue
-                key = (fact.concept, fact.axis, fact.member, fact.period_end)
-                if key in seen:
-                    continue
-                seen.add(key)
-                added.append(fact)
+                key = (fact.concept, fact.period_end, fact.period)
+                if key not in added:
+                    added[key] = fact
 
         if added:
             logger.info(
                 "Added %s segment-disclosure facts missing from the income statement",
                 len(added),
             )
-        return added
+        return list(added.values())
+
+    @classmethod
+    def _is_segment_disclosure(cls, name: str) -> bool:
+        """Return True for a note that disaggregates revenue or segments.
+
+        Args:
+            name: Statement name from the filing's presentation linkbase.
+
+        Returns:
+            True when the note is a segment, geography, or revenue-source table.
+        """
+        if "Discontinued" in name:
+            return False
+        return any(token in name for token in ("Segment", "Geographic", "Revenue"))
+
+    @staticmethod
+    def _undimensioned_plugs(
+        undimensioned: list[FinancialFactCreate],
+        members: list[FinancialFactCreate],
+        face_revenue_by_period: dict[tuple, object],
+    ) -> list[FinancialFactCreate]:
+        """Return note rows that close one axis to the face total.
+
+        Args:
+            undimensioned: Disclosure rows with no axis.
+            members: Revenue members kept from the same note.
+            face_revenue_by_period: Face revenue by period end and period type.
+
+        Returns:
+            The reconciling rows. Totals and unrelated note lines are omitted.
+        """
+        sums: dict[tuple, object] = {}
+        for member in members:
+            if not isinstance(member.value, Decimal):
+                continue
+            key = (member.period_end, member.period, member.axis)
+            sums[key] = sums.get(key, 0) + member.value
+
+        kept = []
+        for fact in undimensioned:
+            if fact.is_abstract or fact.value is None or fact.value == 0:
+                continue
+            face_value = face_revenue_by_period.get((fact.period_end, fact.period))
+            if face_value is None:
+                continue
+            closes_an_axis = any(
+                face_value - total == fact.value
+                for (period_end, period, _axis), total in sums.items()
+                if period_end == fact.period_end and period == fact.period
+            )
+            if closes_an_axis:
+                kept.append(fact)
+        return kept
+
+    def _face_revenue_fact(self, income_facts: list) -> Optional[FinancialFactCreate]:
+        """Return the undimensioned revenue total on the face statement.
+
+        Args:
+            income_facts: Facts parsed from the face income statement.
+
+        Returns:
+            The revenue fact with the largest absolute value, or None.
+        """
+        candidates = [
+            fact
+            for fact in income_facts
+            if not fact.axis
+            and fact.concept in self._TOTAL_REVENUE_CONCEPTS
+            and fact.value is not None
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda fact: abs(fact.value))
+
+    def _adopt_segment_fact(
+        self,
+        fact: FinancialFactCreate,
+        face_concepts: set[str],
+        face_labels: set[str],
+        face_revenue: Optional[FinancialFactCreate],
+        seen: set[tuple],
+        added: dict,
+        origin: dict,
+    ) -> None:
+        """Keep a disclosure fact that extends an income-statement line.
+
+        Args:
+            fact: Dimension fact parsed from a disclosure.
+            face_concepts: Concepts on the undimensioned face statement.
+            face_labels: Lower-cased labels on the undimensioned face statement.
+            face_revenue: Undimensioned revenue total, when the face has one.
+            seen: Concept, axis, member, and period already reported on the face.
+            added: Facts accepted so far, keyed by concept, axis, member, and period.
+            origin: Original concept of each accepted fact, before rewriting.
+        """
+        original_concept = fact.concept
+        revenue_concepts = (
+            self._TOTAL_REVENUE_CONCEPTS | self._COMPONENT_REVENUE_CONCEPTS
+        )
+        rewritten = (
+            face_revenue is not None
+            and original_concept in revenue_concepts
+            and original_concept not in face_concepts
+        )
+        if rewritten and face_revenue is not None:
+            fact.concept = face_revenue.concept
+            fact.label = face_revenue.label
+        else:
+            label = fact.label.strip().lower() if fact.label else ""
+            if fact.concept not in face_concepts and label not in face_labels:
+                return
+
+        key = (fact.concept, fact.axis, fact.member, fact.period_end)
+        if key in seen or key in added:
+            # Other sales tagged on the segment total is that segment's
+            # residual, not a second copy of the total.
+            if original_concept != "us-gaap:OtherSalesRevenueNet":
+                if (
+                    key in added
+                    and original_concept in self._TOTAL_REVENUE_CONCEPTS
+                    and origin.get(key) in self._COMPONENT_REVENUE_CONCEPTS
+                ):
+                    added[key] = fact
+                    origin[key] = original_concept
+                return
+            fact.member = "Other sales"
+            fact.member_label = "Other sales"
+            key = (fact.concept, fact.axis, fact.member, fact.period_end)
+            if key in seen or key in added:
+                return
+
+        added[key] = fact
+        origin[key] = original_concept
+
+    def _published_quarter_fact(
+        self,
+        row,
+        statement_type: str,
+        ytd_fact: FinancialFactCreate,
+        quarter_period_col: str,
+        quarter_comparative_col: Optional[str],
+        latest_period_col: str,
+    ) -> list[FinancialFactCreate]:
+        """Keep a filing's published quarter beside the year-to-date total.
+
+        The face statement otherwise stores only the year-to-date column, and
+        the quarterly procedure reconstructs the quarter by subtraction. A
+        restated comparative makes that residual miss the quarter the filing
+        printed, which drops a dimension split that matches the printed total.
+
+        Args:
+            row: Undimensioned statement row.
+            statement_type: Statement name.
+            ytd_fact: Fact already created from the latest column.
+            quarter_period_col: Column for the filing's current quarter.
+            quarter_comparative_col: Prior-year column for that quarter.
+            latest_period_col: Column used for ``ytd_fact``.
+
+        Returns:
+            The published quarter fact, or nothing when it is not a revenue total.
+        """
+        if (
+            ytd_fact.is_abstract
+            or ytd_fact.axis
+            or ytd_fact.concept not in self._TOTAL_REVENUE_CONCEPTS
+            or quarter_period_col == latest_period_col
+        ):
+            return []
+        quarter_fact = self._create_financial_fact_with_hierarchy(
+            row,
+            statement_type,
+            quarter_period_col,
+            quarter_comparative_col,
+            ytd_fact.position or 0,
+        )
+        if quarter_fact is None or quarter_fact.period != PeriodType.Q:
+            return []
+        quarter_fact.key = f"{quarter_fact.key}|q"
+        return [quarter_fact]
 
     def _parse_statement(
         self,
@@ -355,6 +620,16 @@ class SECXBRLParser:
                     if not fact.is_abstract:
                         base_label_by_concept.setdefault(fact.concept, fact.label)
                     position += 1
+                    facts.extend(
+                        self._published_quarter_fact(
+                            row,
+                            statement_type,
+                            fact,
+                            quarter_period_col,
+                            quarter_comparative_col,
+                            latest_period_col,
+                        )
+                    )
 
             # Handle dimension facts (rows where dimension=True); only for income statement
             if (

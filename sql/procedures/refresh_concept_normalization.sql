@@ -35,12 +35,13 @@ BEGIN
         LEFT JOIN financial_facts_overridden ffo
             ON ffo.id = ff.id
             AND ffo.company_id = ff.company_id
+            AND ffo.source_fact_id IS NULL
         WHERE ff.company_id = ANY(company_ids)
     ),
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
         FROM financial_facts_base
-        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type
+        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type, period
         HAVING COUNT(DISTINCT value) > 1
     ),
     financial_facts_overridden_cte AS (

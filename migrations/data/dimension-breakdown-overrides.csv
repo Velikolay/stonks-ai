@@ -1,1 +1,6 @@
 company_id,normalized_label,axis,parent_member,members
+2,Revenue,Product,,Google;Other Bets
+2,Revenue,Product,Google,Google Network;Google properties;Other revenues including Google Cloud
+2,Revenue,Product,Google,"Google advertising;Google Cloud;Google subscriptions, platforms, and devices"
+2,Revenue,Geographical,,Rest of the world;United Kingdom;United States
+2,Revenue,Geographical,,APAC;EMEA;Other Americas;United States

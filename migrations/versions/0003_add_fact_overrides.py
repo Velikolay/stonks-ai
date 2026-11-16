@@ -60,6 +60,12 @@ def upgrade() -> None:
         sa.Column("to_member_label", sa.String(), nullable=True),
         sa.Column("to_weight", sa.Numeric(), nullable=True),
         sa.Column(
+            "action",
+            sa.String(),
+            nullable=False,
+            server_default="rewrite",
+        ),
+        sa.Column(
             "created_at",
             sa.DateTime(),
             nullable=False,
@@ -81,6 +87,16 @@ def upgrade() -> None:
             "(to_axis IS NULL AND to_member IS NULL AND to_member_label IS NULL) "
             "OR (to_axis IS NOT NULL AND to_member IS NOT NULL AND to_member_label IS NOT NULL)",
             name="chk_ffo_dimension_target_all_or_none",
+        ),
+        sa.CheckConstraint(
+            "action IN ('rewrite', 'clone')",
+            name="ck_financial_facts_overrides_action",
+        ),
+        sa.CheckConstraint(
+            "action <> 'clone' OR ("
+            "to_axis IS NOT NULL AND to_member IS NOT NULL "
+            "AND to_member_label IS NOT NULL)",
+            name="ck_financial_facts_overrides_clone_target",
         ),
     )
 
@@ -156,6 +172,8 @@ def upgrade() -> None:
                         "to_member": row.get("to_member") or None,
                         "to_member_label": row.get("to_member_label") or None,
                         "to_weight": row.get("to_weight") or None,
+                        "action": (row.get("action") or "rewrite").strip().lower()
+                        or "rewrite",
                     }
                 )
             except Exception as e:

@@ -271,6 +271,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Same segment on Product for Revenue but ConsolidationItems for Operating Income | `dimension-normalization-overrides.csv` | `normalized_axis_label=Product` on the ConsolidationItems members |
 | A set of members that adds up to a subtotal or to the line is missing, or one is a coincidence | `dimension-breakdown-overrides.csv` | `parent_member`, `members` |
 | One member is wrong for one period on the quarterly or yearly layer | `financial-rewrites.csv` | `granularity`, `action`, `period_end`, `value` |
+| The same fact must also appear on another axis, and the original line stays | `financial-facts-overrides.csv` | `action=clone` |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
 
@@ -385,7 +386,7 @@ that inference would find for it later.
 
 ### `financial-facts-overrides.csv`
 
-`id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global`
+`id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global,action`
 
 Left-hand columns match, `to_*` columns rewrite. `to_axis`, `to_member` and
 `to_member_label` must be all set or all blank; a check constraint enforces it.
@@ -393,6 +394,14 @@ Left-hand columns match, `to_*` columns rewrite. `to_axis`, `to_member` and
 the source concept there. The `id` column is preserved so admin CSV exports
 round-trip. The loader inserts the file in one batch, so once any row has an
 `id`, a new row needs the next integer too. A blank `id` fails the load.
+
+`action` is `rewrite` or `clone`. Blank means `rewrite`: one matching row
+replaces the fact, and a company-specific row beats a global one. `clone`
+keeps the fact and inserts an extra copy for every matching row, so one
+undimensioned line can be placed on two axes. A clone requires `to_axis`,
+`to_member` and `to_member_label`. Its `to_concept` is what the copy is
+labeled as; the source concept is unchanged. Point a dimension override at
+the clone's member so the copy lands on Product or Geographical.
 
 Turn a company-specific revenue concept into a dimension of the standard one:
 
@@ -410,6 +419,14 @@ Scope a rewrite to a single filing period:
 
 ```csv
 7,5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
+```
+
+Keep an undimensioned hedge and also report it on both cuts. The source
+concept stays; each clone is revenue on one axis:
+
+```csv
+66,2,us-gaap:RevenueNotFromContractWithCustomer,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,us-gaap:StatementBusinessSegmentsAxis,goog:OtherRevenueHedgingGainLossMember,Hedging gains (losses),,False,clone
+67,2,us-gaap:RevenueNotFromContractWithCustomer,Income Statement,__EMPTY__,__EMPTY__,,,,,us-gaap:Revenues,srt:StatementGeographicalAxis,goog:GeographicRevenueHedgingGainLossMember,Hedging gains (losses),,False,clone
 ```
 
 Rows referencing a `company_id` that has not been ingested are skipped with a

@@ -583,7 +583,10 @@ class TestSECXBRLParser:
         face.axis = ""
         face.member = ""
         face.label = "Revenue"
-        face.period_end = None
+        face.value = Decimal("100")
+        face.is_abstract = False
+        face.period = PeriodType.YTD
+        face.period_end = date(2022, 1, 30)
 
         already = Mock()
         already.concept = "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
@@ -643,9 +646,204 @@ class TestSECXBRLParser:
 
         assert [fact.member for fact in added] == ["nvda:DataCenterMember"]
         assert added[0].axis == "srt:ProductOrServiceAxis"
+        assert added[0].concept == "us-gaap:Revenues"
         assert added[0].label == "Revenue"
         assert added[0].value == Decimal("60.0")
         xbrl.statements.get.assert_called_once_with("SegmentRevenue")
+
+    def test_supplement_keeps_revenue_components_as_their_own_members(self):
+        """Advertising lines are kept; other sales on the segment total is split out."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenues"
+        face.value = Decimal("100")
+        face.period_end = date(2016, 12, 31)
+
+        segment_total = Mock()
+        segment_total.concept = "us-gaap:Revenues"
+        segment_total.axis = "us-gaap:StatementBusinessSegmentsAxis"
+        segment_total.member = "goog:GoogleInc.Member"
+        segment_total.label = "Revenues"
+        segment_total.period_end = date(2016, 12, 31)
+
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_AdvertisingRevenue",
+                    "us-gaap_AdvertisingRevenue",
+                    "us-gaap_OtherSalesRevenueNet",
+                ],
+                "label": [
+                    "Google properties",
+                    "Google",
+                    "Google",
+                ],
+                "abstract": [False, False, False],
+                "dimension": [True, True, True],
+                "dimension_axis": [
+                    "us-gaap:ProductOrServiceAxis",
+                    "us-gaap:StatementBusinessSegmentsAxis",
+                    "us-gaap:StatementBusinessSegmentsAxis",
+                ],
+                "dimension_member": [
+                    "goog_GooglePropertiesMember",
+                    "goog_GoogleInc.Member",
+                    "goog_GoogleInc.Member",
+                ],
+                "dimension_member_label": [
+                    "Google properties",
+                    "Google",
+                    "Google",
+                ],
+                "unit": ["usd", "usd", "usd"],
+                "weight": [1.0, 1.0, 1.0],
+                "preferred_sign": [1.0, 1.0, 1.0],
+                "point_in_time": [False, False, False],
+                "2016-12-31 (FY)": [63.0, 79.0, 10.0],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenue by Revenue Source (Details)"],
+                "role_name": ["RevenueSource"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = parser._supplement_segment_dimensions(xbrl, [face, segment_total])
+        by_member = {fact.member: fact for fact in added}
+
+        assert set(by_member) == {"goog:GooglePropertiesMember", "Other sales"}
+        assert by_member["goog:GooglePropertiesMember"].concept == "us-gaap:Revenues"
+        assert by_member["goog:GooglePropertiesMember"].label == "Revenues"
+        assert by_member["goog:GooglePropertiesMember"].value == Decimal("63.0")
+        assert by_member["Other sales"].value == Decimal("10.0")
+        assert by_member["Other sales"].member_label == "Other sales"
+
+    def test_supplement_keeps_only_the_undimensioned_plug(self):
+        """The row that closes the members to revenue is kept; other note lines are not."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenues"
+        face.value = Decimal("100")
+        face.is_abstract = False
+        face.period = PeriodType.YTD
+        face.period_end = date(2024, 12, 31)
+
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_Revenues",
+                    "us-gaap_Revenues",
+                    "us-gaap_Revenues",
+                    "us-gaap_RevenueNotFromContractWithCustomer",
+                    "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment",
+                    "us-gaap_RevenuesAbstract",
+                ],
+                "label": [
+                    "Revenues",
+                    "United States",
+                    "EMEA",
+                    "Hedging gains (losses) included in consolidated revenue",
+                    "Capital expenditures",
+                    "Revenue categories",
+                ],
+                "abstract": [False, False, False, False, False, True],
+                "dimension": [False, True, True, False, False, False],
+                "dimension_axis": [
+                    None,
+                    "srt:StatementGeographicalAxis",
+                    "srt:StatementGeographicalAxis",
+                    None,
+                    None,
+                    None,
+                ],
+                "dimension_member": [
+                    None,
+                    "country:US",
+                    "us-gaap:EMEAMember",
+                    None,
+                    None,
+                    None,
+                ],
+                "dimension_member_label": [
+                    None,
+                    "United States",
+                    "EMEA",
+                    None,
+                    None,
+                    None,
+                ],
+                "unit": ["usd", "usd", "usd", "usd", "usd", None],
+                "weight": [1.0, 1.0, 1.0, 1.0, 1.0, None],
+                "preferred_sign": [1.0, 1.0, 1.0, 1.0, 1.0, None],
+                "point_in_time": [False, False, False, False, False, False],
+                "2024-12-31 (FY)": [100.0, 60.0, 43.0, -3.0, 999.0, None],
+                "parent_concept": [None, None, None, None, None, None],
+                "parent_abstract_concept": [None, None, None, None, None, None],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenue by Geographic Area (Details)"],
+                "role_name": ["GeographicRevenue"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = parser._supplement_segment_dimensions(xbrl, [face])
+        undimensioned = [fact for fact in added if not fact.axis]
+
+        assert len(undimensioned) == 1
+        assert undimensioned[0].concept == "us-gaap:RevenueNotFromContractWithCustomer"
+        assert undimensioned[0].value == Decimal("-3.0")
+        assert (
+            undimensioned[0].label
+            == "Hedging gains (losses) included in consolidated revenue"
+        )
+
+    def test_face_revenue_keeps_the_published_quarter(self):
+        """A printed quarter is stored beside the year-to-date revenue total."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Revenues"],
+                "label": ["Revenues"],
+                "abstract": [False],
+                "dimension": [False],
+                "parent_concept": [None],
+                "parent_abstract_concept": [None],
+                "unit": ["usd"],
+                "weight": [1.0],
+                "preferred_sign": [1.0],
+                "point_in_time": [False],
+                "2025-09-30 (Q3)": [102346.0],
+                "2025-09-30 (YTD)": [289007.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", False)
+        by_period = {fact.period: fact for fact in facts}
+
+        assert by_period[PeriodType.Q].value == Decimal("102346.0")
+        assert by_period[PeriodType.YTD].value == Decimal("289007.0")
+        assert by_period[PeriodType.Q].key != by_period[PeriodType.YTD].key
 
     def test_dimension_suffix_rewrites_only_reused_members(self):
         """A shared parent member takes the label suffix; a distinct member does not."""
@@ -723,12 +921,11 @@ class TestSECXBRLParser:
         )
 
         facts = parser._parse_statement(frame, "Income Statement", True)
-        face = [fact for fact in facts if not fact.axis]
+        face = {fact.period: fact for fact in facts if not fact.axis}
         geo = {fact.period: fact for fact in facts if fact.member == "country:US"}
 
-        assert len(face) == 1
-        assert face[0].period == PeriodType.YTD
-        assert face[0].value == Decimal("147811")
+        assert face[PeriodType.Q].value == Decimal("57006")
+        assert face[PeriodType.YTD].value == Decimal("147811")
         assert geo[PeriodType.Q].value == Decimal("39177")
         assert geo[PeriodType.Q].comparative_value == Decimal("19620")
         assert geo[PeriodType.YTD].value == Decimal("97759")

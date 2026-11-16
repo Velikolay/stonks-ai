@@ -2,9 +2,10 @@
 --
 -- refresh_financial_facts_normalized builds conflicting_fact_keys and excludes
 -- every fact whose (company, statement, concept, label, axis, member,
--- member_label, period_end, form_type) group reports more than one distinct
--- value. That is usually a restatement across two filings. Nothing downstream
--- reports the loss, so check it here.
+-- member_label, period_end, form_type, period) group reports more than one
+-- distinct value. A quarter and its year-to-date total share a date and are
+-- not a conflict. A real conflict is usually a restatement across two filings.
+-- Nothing downstream reports the loss, so check it here.
 
 \echo '--- Fact groups excluded because they report conflicting values ---'
 WITH base AS (
@@ -19,6 +20,7 @@ WITH base AS (
         COALESCE(ffo.member_label, ff.member_label) AS member_label,
         ff.period_end,
         ff.form_type,
+        ff.period,
         ff.filing_id,
         ff.value
     FROM financial_facts ff
@@ -35,6 +37,7 @@ SELECT
     member,
     period_end,
     form_type,
+    period,
     COUNT(*) AS facts,
     COUNT(DISTINCT value) AS distinct_values,
     array_agg(DISTINCT value) AS values,
@@ -49,7 +52,8 @@ GROUP BY
     member,
     member_label,
     period_end,
-    form_type
+    form_type,
+    period
 HAVING COUNT(DISTINCT value) > 1
 ORDER BY distinct_values DESC, company_id, statement, concept
 LIMIT 50;

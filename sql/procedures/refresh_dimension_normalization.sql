@@ -35,12 +35,45 @@ BEGIN
         LEFT JOIN financial_facts_overridden ffo
             ON ffo.id = ff.id
             AND ffo.company_id = ff.company_id
+            AND ffo.source_fact_id IS NULL
         WHERE ff.company_id = ANY(company_ids)
+
+        UNION ALL
+
+        SELECT
+            ffo.id,
+            ff.filing_id,
+            ff.company_id,
+            ff.form_type,
+            ffo.concept,
+            ff.label,
+            FALSE AS is_abstract,
+            ff.value,
+            ff.comparative_value,
+            ffo.weight,
+            ff.unit,
+            ffo.axis,
+            ffo.member,
+            ffo.member_label,
+            ff.statement,
+            ff.period_end,
+            ff.comparative_period_end,
+            ff.period,
+            ff.position,
+            NULL::bigint,
+            NULL::bigint,
+            ffo.fact_override_id
+        FROM financial_facts_overridden ffo
+        JOIN financial_facts ff
+            ON ff.id = ffo.source_fact_id
+            AND ff.company_id = ffo.company_id
+        WHERE ffo.company_id = ANY(company_ids)
+            AND ffo.source_fact_id IS NOT NULL
     ),
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
         FROM financial_facts_base
-        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type
+        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type, period
         HAVING COUNT(DISTINCT value) > 1
     ),
     financial_facts_overridden_cte AS (
@@ -150,6 +183,13 @@ BEGIN
             AND e1.company_id = e2.company_id
             AND e1.statement = e2.statement
             AND e1.normalized_label = e2.normalized_label
+        JOIN dimension_normalized_base b1 ON b1.id = e1.id
+        JOIN dimension_normalized_base b2 ON b2.id = e2.id
+        -- The same label on two axes that an override already sent to different
+        -- cuts is two series, not a rename.
+        WHERE b1.normalized_axis_label IS NULL
+           OR b2.normalized_axis_label IS NULL
+           OR b1.normalized_axis_label = b2.normalized_axis_label
     ),
     groups AS (
         SELECT id, id AS group_id

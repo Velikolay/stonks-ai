@@ -62,6 +62,7 @@ class FinancialFactsOverridesOperationsAsync:
                         to_member=row.to_member,
                         to_member_label=row.to_member_label,
                         to_weight=row.to_weight,
+                        action=row.action,
                         is_global=row.is_global,
                         created_at=row.created_at,
                         updated_at=row.updated_at,
@@ -97,6 +98,7 @@ class FinancialFactsOverridesOperationsAsync:
                         to_member=override.to_member,
                         to_member_label=override.to_member_label,
                         to_weight=override.to_weight,
+                        action=override.action,
                     )
                     .returning(self.overrides_table)
                 )
@@ -120,6 +122,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_member=row.to_member,
                     to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
+                    action=row.action,
                     is_global=row.is_global,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
@@ -151,6 +154,7 @@ class FinancialFactsOverridesOperationsAsync:
                     "to_member",
                     "to_member_label",
                     "to_weight",
+                    "action",
                 ]:
                     value = getattr(override_update, field)
                     if value is not None:
@@ -187,6 +191,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_member=row.to_member,
                     to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
+                    action=row.action,
                     is_global=row.is_global,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
@@ -250,6 +255,7 @@ class FinancialFactsOverridesOperationsAsync:
                     to_member=row.to_member,
                     to_member_label=row.to_member_label,
                     to_weight=row.to_weight,
+                    action=row.action,
                     is_global=row.is_global,
                     created_at=row.created_at,
                     updated_at=row.updated_at,

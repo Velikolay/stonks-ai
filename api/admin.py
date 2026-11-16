@@ -160,6 +160,7 @@ class FinancialFactsOverrideResponse(BaseModel):
     to_member: Optional[str] = None
     to_member_label: Optional[str] = None
     to_weight: Optional[Decimal] = None
+    action: str = "rewrite"
     is_global: bool
     created_at: datetime
     updated_at: datetime
@@ -1248,6 +1249,7 @@ async def list_financial_facts_overrides(
                 to_member=o.to_member,
                 to_member_label=o.to_member_label,
                 to_weight=o.to_weight,
+                action=o.action,
                 is_global=o.is_global,
                 created_at=o.created_at,
                 updated_at=o.updated_at,
@@ -1289,6 +1291,7 @@ async def create_financial_facts_override(
             to_member=created.to_member,
             to_member_label=created.to_member_label,
             to_weight=created.to_weight,
+            action=created.action,
             is_global=created.is_global,
             created_at=created.created_at,
             updated_at=created.updated_at,
@@ -1334,6 +1337,7 @@ async def update_financial_facts_override(
             to_member=updated.to_member,
             to_member_label=updated.to_member_label,
             to_weight=updated.to_weight,
+            action=updated.action,
             is_global=updated.is_global,
             created_at=updated.created_at,
             updated_at=updated.updated_at,
@@ -1407,6 +1411,7 @@ async def export_financial_facts_overrides_to_csv(
             "to_member_label",
             "to_weight",
             "is_global",
+            "action",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
@@ -1430,6 +1435,7 @@ async def export_financial_facts_overrides_to_csv(
                     "to_member_label": o.to_member_label or "",
                     "to_weight": str(o.to_weight) if o.to_weight is not None else "",
                     "is_global": str(o.is_global),
+                    "action": o.action or "rewrite",
                 }
             )
 
@@ -1516,6 +1522,8 @@ async def import_financial_facts_overrides_from_csv(
                     to_member=(row.get("to_member", "").strip() or None),
                     to_member_label=(row.get("to_member_label", "").strip() or None),
                     to_weight=to_weight,
+                    action=(row.get("action") or "rewrite").strip().lower()
+                    or "rewrite",
                 )
 
                 override_id_str = (row.get("id") or "").strip()
@@ -1534,6 +1542,7 @@ async def import_financial_facts_overrides_from_csv(
                         to_member=override_create.to_member,
                         to_member_label=override_create.to_member_label,
                         to_weight=override_create.to_weight,
+                        action=override_create.action,
                     )
                     updated_obj = await filings_db.financial_facts_overrides.update(
                         override_id, override_update

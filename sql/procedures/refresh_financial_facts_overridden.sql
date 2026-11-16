@@ -6,6 +6,9 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Rewrites replace a fact (one winning row, same id). Clones keep the fact
+    -- and add one row per matching override, with a negative id and
+    -- source_fact_id pointing at the stored fact.
     CREATE TEMP TABLE tmp_financial_facts_overridden_new ON COMMIT DROP AS
     SELECT
         ff.id,
@@ -16,13 +19,15 @@ BEGIN
         COALESCE(r.to_member, ff.member) AS member,
         COALESCE(r.to_member_label, ff.member_label) AS member_label,
         COALESCE(r.to_weight, ff.weight) AS weight,
-        r.id AS fact_override_id
+        r.id AS fact_override_id,
+        NULL::bigint AS source_fact_id
     FROM financial_facts ff
     JOIN LATERAL (
         SELECT r.*
         FROM financial_facts_overrides r
         WHERE
-            r.statement = ff.statement
+            r.action = 'rewrite'
+            AND r.statement = ff.statement
             AND r.concept = ff.concept
             AND (r.company_id = ff.company_id OR r.is_global = TRUE)
             AND (r.axis IS NULL OR r.axis = ff.axis)
@@ -45,6 +50,43 @@ BEGIN
             r.updated_at DESC
         LIMIT 1
     ) r ON TRUE
+    WHERE ff.company_id = ANY(company_ids)
+
+    UNION ALL
+
+    SELECT
+        CASE
+            WHEN hashtextextended(
+                'fact-clone|' || ff.id::text || '|' || r.id::text, 0
+            ) < 0
+            THEN hashtextextended(
+                'fact-clone|' || ff.id::text || '|' || r.id::text, 0
+            )
+            ELSE -1 - hashtextextended(
+                'fact-clone|' || ff.id::text || '|' || r.id::text, 0
+            )
+        END AS id,
+        ff.company_id,
+        ff.statement,
+        r.to_concept AS concept,
+        r.to_axis AS axis,
+        r.to_member AS member,
+        r.to_member_label AS member_label,
+        COALESCE(r.to_weight, ff.weight) AS weight,
+        r.id AS fact_override_id,
+        ff.id AS source_fact_id
+    FROM financial_facts ff
+    JOIN financial_facts_overrides r
+        ON r.action = 'clone'
+        AND r.statement = ff.statement
+        AND r.concept = ff.concept
+        AND (r.company_id = ff.company_id OR r.is_global = TRUE)
+        AND (r.axis IS NULL OR r.axis = ff.axis)
+        AND (r.member IS NULL OR r.member = ff.member)
+        AND (r.label IS NULL OR r.label = ff.label)
+        AND (r.form_type IS NULL OR r.form_type = ff.form_type)
+        AND (r.from_period IS NULL OR ff.period_end >= r.from_period)
+        AND (r.to_period IS NULL OR ff.period_end <= r.to_period)
     WHERE ff.company_id = ANY(company_ids);
 
     DELETE FROM financial_facts_overridden ffo
@@ -65,7 +107,8 @@ BEGIN
         member,
         member_label,
         weight,
-        fact_override_id
+        fact_override_id,
+        source_fact_id
     )
     SELECT
         id,
@@ -76,7 +119,8 @@ BEGIN
         member,
         member_label,
         weight,
-        fact_override_id
+        fact_override_id,
+        source_fact_id
     FROM tmp_financial_facts_overridden_new
     ON CONFLICT (id) DO UPDATE
     SET
@@ -87,6 +131,7 @@ BEGIN
         member = EXCLUDED.member,
         member_label = EXCLUDED.member_label,
         weight = EXCLUDED.weight,
-        fact_override_id = EXCLUDED.fact_override_id;
+        fact_override_id = EXCLUDED.fact_override_id,
+        source_fact_id = EXCLUDED.source_fact_id;
 END;
 $$;

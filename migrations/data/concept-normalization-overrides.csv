@@ -82,6 +82,8 @@ company_id,concept,statement,normalized_label,is_abstract,is_global,abstract_con
 0,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,Revenue,False,True,,,,usd,
 5,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Income Statement,Net income attributable to common stockholders,False,False,,,,usd,
 2,us-gaap:AdvertisingRevenue,Income Statement,Revenue,False,False,,,,usd,
+2,us-gaap:RevenueNotFromContractWithCustomer,Income Statement,Hedging gains (losses),False,False,,,Foreign-currency hedge included in revenue; not a segment or region,usd,
+2,us-gaap:GainLossOnOilAndGasHedgingActivity,Income Statement,Hedging gains (losses),False,False,,,2018-2020 tag for the same unallocated revenue hedge,usd,
 0,us-gaap:CostOfGoodsAndServicesSold,Income Statement,Cost of Revenue,False,True,,,,usd,
 0,us-gaap:CostOfRevenue,Income Statement,Cost of Revenue,False,True,,,,usd,
 0,us-gaap:CostOfGoodsSold,Income Statement,Cost of Revenue,False,True,,,,usd,

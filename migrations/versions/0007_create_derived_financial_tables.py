@@ -32,6 +32,7 @@ def upgrade() -> None:
         sa.Column("member_label", sa.String(), nullable=False),
         sa.Column("weight", sa.Numeric(), nullable=True),
         sa.Column("fact_override_id", sa.Integer(), nullable=False),
+        sa.Column("source_fact_id", sa.BigInteger(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

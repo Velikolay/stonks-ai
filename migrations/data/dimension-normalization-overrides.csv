@@ -1,11 +1,35 @@
 company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_member_label,tags
-2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesMember,,False,Product,Google Services,
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesMember,,False,Product,Google Services,Segment revenue and costs on the same cut as operating income
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesSegmentMember,,False,Product,Google Services,2021-2022 segment member id
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleCloudMember,,False,Product,Google Cloud,Segment revenue and costs on the same cut as operating income
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleCloudSegmentMember,,False,Product,Google Cloud,2021-2022 segment member id
 2,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,,False,Product,Other Bets,
-2,us-gaap:ProductOrServiceAxis,goog:AdvertisingMember,,False,Product,Google Inc,
-2,us-gaap:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising,
-2,srt:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising ,
+2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleInc.Member,,False,Product,Google,Pre-2021 Google segment; filing label is Google
+2,us-gaap:StatementBusinessSegmentsAxis,goog:OtherRevenueHedgingGainLossMember,,False,Product,Hedging gains (losses),Unallocated foreign-currency hedge cloned onto Product
+2,srt:StatementGeographicalAxis,goog:GeographicRevenueHedgingGainLossMember,,False,Geographical,Hedging gains (losses),Same hedge cloned onto Geographical
+2,us-gaap:StatementBusinessSegmentsAxis,Other sales,,False,Product,Other revenues including Google Cloud,2015-2018 Google revenue other than advertising; includes Google Cloud
+2,srt:ProductOrServiceAxis,goog:OtherRevenuesIncludingCloudMember,,False,Product,Other revenues including Google Cloud,2018 10-K and 2019 Q2-Q3 still include Google Cloud; 2019 10-K other excludes it
+2,us-gaap:ProductOrServiceAxis,goog:OtherRevenuesIncludingCloudMember,,False,Product,Other revenues including Google Cloud,2018 10-K and 2019 Q2-Q3 still include Google Cloud; 2019 10-K other excludes it
+2,srt:ConsolidationItemsAxis,Google,,False,Product,Google,Segment operating income
+2,srt:ConsolidationItemsAxis,Google Services,,False,Product,Google Services,Segment operating income
+2,srt:ConsolidationItemsAxis,Google Cloud,,False,Product,Google Cloud,Segment operating income
+2,srt:ConsolidationItemsAxis,Other Bets,,False,Product,Other Bets,Segment operating income
+2,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Product,Reconciling items,Corporate costs in the segment operating-income reconciliation
+2,us-gaap:ConsolidationItemsAxis,Google,,False,Product,Google,Segment operating income
+2,us-gaap:ConsolidationItemsAxis,Google Services,,False,Product,Google Services,Segment operating income
+2,us-gaap:ConsolidationItemsAxis,Google Cloud,,False,Product,Google Cloud,Segment operating income
+2,us-gaap:ConsolidationItemsAxis,Other Bets,,False,Product,Other Bets,Segment operating income
+2,us-gaap:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Product,Reconciling items,Corporate costs in the segment operating-income reconciliation
+2,us-gaap:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising,2018 advertising subtotal
+2,srt:ProductOrServiceAxis,goog:AdvertisingRevenueMember,,False,Product,Google advertising,2018 advertising subtotal
 2,srt:ProductOrServiceAxis,goog:GoogleAdvertisingRevenueMember,,False,Product,Google advertising,
-2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleInc.Member,,False,Product,Google Inc,
+2,us-gaap:ProductOrServiceAxis,goog:GoogleAdvertisingRevenueMember,,False,Product,Google advertising,
+2,us-gaap:ProductOrServiceAxis,goog:GoogleWebSitesMember,,False,Product,Google properties,2015 name for Google properties
+2,srt:ProductOrServiceAxis,goog:GoogleWebSitesMember,,False,Product,Google properties,2015 name for Google properties
+2,us-gaap:ProductOrServiceAxis,goog:GoogleNetworkWebSitesMember,,False,Product,Google Network,2015 name for Google Network
+2,srt:ProductOrServiceAxis,goog:GoogleNetworkWebSitesMember,,False,Product,Google Network,2015 name for Google Network
+2,us-gaap:ProductOrServiceAxis,goog:GoogleNetworkMembersPropertiesMember,,False,Product,Google Network,2016-2021 name for Google Network
+2,srt:ProductOrServiceAxis,goog:GoogleNetworkMembersPropertiesMember,,False,Product,Google Network,2016-2021 name for Google Network
 0,us-gaap:StatementBusinessSegmentsAxis,,Japan,True,Geographical,Japan,
 0,us-gaap:StatementBusinessSegmentsAxis,,Europe,True,Geographical,Europe,
 0,us-gaap:StatementBusinessSegmentsAxis,,Americas,True,Geographical,Americas,

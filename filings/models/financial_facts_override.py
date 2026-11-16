@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -26,6 +26,15 @@ class FinancialFactsOverrideBase(BaseModel):
     to_member: Optional[str] = None
     to_member_label: Optional[str] = None
     to_weight: Optional[Decimal] = None
+    action: Literal["rewrite", "clone"] = "rewrite"
+
+    @model_validator(mode="after")
+    def _clone_has_target(self) -> "FinancialFactsOverrideBase":
+        if self.action == "clone" and not (
+            self.to_axis and self.to_member and self.to_member_label
+        ):
+            raise ValueError("clone requires to_axis, to_member and to_member_label")
+        return self
 
 
 class FinancialFactsOverrideCreate(FinancialFactsOverrideBase):
@@ -49,6 +58,7 @@ class FinancialFactsOverrideUpdate(BaseModel):
     to_member: Optional[str] = None
     to_member_label: Optional[str] = None
     to_weight: Optional[Decimal] = None
+    action: Optional[Literal["rewrite", "clone"]] = None
 
 
 class FinancialFactsOverride(FinancialFactsOverrideBase):

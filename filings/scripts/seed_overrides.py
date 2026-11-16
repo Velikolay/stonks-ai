@@ -216,6 +216,17 @@ def parse_facts_rows(path: Path = FACTS_CSV) -> List[dict]:
                 "either all set or all blank"
             )
 
+        action = (_optional(row.get("action")) or "rewrite").lower()
+        if action not in ("rewrite", "clone"):
+            raise SeedError(
+                f"Row {row_num}: action must be rewrite or clone, got {action!r}"
+            )
+        if action == "clone" and not all(target is not None for target in targets):
+            raise SeedError(
+                f"Row {row_num}: clone requires to_axis, to_member and "
+                "to_member_label"
+            )
+
         record = {
             "company_id": _parse_int(row["company_id"], row_num, "company_id"),
             "concept": row["concept"].strip(),
@@ -232,6 +243,7 @@ def parse_facts_rows(path: Path = FACTS_CSV) -> List[dict]:
             "to_member": to_member,
             "to_member_label": to_member_label,
             "to_weight": _parse_decimal(row.get("to_weight"), row_num, "to_weight"),
+            "action": action,
         }
         # The CSV carries stable ids so admin exports round-trip; keep them.
         override_id = _optional(row.get("id"))

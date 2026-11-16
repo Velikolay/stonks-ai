@@ -36,7 +36,41 @@ BEGIN
         LEFT JOIN financial_facts_overridden ffo
             ON ffo.id = ff.id
             AND ffo.company_id = ff.company_id
+            AND ffo.source_fact_id IS NULL
         WHERE ff.company_id = ANY(company_ids)
+
+        UNION ALL
+
+        SELECT
+            ffo.id,
+            ff.filing_id,
+            ff.company_id,
+            ff.form_type,
+            ffo.concept,
+            ff.label,
+            FALSE AS is_abstract,
+            ff.value,
+            ff.comparative_value,
+            ffo.weight,
+            ff.print_sign,
+            ff.unit,
+            ffo.axis,
+            ffo.member,
+            ffo.member_label,
+            ff.statement,
+            ff.period_end,
+            ff.comparative_period_end,
+            ff.period,
+            ff.position,
+            NULL::bigint,
+            NULL::bigint,
+            ffo.fact_override_id
+        FROM financial_facts_overridden ffo
+        JOIN financial_facts ff
+            ON ff.id = ffo.source_fact_id
+            AND ff.company_id = ffo.company_id
+        WHERE ffo.company_id = ANY(company_ids)
+            AND ffo.source_fact_id IS NOT NULL
     ),
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
