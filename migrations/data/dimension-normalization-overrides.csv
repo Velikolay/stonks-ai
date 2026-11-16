@@ -119,3 +119,16 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 1,us-gaap:StatementBusinessSegmentsAxis,,Accessories,False,Product,Accessories,AAPL 2013-2014 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,Desktops,False,us-gaap:StatementBusinessSegmentsAxis,Desktops,Part of Total Mac net sales
 1,us-gaap:StatementBusinessSegmentsAxis,,Mac desktops,False,us-gaap:StatementBusinessSegmentsAxis,Mac desktops,Part of Total Mac net sales
+5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Automotive segment,Reportable segment; includes services and other
+5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveMember,,False,us-gaap:StatementBusinessSegmentsAxis,Automotive segment,2016-2017 segment member
+5,us-gaap:StatementBusinessSegmentsAxis,tsla:EnergyGenerationAndStorageSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy generation and storage segment,Reportable segment
+5,us-gaap:StatementBusinessSegmentsAxis,tsla:EnergyGenerationAndStorageMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy generation and storage segment,2016-2017 segment member
+5,srt:ProductOrServiceAxis,tsla:RegulatoryCreditsMember,,False,Product,Automotive regulatory credits,2018 member of the later automotive regulatory credits line
+5,us-gaap:ProductOrServiceAxis,tsla:RegulatoryCreditsMember,,False,Product,Automotive regulatory credits,2014-2017 member of the later automotive regulatory credits line
+5,us-gaap:ProductOrServiceAxis,tsla:ZeroEmissionVehicleCreditSalesMember,,False,Product,Automotive regulatory credits,2011-2012 ZEV credit sales; the line later called regulatory credits
+5,us-gaap:ProductOrServiceAxis,us-gaap:CreditMember,,False,Product,Automotive regulatory credits,2013 ZEV credit sales; the line later called regulatory credits
+5,srt:ProductOrServiceAxis,tsla:ServicesAndOtherMember,,False,Product,Services and other,
+5,srt:ProductOrServiceAxis,tsla:EnergyGenerationAndStorageMember,,False,Product,Energy generation and storage,
+5,srt:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
+5,us-gaap:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
+5,srt:StatementGeographicalAxis,tsla:OtherInternationalMember,,False,Geographical,Other International,2023 member id for the Other international line

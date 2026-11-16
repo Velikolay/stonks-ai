@@ -4,3 +4,10 @@ company_id,statement,normalized_label,axis,member,period_end,granularity,action,
 8,Income Statement,Revenue,Geographical,Other,2023-10-29,quarterly,delete,
 8,Income Statement,Revenue,Geographical,Singapore,2023-10-29,quarterly,delete,
 8,Income Statement,Revenue,Geographical,Other,2024-01-28,quarterly,delete,
+5,Income Statement,Revenue,Geographical,China,2023-09-30,quarterly,set,5020000000
+5,Income Statement,Revenue,Geographical,United States,2023-09-30,quarterly,set,10893000000
+5,Income Statement,Revenue,Geographical,Other International,2023-09-30,quarterly,set,7437000000
+5,Income Statement,Revenue,Geographical,China,2023-12-31,quarterly,set,6103000000
+5,Income Statement,Revenue,Geographical,United States,2023-12-31,quarterly,set,11763000000
+5,Income Statement,Revenue,Geographical,Other International,2023-12-31,quarterly,set,7301000000
+5,Income Statement,Revenue,,,2022-12-31,quarterly,set,24318000000
