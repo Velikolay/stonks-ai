@@ -189,6 +189,23 @@ def upgrade() -> None:
         "financial_facts",
         ["company_id", "statement", "concept", "filing_id"],
     )
+    # filing_id, parent_id, and abstract_id are checked once per row when a
+    # filing is replaced. The composite index above cannot serve those lookups.
+    op.create_index(
+        "ix_financial_facts_filing_id",
+        "financial_facts",
+        ["filing_id"],
+    )
+    op.create_index(
+        "ix_financial_facts_parent_id",
+        "financial_facts",
+        ["parent_id"],
+    )
+    op.create_index(
+        "ix_financial_facts_abstract_id",
+        "financial_facts",
+        ["abstract_id"],
+    )
 
 
 def downgrade() -> None:
@@ -199,6 +216,9 @@ def downgrade() -> None:
     )
     op.drop_index("ix_financial_facts_statement_concept", table_name="financial_facts")
     op.drop_index("ix_financial_facts_form_type", table_name="financial_facts")
+    op.drop_index("ix_financial_facts_filing_id", table_name="financial_facts")
+    op.drop_index("ix_financial_facts_parent_id", table_name="financial_facts")
+    op.drop_index("ix_financial_facts_abstract_id", table_name="financial_facts")
     op.drop_table("financial_facts")
 
     # Drop the enum type
