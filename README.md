@@ -327,7 +327,9 @@ reported at the requested granularity. The sets that remain are alternatives,
 so show one at a time. For a
 period, sum the members that have a value. The difference from the series
 value is unallocated; a sum past the value means the split does not apply in
-that period. To drill down, request that axis and use a member's own
+that period. Members reprinted coarser than the total, such as millions beside
+an exact dollar total, may overshoot by half a rounding unit each, up to 0.1%.
+That split still applies and the bars stay at the filed values. To drill down, request that axis and use a member's own
 `breakdowns`. A member in no breakdown is not additive.
 
 ```json

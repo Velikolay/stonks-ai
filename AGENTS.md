@@ -220,7 +220,10 @@ from a quarterly response. With `breakdowns=true`, the API returns
 `breakdowns` once on the series: each
 entry is an axis and its members. Show one at a time. For a
 period, sum the members that have a value; a shortfall is unallocated and a
-sum past the line means that split does not apply there. Drill down through a
+sum past the line means that split does not apply there. Members reprinted
+coarser than the total, such as millions beside an exact dollar total, may
+overshoot by half a rounding unit each, up to 0.1%. That split still applies
+and the bars stay at the filed values. Drill down through a
 member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
 than 16 members and per-share amounts are skipped.
 
