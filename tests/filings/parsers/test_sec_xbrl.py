@@ -818,6 +818,126 @@ class TestSECXBRLParser:
             == "Hedging gains (losses) included in consolidated revenue"
         )
 
+    def test_supplement_keeps_extension_axis_that_sums_to_revenue(self):
+        """A company axis is kept when its revenue members equal face revenue."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenues"
+        face.value = Decimal("100")
+        face.is_abstract = False
+        face.period = PeriodType.Q
+        face.period_end = date(2012, 3, 31)
+
+        axis = (
+            "goog:RevenueFromExternalCustomersAndLongLivedAssets"
+            "AttributedToGeographicAreasAxis"
+        )
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_SalesRevenueNet",
+                    "us-gaap_SalesRevenueNet",
+                    "us-gaap_SalesRevenueNet",
+                ],
+                "label": ["United States", "United Kingdom", "Rest of the world"],
+                "abstract": [False, False, False],
+                "dimension": [True, True, True],
+                "dimension_axis": [axis, axis, axis],
+                "dimension_member": [
+                    "us-gaap_SegmentGeographicalGroupsOfCountriesGroupOneMember",
+                    "us-gaap_SegmentGeographicalGroupsOfCountriesGroupTwoMember",
+                    "goog_SegmentGeographicalGroupsOfCountriesGroupThreeMember",
+                ],
+                "dimension_member_label": [
+                    "United States",
+                    "United Kingdom",
+                    "Rest of the world",
+                ],
+                "unit": ["usd", "usd", "usd"],
+                "weight": [1.0, 1.0, 1.0],
+                "preferred_sign": [1.0, 1.0, 1.0],
+                "point_in_time": [False, False, False],
+                "2012-03-31 (Q1)": [50.0, 10.0, 40.0],
+                "parent_concept": [None, None, None],
+                "parent_abstract_concept": [None, None, None],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenues by Geographic Area (Detail)"],
+                "role_name": ["GeographicRevenue"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = parser._supplement_segment_dimensions(xbrl, [face])
+        by_member = {fact.member_label: fact for fact in added}
+
+        assert set(by_member) == {
+            "United States",
+            "United Kingdom",
+            "Rest of the world",
+        }
+        assert by_member["United States"].concept == "us-gaap:Revenues"
+        assert by_member["United States"].label == "Revenues"
+        assert by_member["United States"].axis == axis
+        assert by_member["United States"].value == Decimal("50")
+        assert by_member["Rest of the world"].value == Decimal("40")
+
+    def test_supplement_drops_extension_axis_that_misses_revenue(self):
+        """An extension axis that does not add up to face revenue is left out."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenues"
+        face.value = Decimal("100")
+        face.is_abstract = False
+        face.period = PeriodType.Q
+        face.period_end = date(2012, 3, 31)
+
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_SalesRevenueNet", "us-gaap_SalesRevenueNet"],
+                "label": ["United States", "United Kingdom"],
+                "abstract": [False, False],
+                "dimension": [True, True],
+                "dimension_axis": ["dei:LegalEntityAxis", "dei:LegalEntityAxis"],
+                "dimension_member": ["country_US", "country_GB"],
+                "dimension_member_label": ["United States", "United Kingdom"],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                "2012-03-31 (Q1)": [60.0, 30.0],
+                "parent_concept": [None, None],
+                "parent_abstract_concept": [None, None],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenues by Geographic Area (Detail)"],
+                "role_name": ["GeographicRevenue"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        assert parser._supplement_segment_dimensions(xbrl, [face]) == []
+
     def test_supplement_keeps_undimensioned_revenue_components(self):
         """Advertising and other fees that sum to revenue are kept as filed."""
         parser = SECXBRLParser()

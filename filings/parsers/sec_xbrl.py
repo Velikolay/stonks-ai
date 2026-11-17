@@ -215,7 +215,9 @@ class SECXBRLParser:
         members, which leaves a one-year hole in every series. A disclosure row
         is kept when it sits on a segment axis and either reuses an
         income-statement concept or label, or tags the revenue line with a
-        different revenue concept than the face. The revenue concept and label
+        different revenue concept than the face. A company extension axis is
+        kept on the same terms when its total-revenue members for a period
+        equal the face revenue for that period. The revenue concept and label
         are rewritten to the face line so the member joins that series. A
         member the face already reports is not added again. Other sales tagged
         on a segment member that already carries the total is the residual of
@@ -319,6 +321,16 @@ class SECXBRLParser:
                     continue
                 if fact.axis not in self._SEGMENT_AXES:
                     continue
+                self._adopt_segment_fact(
+                    fact,
+                    face_concepts,
+                    face_labels,
+                    face_revenue,
+                    seen,
+                    added,
+                    origin,
+                )
+            for fact in self._extension_revenue_members(parsed, face_revenue_by_period):
                 self._adopt_segment_fact(
                     fact,
                     face_concepts,
@@ -498,6 +510,49 @@ class SECXBRLParser:
                 stored_key = (component.concept, component.period_end, component.period)
                 if stored_key not in added:
                     added[stored_key] = component
+
+    def _extension_revenue_members(
+        self,
+        facts: list[FinancialFactCreate],
+        face_revenue_by_period: dict[tuple, object],
+    ) -> list[FinancialFactCreate]:
+        """Return extension-axis revenue members that equal face revenue.
+
+        ``_SEGMENT_AXES`` is the standard product, geography, and segment
+        axes. A filer often reports the same split on its own axis, and only
+        in a note, after the face concept changes. Those members are kept
+        when, for one axis and period, the total-revenue amounts add up to
+        the undimensioned face revenue. An axis that falls short is left out,
+        which drops partial country lists, customers, and asset breakdowns.
+
+        Args:
+            facts: Facts parsed from one disclosure.
+            face_revenue_by_period: Face revenue by period end and period type.
+
+        Returns:
+            Members of each extension axis and period that adds up.
+        """
+        grouped: dict[tuple, list[FinancialFactCreate]] = {}
+        for fact in facts:
+            if not fact.axis or fact.axis in self._SEGMENT_AXES:
+                continue
+            if fact.is_abstract or fact.concept not in self._TOTAL_REVENUE_CONCEPTS:
+                continue
+            if not isinstance(fact.value, Decimal) or fact.period_end is None:
+                continue
+            grouped.setdefault((fact.axis, fact.period_end, fact.period), []).append(
+                fact
+            )
+
+        kept: list[FinancialFactCreate] = []
+        for (_axis, period_end, period), members in grouped.items():
+            face_value = face_revenue_by_period.get((period_end, period))
+            if not isinstance(face_value, Decimal) or len(members) < 2:
+                continue
+            total = sum((member.value for member in members), Decimal("0"))
+            if total == face_value:
+                kept.extend(members)
+        return kept
 
     def _adopt_segment_fact(
         self,
