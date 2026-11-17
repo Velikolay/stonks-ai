@@ -206,7 +206,9 @@ least two 10-Ks (a year where one of its members could be swapped for another
 member of equal value does not count, so a region and a country that coincide
 never mix) and writes it into `dimension_breakdowns`; a set that only expands
 another one (iPhone, iPad, Mac, Wearables and Services beside Products and
-Services) is dropped. A year where the set falls short is not stored.
+Services) is dropped. A year where the set falls short is not stored. Members
+coarser than their parent, such as millions a later 10-K reprinted beside a
+total in thousands, may miss it by half a unit each, up to 0.1%.
 Diagnostic 14 finds those years by comparing the members to
 `yearly_financials`: at least two members present, none negative, and short of
 a positive parent. The shortfall is unallocated. Several breakdowns of one
@@ -223,17 +225,22 @@ member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
 than 16 members and per-share amounts are skipped.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
-member and period, then ranked: amendments first, then the later filing, then a
-published quarter over the year-to-date total of the same date, then the longest
-comparative-value chain, then lowest id. A later filing that reprints two or
-more members of an axis for an earlier period retires members that reprint
-leaves out. Losers get `is_duplicate = true`, and both `yearly_financials` and
+member and period, then ranked: amendments first, then the period's own filing,
+then the later filing, then a published quarter over the year-to-date total of
+the same date, then the longest comparative-value chain, then lowest id. The
+undimensioned line is only kept from the period's own filing, so its members
+are too: a later 10-K that recasts the year (NVIDIA's fiscal 2026 10-K
+dropping Singapore from fiscal 2025) only fills members the period's own filing
+left out, and the two splits stay apart as breakdowns. A row that rounds to the
+winner's value, within 0.1%, beats it, so a later reprint in millions does not
+replace the original's digits. Losers get `is_duplicate = true`, and both `yearly_financials` and
 `quarterly_financials` filter them out. If a value vanishes from the
 presentation layer, this is usually why — check `financial_facts_normalized`
 before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
-the previous quarter when that quarter ended 80 to 100 days earlier. A dimension
+the previous quarter when that quarter ended 80 to 100 days earlier, or that
+quarter's year-to-date total when it was published beside it. A dimension
 column marked as a quarter is stored as that quarter, and its year-to-date
 total is kept only so Q4 can subtract the nine-month figure. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
@@ -245,9 +252,15 @@ missing period as a comparative. That comparative is added as a
 quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
 figure of that same member minus the nine-month YTD on the quarter before the
 10-K. A later filing can recast the year under new members, so every member's
-Q4 on one axis comes from the same 10-K, including rows dedup retired: one
-whose members all have quarters, then an amendment, then the first 10-K filed
-after the quarters, then the latest before them. A later gap
+Q4 on one axis comes from the same 10-K, including rows dedup ranked lower: an
+amendment, then the year's own 10-K, then one on the quarters' split (its
+members all have quarters and every member with quarters is in it), then the
+first 10-K filed after the quarters (a backfilled comparative does not count),
+then the latest before them. A member that 10-K leaves out comes from the next
+one in that order. The nine months come from the 10-Q, nearest in filing date,
+whose members on that axis are the 10-K's, so a 10-K on new members subtracts
+a 10-Q that reprinted the nine months on them and not quarters filed on the old
+ones. Without such a 10-Q, Q1–Q3 are subtracted. A later gap
 in an existing series stays as its own quarter. Rows in
 `financial-rewrites.csv` then delete, replace, or add one member for one
 period. `granularity=quarterly` is applied while building

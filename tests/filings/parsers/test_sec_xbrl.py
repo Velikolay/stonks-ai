@@ -1100,6 +1100,35 @@ class TestSECXBRLParser:
         assert current_ytd.key.endswith("|ytd")
         assert geo[(PeriodType.YTD, date(2024, 10, 27))].value == Decimal("53873")
 
+    def test_dimension_keeps_prior_quarter_numbered_differently(self):
+        """A fiscal Q1 labeled Q2 still pairs with the prior-year Q1 column."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Revenues", "us-gaap_Revenues"],
+                "label": ["Revenue", "Revenue - Gaming"],
+                "abstract": [False, False],
+                "dimension": [False, True],
+                "dimension_axis": [None, "srt:ProductOrServiceAxis"],
+                "dimension_member": [None, "nvda_GamingMember"],
+                "dimension_member_label": [None, "Gaming"],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                "2015-04-26 (Q1)": [1151.0, 499.0],
+                "2016-05-01 (Q2)": [1305.0, 687.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        face = [fact for fact in facts if not fact.axis]
+        gaming = {fact.period_end: fact for fact in facts if fact.axis}
+
+        assert face[0].comparative_value == Decimal("1151")
+        assert gaming[date(2016, 5, 1)].comparative_value == Decimal("499")
+        assert gaming[date(2015, 4, 26)].value == Decimal("499")
+
     def test_dimension_keeps_every_annual_column(self):
         """A three-year 10-K column is a fact for each year, not only the latest."""
         parser = SECXBRLParser()

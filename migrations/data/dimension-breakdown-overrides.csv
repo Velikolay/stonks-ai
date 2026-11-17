@@ -4,3 +4,6 @@ company_id,normalized_label,axis,parent_member,members
 2,Revenue,Product,Google,"Google advertising;Google Cloud;Google subscriptions, platforms, and devices"
 2,Revenue,Geographical,,Rest of the world;United Kingdom;United States
 2,Revenue,Geographical,,APAC;EMEA;Other Americas;United States
+8,Revenue,Geographical,,China (including Hong Kong);Europe;Other;Other Asia Pacific;Taiwan;United States
+8,Revenue,Geographical,,China (including Hong Kong);Other;Taiwan;United States
+8,Revenue,Geographical,,China (including Hong Kong);Other;Singapore;Taiwan;United States

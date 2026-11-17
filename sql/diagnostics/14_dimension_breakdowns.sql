@@ -1,6 +1,8 @@
 -- Dimension breakdowns: each row of dimension_breakdowns lists a set of
 -- members on one axis that add up exactly to a parent (another member or the
--- undimensioned line) in fiscal_years. refresh_dimension_breakdowns keeps a
+-- undimensioned line) in fiscal_years. Members coarser than the parent, such
+-- as millions reprinted by a later filing, may miss it by half a unit each,
+-- up to 0.1%. refresh_dimension_breakdowns keeps a
 -- set when it adds up in at least two 10-Ks (a year where one of its members
 -- could be swapped for another member of equal value does not count). A year
 -- where that set falls short is not stored; the query below finds it by
@@ -17,6 +19,17 @@ WITH breakdown_years AS (
     FROM dimension_breakdowns b
     CROSS JOIN LATERAL unnest(b.fiscal_years) AS fy
 ),
+rounded AS (
+    SELECT
+        y.*,
+        CASE
+            WHEN y.value = 0 THEN 1
+            WHEN y.value % 1000000 = 0 THEN 1000000
+            WHEN y.value % 1000 = 0 THEN 1000
+            ELSE 1
+        END AS rounding
+    FROM yearly_financials y
+),
 checked AS (
     SELECT
         bd.company_id,
@@ -27,33 +40,45 @@ checked AS (
         bd.members,
         bd.source,
         bd.fiscal_year,
-        (
-            SELECT SUM(y.value)
-            FROM yearly_financials y
-            WHERE y.company_id = bd.company_id
-              AND y.statement = bd.statement
-              AND y.normalized_label = bd.normalized_label
-              AND y.fiscal_year = bd.fiscal_year
-              AND y.axis = bd.axis
-              AND y.member = ANY(bd.members)
-        ) AS members_total,
-        (
-            SELECT MAX(y.value)
-            FROM yearly_financials y
-            WHERE y.company_id = bd.company_id
-              AND y.statement = bd.statement
-              AND y.normalized_label = bd.normalized_label
-              AND y.fiscal_year = bd.fiscal_year
-              AND COALESCE(y.axis, '') = CASE
-                  WHEN bd.parent_member = '' THEN '' ELSE bd.axis
-              END
-              AND COALESCE(y.member, '') = bd.parent_member
-        ) AS parent_value
+        m.members_total,
+        m.members_rounding,
+        p.parent_value,
+        p.parent_rounding
     FROM breakdown_years bd
+    CROSS JOIN LATERAL (
+        SELECT SUM(y.value) AS members_total, MAX(y.rounding) AS members_rounding
+        FROM rounded y
+        WHERE y.company_id = bd.company_id
+          AND y.statement = bd.statement
+          AND y.normalized_label = bd.normalized_label
+          AND y.fiscal_year = bd.fiscal_year
+          AND y.axis = bd.axis
+          AND y.member = ANY(bd.members)
+    ) m
+    CROSS JOIN LATERAL (
+        SELECT MAX(y.value) AS parent_value, MAX(y.rounding) AS parent_rounding
+        FROM rounded y
+        WHERE y.company_id = bd.company_id
+          AND y.statement = bd.statement
+          AND y.normalized_label = bd.normalized_label
+          AND y.fiscal_year = bd.fiscal_year
+          AND COALESCE(y.axis, '') = CASE
+              WHEN bd.parent_member = '' THEN '' ELSE bd.axis
+          END
+          AND COALESCE(y.member, '') = bd.parent_member
+    ) p
 )
 SELECT *
 FROM checked
-WHERE members_total IS DISTINCT FROM parent_value
+WHERE members_total IS NULL
+   OR parent_value IS NULL
+   OR ABS(members_total - parent_value) > CASE
+       WHEN members_rounding > parent_rounding THEN LEAST(
+           cardinality(members) * members_rounding / 2,
+           ABS(parent_value) / 1000
+       )
+       ELSE 0
+   END
 ORDER BY company_id, statement, normalized_label, axis, parent_member, fiscal_year
 LIMIT 50;
 

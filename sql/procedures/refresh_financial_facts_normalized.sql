@@ -472,73 +472,6 @@ BEGIN
             GROUP BY cw.id
         ) id_chain ON id_chain.id = r.id
     ),
-    -- A later filing that reprints an axis for an earlier period replaces
-    -- that presentation. Members the reprint leaves out are the old
-    -- categories. A reprint of one member does not retire the rest.
-    latest_reprint_members AS (
-        SELECT
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            period_end,
-            period_key,
-            member,
-            COUNT(*) OVER (
-                PARTITION BY company_id, statement, normalized_label, axis,
-                    period_end, period_key
-            ) AS reprinted_members
-        FROM (
-            SELECT
-                r.company_id,
-                r.statement,
-                r.normalized_label,
-                r.axis,
-                r.period_end,
-                COALESCE(r.period::text, '') AS period_key,
-                r.member,
-                filed.filing_date,
-                MAX(filed.filing_date) OVER (
-                    PARTITION BY r.company_id, r.statement, r.normalized_label,
-                        r.axis, r.period_end, r.period
-                ) AS latest_date
-            FROM rolled_up_facts r
-            JOIN filings filed ON filed.id = r.filing_id
-            WHERE COALESCE(r.axis, '') <> ''
-                AND COALESCE(r.member, '') <> ''
-                AND NOT r.is_abstract
-                AND filed.fiscal_period_end <> r.period_end
-        ) reprint
-        WHERE filing_date = latest_date
-        GROUP BY
-            company_id, statement, normalized_label, axis, period_end, period_key,
-            member
-    ),
-    retired_member_ids AS (
-        SELECT r.id
-        FROM rolled_up_facts r
-        JOIN (
-            SELECT DISTINCT
-                company_id, statement, normalized_label, axis, period_end, period_key
-            FROM latest_reprint_members
-            WHERE reprinted_members >= 2
-        ) reprinted
-            ON reprinted.company_id = r.company_id
-            AND reprinted.statement = r.statement
-            AND reprinted.normalized_label = r.normalized_label
-            AND reprinted.axis = r.axis
-            AND reprinted.period_end = r.period_end
-            AND reprinted.period_key = COALESCE(r.period::text, '')
-        LEFT JOIN latest_reprint_members kept
-            ON kept.company_id = r.company_id
-            AND kept.statement = r.statement
-            AND kept.normalized_label = r.normalized_label
-            AND kept.axis = r.axis
-            AND kept.period_end = r.period_end
-            AND kept.period_key = COALESCE(r.period::text, '')
-            AND kept.member = r.member
-        WHERE kept.member IS NULL
-    ),
     -- A column for an earlier year is stored on the filing that printed it.
     -- Its fiscal year and quarter come from the filing of the same form family
     -- that closed on that period_end, so a 2015 10-K column for 2013 lands in
@@ -553,26 +486,12 @@ BEGIN
         WHERE company_id = ANY(company_ids)
         ORDER BY company_id, fiscal_period_end, form_type, id
     ),
-    deduped AS (
+    ranked AS (
         SELECT
             r.*,
             COALESCE(fiscal.id, r.filing_id) AS fiscal_filing_id,
-            ROW_NUMBER() OVER (
-                PARTITION BY r.company_id, r.statement, r.normalized_label,
-                             r.axis, r.member, r.period_end
-                ORDER BY
-                    -- prefer amendments over original filings
-                    CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
-                    -- a later filing restates the period; it beats the original
-                    -- quarter when the categories changed and only the
-                    -- year-to-date comparative was reprinted
-                    filed.filing_date DESC NULLS LAST,
-                    -- a published quarter beats the year-to-date total of the same date
-                    CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
-                    -- prefer longer chains
-                    COALESCE(cs.chain_size, 1) DESC,
-                    r.id ASC
-            ) AS rn
+            FIRST_VALUE(r.value) OVER filing_order AS winner_value,
+            ROW_NUMBER() OVER filing_order AS filing_rank
         FROM rolled_up_facts r
         LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id
         LEFT JOIN filings filed ON filed.id = r.filing_id
@@ -584,6 +503,58 @@ BEGIN
                 WHEN filed.form_type IN ('10-Q', '10-Q/A') THEN '10-Q'
                 ELSE filed.form_type
             END
+        WINDOW filing_order AS (
+            PARTITION BY r.company_id, r.statement, r.normalized_label,
+                         r.axis, r.member, r.period_end
+            ORDER BY
+                -- prefer amendments over original filings
+                CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
+                -- the period's own filing beats a later reprint, which may
+                -- be recast under other members; the line itself is only
+                -- kept from that filing
+                (filed.fiscal_period_end = r.period_end) DESC NULLS LAST,
+                filed.filing_date DESC NULLS LAST,
+                -- a published quarter beats the year-to-date total of the same date
+                CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
+                -- prefer longer chains
+                COALESCE(cs.chain_size, 1) DESC,
+                r.id ASC
+        )
+    ),
+    -- Later filings reprint earlier years rounded to thousands or millions.
+    -- A row that rounds to the winner, within 0.1%, keeps its digits, so
+    -- members still add up to a line taken from the original filing.
+    deduped AS (
+        SELECT
+            k.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY k.company_id, k.statement, k.normalized_label,
+                             k.axis, k.member, k.period_end
+                ORDER BY
+                    (
+                        k.value = k.winner_value
+                        OR (
+                            k.winner_value <> 0
+                            AND k.winner_value % 1000 = 0
+                            AND ROUND(k.value / k.winner_rounding) * k.winner_rounding
+                                = k.winner_value
+                            AND ABS(k.value - k.winner_value)
+                                <= ABS(k.winner_value) / 1000
+                        )
+                    ) DESC NULLS LAST,
+                    k.value % 1000 = 0,
+                    k.value % 1000000 = 0,
+                    k.filing_rank
+            ) AS rn
+        FROM (
+            SELECT
+                ranked.*,
+                CASE
+                    WHEN winner_value % 1000000 = 0 THEN 1000000
+                    ELSE 1000
+                END AS winner_rounding
+            FROM ranked
+        ) k
     ),
     deduped_by_id AS (
         SELECT DISTINCT ON (id)
@@ -611,7 +582,7 @@ BEGIN
             parent_id,
             abstract_id,
             is_synthetic,
-            rn > 1 OR id IN (SELECT id FROM retired_member_ids) AS is_duplicate
+            rn > 1 AS is_duplicate
         FROM deduped
         ORDER BY id, is_duplicate ASC
     )

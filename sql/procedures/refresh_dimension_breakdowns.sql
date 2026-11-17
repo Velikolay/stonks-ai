@@ -10,6 +10,8 @@ BEGIN
     -- row in the same 10-K period, either a member or the undimensioned line.
     -- Only rows that survive dedup take part, so a breakdown holds on the
     -- values the presentation tables show. Per-share amounts are not additive.
+    -- A later filing reprints earlier members rounded to millions, so members
+    -- coarser than their parent may miss it by half a unit each, up to 0.1%.
     CREATE TEMP TABLE tmp_breakdown_rows ON COMMIT DROP AS
     SELECT
         ff.id,
@@ -23,7 +25,13 @@ BEGIN
             EXTRACT(YEAR FROM f.fiscal_period_end)::int
             - EXTRACT(YEAR FROM ff.period_end)::int
         ) AS fiscal_year,
-        ff.value
+        ff.value,
+        CASE
+            WHEN ff.value = 0 THEN 1
+            WHEN ff.value % 1000000 = 0 THEN 1000000
+            WHEN ff.value % 1000 = 0 THEN 1000
+            ELSE 1
+        END AS rounding
     FROM financial_facts_normalized ff
     JOIN filings f
         ON f.id = ff.fiscal_filing_id
@@ -57,7 +65,8 @@ BEGIN
             period_end,
             fiscal_year,
             array_agg(member ORDER BY member) AS names,
-            array_agg(value ORDER BY member) AS amounts
+            array_agg(value ORDER BY member) AS amounts,
+            array_agg(rounding ORDER BY member) AS roundings
         FROM members
         GROUP BY company_id, statement, normalized_label, axis, period_end, fiscal_year
     ),
@@ -73,7 +82,8 @@ BEGIN
             m.period_end,
             m.fiscal_year,
             m.member AS parent_member,
-            m.value
+            m.value,
+            m.rounding
         FROM members m
         WHERE NOT EXISTS (
             SELECT 1
@@ -95,7 +105,8 @@ BEGIN
             g.period_end,
             g.fiscal_year,
             '' AS parent_member,
-            t.value
+            t.value,
+            t.rounding
         FROM axis_groups g
         JOIN totals t
             ON t.company_id = g.company_id
@@ -113,7 +124,8 @@ BEGIN
             g.period_end,
             g.fiscal_year,
             s.members,
-            s.members_total
+            s.members_total,
+            s.members_rounding
         FROM (
             SELECT *
             FROM axis_groups
@@ -123,7 +135,8 @@ BEGIN
         CROSS JOIN LATERAL (
             SELECT
                 array_agg(g.names[i] ORDER BY i) AS members,
-                SUM(g.amounts[i]) AS members_total
+                SUM(g.amounts[i]) AS members_total,
+                MAX(g.roundings[i]) AS members_rounding
             FROM generate_subscripts(g.names, 1) AS i
             WHERE mask & (1 << (i - 1)) <> 0
         ) s
@@ -182,7 +195,13 @@ BEGIN
             AND t.normalized_label = s.normalized_label
             AND t.axis = s.axis
             AND t.period_end = s.period_end
-            AND t.value = s.members_total
+            AND ABS(t.value - s.members_total) <= CASE
+                WHEN s.members_rounding > t.rounding THEN LEAST(
+                    cardinality(s.members) * s.members_rounding / 2,
+                    ABS(t.value) / 1000
+                )
+                ELSE 0
+            END
             AND NOT (t.parent_member = ANY(s.members))
     ),
     kept AS (
@@ -297,9 +316,16 @@ BEGIN
             AND t.parent_member = o.parent_member
         WHERE
             cardinality(o.members) >= 2
-            AND t.value = (
-                SELECT SUM(u.amount)
-                FROM unnest(g.names, g.amounts) AS u(name, amount)
+            AND (
+                SELECT ABS(t.value - SUM(u.amount)) <= CASE
+                    WHEN MAX(u.rounding) > t.rounding THEN LEAST(
+                        cardinality(o.members) * MAX(u.rounding) / 2,
+                        ABS(t.value) / 1000
+                    )
+                    ELSE 0
+                END
+                FROM unnest(g.names, g.amounts, g.roundings)
+                    AS u(name, amount, rounding)
                 WHERE u.name = ANY(o.members)
             )
     ),

@@ -811,9 +811,12 @@ class SECXBRLParser:
             facts.append(fact)
         return facts
 
-    @staticmethod
-    def _column_shape(column: str) -> str:
-        """Return the period token after the date, such as ``Q3`` or ``FY``.
+    @classmethod
+    def _column_shape(cls, column: str) -> str:
+        """Return the period token after the date, such as ``q`` or ``fy``.
+
+        Every quarter is ``q``: edgartools numbers quarters from the calendar
+        for some filers, so a fiscal Q1 can sit beside a prior-year "Q2".
 
         Args:
             column: A period column name.
@@ -821,9 +824,11 @@ class SECXBRLParser:
         Returns:
             The lowercased token, or an empty string when the column is a date.
         """
-        parts = column.split(" ")
+        parts = column.split(" ", 1)
         if len(parts) < 2:
             return ""
+        if cls._is_quarter_column(column):
+            return "q"
         return parts[1].lower()
 
     @staticmethod
@@ -1496,13 +1501,13 @@ class SECXBRLParser:
             )
         elif len(period_info) == 2:
             period_date = period_info[0]
-            period_quarter = period_info[1]
+            shape = self._column_shape(latest_period_col)
             return next(
                 (
                     x
                     for _, x in enumerate(period_columns)
                     if len(x.split(" ")) == 2
-                    and period_quarter in x
+                    and self._column_shape(x) == shape
                     and period_date not in x
                 ),
                 None,
