@@ -2,3 +2,4 @@ company_id,statement,normalized_label,axis,member,period_end,granularity,action,
 5,Income Statement,Revenue,Product,Energy generation and storage,2016-12-31,quarterly,add,181394000
 8,Income Statement,Revenue,Product,Automotive,2018-07-29,quarterly,set,161000000
 8,Income Statement,Revenue,Product,OEM and Other,2018-07-29,quarterly,add,116000000
+8,Income Statement,Revenue,Geographical,Other,2024-01-28,quarterly,set,1159000000
