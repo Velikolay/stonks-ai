@@ -105,6 +105,8 @@ BEGIN
             AND f1.form_type = f2.form_type
             AND f1.statement = f2.statement
             AND f1.normalized_comparative_value = f2.normalized_value
+            -- Zero is the value of every line that did not occur that year.
+            AND f2.normalized_value <> 0
             AND f1.comparative_period_end = f2.period_end
         WHERE
             f1.concept <> f2.concept

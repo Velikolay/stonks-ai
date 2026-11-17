@@ -587,7 +587,8 @@ Every condition on it is a way to miss a real rename: exact value equality fails
 on a restatement, both sides are multiplied by `weight` so a weight override on
 only one concept breaks the match, `form_type` must agree so a rename that
 appears first in a 10-Q is invisible, and a missing `comparative_value` means
-there is no bridge at all. The same multiplication works in reverse: a weight
+there is no bridge at all. A zero never bridges, since every line that did not
+occur that year shares it, so a rename that first prints as zero is not linked. The same multiplication works in reverse: a weight
 you just corrected can create a new match against an unrelated line that now
 shares the amount. The `false_matches` CTEs then drop a pair entirely for
 the whole company and statement if any period triple chains or any mirrored pair
