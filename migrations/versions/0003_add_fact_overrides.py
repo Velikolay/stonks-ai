@@ -52,6 +52,8 @@ def upgrade() -> None:
         sa.Column("form_type", sa.String(), nullable=True),
         sa.Column("from_period", sa.Date(), nullable=True),
         sa.Column("to_period", sa.Date(), nullable=True),
+        sa.Column("from_filing_period", sa.Date(), nullable=True),
+        sa.Column("to_filing_period", sa.Date(), nullable=True),
         sa.Column("is_global", sa.Boolean(), nullable=False),
         # override target
         sa.Column("to_concept", sa.String(), nullable=False),
@@ -166,6 +168,8 @@ def upgrade() -> None:
                         "form_type": row.get("form_type") or None,
                         "from_period": row.get("from_period") or None,
                         "to_period": row.get("to_period") or None,
+                        "from_filing_period": row.get("from_filing_period") or None,
+                        "to_filing_period": row.get("to_filing_period") or None,
                         "is_global": row["is_global"].lower() == "true",
                         "to_concept": row["to_concept"],
                         "to_axis": row.get("to_axis") or None,

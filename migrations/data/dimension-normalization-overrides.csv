@@ -123,10 +123,11 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveMember,,False,us-gaap:StatementBusinessSegmentsAxis,Automotive segment,2016-2017 segment member
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:EnergyGenerationAndStorageSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy generation and storage segment,Reportable segment
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:EnergyGenerationAndStorageMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy generation and storage segment,2016-2017 segment member
-5,srt:ProductOrServiceAxis,tsla:RegulatoryCreditsMember,,False,Product,Automotive regulatory credits,2018 member of the later automotive regulatory credits line
-5,us-gaap:ProductOrServiceAxis,tsla:RegulatoryCreditsMember,,False,Product,Automotive regulatory credits,2014-2017 member of the later automotive regulatory credits line
-5,us-gaap:ProductOrServiceAxis,tsla:ZeroEmissionVehicleCreditSalesMember,,False,Product,Automotive regulatory credits,2011-2012 ZEV credit sales; the line later called regulatory credits
-5,us-gaap:ProductOrServiceAxis,us-gaap:CreditMember,,False,Product,Automotive regulatory credits,2013 ZEV credit sales; the line later called regulatory credits
+5,us-gaap:ProductOrServiceAxis,tsla:RegulatoryCreditsMember,,False,Product,Regulatory credits (in automotive sales),2014-2017 member; no split of automotive sales before 2018
+5,us-gaap:ProductOrServiceAxis,tsla:ZeroEmissionVehicleCreditSalesMember,,False,Product,Regulatory credits (in automotive sales),2011-2012 ZEV credit sales; inside automotive sales
+5,us-gaap:ProductOrServiceAxis,us-gaap:CreditMember,,False,Product,Regulatory credits (in automotive sales),2013 ZEV credit sales; inside automotive sales
+5,us-gaap:ProductOrServiceAxis,tsla:AutomativeRegulatoryCreditsMember,,False,Product,Regulatory credits included in automotive sales,Misspelled 2018 10-Q member
+5,srt:ProductOrServiceAxis,tsla:RegulatoryCreditsInAutomotiveSalesMember,,False,Product,Regulatory credits included in automotive sales,Credits in filings through the 2021 10-Qs; the 2021 10-K moved them out of automotive sales
 5,srt:ProductOrServiceAxis,tsla:ServicesAndOtherMember,,False,Product,Services and other,
 5,srt:ProductOrServiceAxis,tsla:EnergyGenerationAndStorageMember,,False,Product,Energy generation and storage,
 5,srt:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member

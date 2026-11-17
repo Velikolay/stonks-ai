@@ -423,7 +423,7 @@ BEGIN
     nine_months AS (
         SELECT DISTINCT ON (
             ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
-            ff.filing_id
+            ff.filing_id, f.fiscal_tag
         )
             ff.company_id,
             ff.statement,
@@ -448,23 +448,54 @@ BEGIN
             AND (k.fiscal_period_end - ff.period_end) BETWEEN 80 AND 100
         ORDER BY
             ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
-            ff.filing_id, ff.is_duplicate, ff.id
+            ff.filing_id, f.fiscal_tag, ff.is_duplicate, ff.id
     ),
-    -- A 10-K's year minus the nine months of a 10-Q with the same members,
-    -- the nearest one filed, so a recast year pairs with a 10-Q recast the
-    -- same way and not with quarters on the earlier members.
-    nine_month_split AS MATERIALIZED (
-        SELECT DISTINCT ON (
-            a.company_id, a.statement, a.normalized_label, a.axis, a.fiscal_tag,
-            a.filing_id
-        )
+    -- A 10-K's year minus the nine months of a 10-Q on the 10-K's split. A
+    -- 10-Q a year later is on it when the first 10-K after that 10-Q prints
+    -- the year as this 10-K did: no shared member at another value beyond
+    -- rounding. Its reprint is then used when all its members are the
+    -- 10-K's, which covers a 10-K that moved a line out of another.
+    -- Otherwise a 10-Q with the same members, the year's own first, so a
+    -- 10-K that recast its year pairs with the 10-Q that reprinted the nine
+    -- months that way and not with quarters filed on the earlier members.
+    nine_month_candidates AS (
+        SELECT
             a.company_id,
             a.statement,
             a.normalized_label,
             a.axis,
             a.fiscal_tag,
             a.filing_id,
-            n.filing_id AS nine_month_filing_id
+            a.filing_date,
+            n.filing_id AS nine_month_filing_id,
+            n.filing_date AS nine_month_filing_date,
+            n.members = a.members AS same_members,
+            next_annual.filing_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM annual_members own
+                    JOIN annual_members later
+                        ON later.filing_id = next_annual.filing_id
+                        AND later.company_id = own.company_id
+                        AND later.statement = own.statement
+                        AND later.normalized_label = own.normalized_label
+                        AND later.axis = own.axis
+                        AND later.member = own.member
+                        AND later.fiscal_tag = own.fiscal_tag
+                    WHERE own.filing_id = a.filing_id
+                        AND own.company_id = a.company_id
+                        AND own.statement = a.statement
+                        AND own.normalized_label = a.normalized_label
+                        AND own.axis = a.axis
+                        AND own.fiscal_tag = a.fiscal_tag
+                        AND ABS(own.value - later.value) > CASE
+                            WHEN later.value <> 0 AND later.value % 1000000 = 0
+                                THEN 500000
+                            WHEN later.value <> 0 AND later.value % 1000 = 0
+                                THEN 500
+                            ELSE 0
+                        END
+                ) AS on_annual_split
         FROM (
             SELECT
                 company_id, statement, normalized_label, axis, fiscal_tag,
@@ -490,10 +521,39 @@ BEGIN
             AND n.normalized_label = a.normalized_label
             AND n.axis = a.axis
             AND n.fiscal_tag = a.fiscal_tag
-            AND n.members = a.members
+            AND n.members <@ a.members
+        LEFT JOIN LATERAL (
+            SELECT b.filing_id
+            FROM annual_members b
+            WHERE b.company_id = a.company_id
+                AND b.statement = a.statement
+                AND b.normalized_label = a.normalized_label
+                AND b.axis = a.axis
+                AND b.fiscal_tag = a.fiscal_tag
+                AND b.filing_date > n.filing_date
+                AND n.filing_date > a.filing_date
+            ORDER BY b.filing_date, b.filing_id
+            LIMIT 1
+        ) next_annual ON TRUE
+    ),
+    nine_month_split AS MATERIALIZED (
+        SELECT DISTINCT ON (
+            company_id, statement, normalized_label, axis, fiscal_tag, filing_id
+        )
+            company_id,
+            statement,
+            normalized_label,
+            axis,
+            fiscal_tag,
+            filing_id,
+            nine_month_filing_id
+        FROM nine_month_candidates
+        WHERE same_members OR on_annual_split
         ORDER BY
-            a.company_id, a.statement, a.normalized_label, a.axis, a.fiscal_tag,
-            a.filing_id, ABS(n.filing_date - a.filing_date), n.filing_id
+            company_id, statement, normalized_label, axis, fiscal_tag, filing_id,
+            on_annual_split DESC,
+            nine_month_filing_date < filing_date DESC,
+            ABS(nine_month_filing_date - filing_date), nine_month_filing_id
     ),
     -- Q4 subtracts the quarters from one 10-K's split of the year. Prefer an
     -- amendment, then the year's own 10-K, then a 10-K on the split the
@@ -552,10 +612,13 @@ BEGIN
                 a.fiscal_tag, a.filing_id, a.filing_date, a.is_amendment
         ) candidates
     ),
+    -- A member of the year's chosen 10-K takes its Q4 from nine months on
+    -- the same members even when its quarters are not shown, because they
+    -- were only printed by a later 10-Q that recast the year.
     missing_quarters AS (
         (SELECT DISTINCT ON (
-            q.company_id, q.statement, q.normalized_label, q.axis, q.member,
-            q.fiscal_tag
+            a.company_id, a.statement, a.normalized_label, a.axis, a.member,
+            a.fiscal_tag
         )
             a.company_id,
             a.filing_id,
@@ -579,46 +642,46 @@ BEGIN
             a.is_abstract,
             a.is_synthetic,
             'calculated' AS source_type
-        FROM quarterly_aggregation q
-        JOIN annual_split split
-            ON split.company_id = q.company_id
-            AND split.statement = q.statement
-            AND split.normalized_label = q.normalized_label
-            AND split.axis = q.axis
-            AND split.fiscal_tag = q.fiscal_tag
+        FROM annual_split split
         JOIN annual_members a
             ON a.filing_id = split.filing_id
-            AND a.company_id = q.company_id
-            AND a.statement = q.statement
-            AND a.normalized_label = q.normalized_label
-            AND a.axis = q.axis
-            AND a.member = q.member
-            AND a.fiscal_tag = q.fiscal_tag
+            AND a.company_id = split.company_id
+            AND a.statement = split.statement
+            AND a.normalized_label = split.normalized_label
+            AND a.axis = split.axis
+            AND a.fiscal_tag = split.fiscal_tag
+        LEFT JOIN quarterly_aggregation q
+            ON q.company_id = a.company_id
+            AND q.statement = a.statement
+            AND q.normalized_label = a.normalized_label
+            AND q.axis = a.axis
+            AND q.member = a.member
+            AND q.fiscal_tag = a.fiscal_tag
         LEFT JOIN nine_month_split nms
             ON nms.filing_id = split.filing_id
-            AND nms.company_id = q.company_id
-            AND nms.statement = q.statement
-            AND nms.normalized_label = q.normalized_label
-            AND nms.axis = q.axis
-            AND nms.fiscal_tag = q.fiscal_tag
+            AND nms.company_id = a.company_id
+            AND nms.statement = a.statement
+            AND nms.normalized_label = a.normalized_label
+            AND nms.axis = a.axis
+            AND nms.fiscal_tag = a.fiscal_tag
         LEFT JOIN nine_months nm
             ON nm.filing_id = nms.nine_month_filing_id
-            AND nm.company_id = q.company_id
-            AND nm.statement = q.statement
-            AND nm.normalized_label = q.normalized_label
-            AND nm.axis = q.axis
-            AND nm.member = q.member
-            AND nm.fiscal_tag = q.fiscal_tag
+            AND nm.company_id = a.company_id
+            AND nm.statement = a.statement
+            AND nm.normalized_label = a.normalized_label
+            AND nm.axis = a.axis
+            AND nm.member = a.member
+            AND nm.fiscal_tag = a.fiscal_tag
         WHERE
-            q.value IS NOT NULL
+            (q.value IS NOT NULL OR (split.split_rank = 1 AND nm.value IS NOT NULL))
             AND a.statement != 'Balance Sheet'
             AND a.concept NOT IN (
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
         ORDER BY
-            q.company_id, q.statement, q.normalized_label, q.axis, q.member,
-            q.fiscal_tag, split.split_rank, a.is_duplicate, a.id)
+            a.company_id, a.statement, a.normalized_label, a.axis, a.member,
+            a.fiscal_tag, split.split_rank, a.is_duplicate, a.id)
 
         UNION ALL
 

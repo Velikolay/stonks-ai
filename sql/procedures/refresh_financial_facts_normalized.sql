@@ -486,15 +486,57 @@ BEGIN
         WHERE company_id = ANY(company_ids)
         ORDER BY company_id, fiscal_period_end, form_type, id
     ),
+    -- A later filing that prints a member of an earlier period at another
+    -- value than the period's own filing has recast that split. None of its
+    -- members for that period are shown; Q4 still reads them as duplicates.
+    -- One that only adds members, rounded or not, extends the split.
+    recast_filings AS (
+        SELECT DISTINCT
+            later.company_id,
+            later.statement,
+            later.normalized_label,
+            later.axis,
+            later.period_end,
+            later.filing_id
+        FROM rolled_up_facts later
+        JOIN filings later_filed ON later_filed.id = later.filing_id
+        JOIN rolled_up_facts own
+            ON own.company_id = later.company_id
+            AND own.statement = later.statement
+            AND own.normalized_label = later.normalized_label
+            AND own.axis = later.axis
+            AND own.member = later.member
+            AND own.period_end = later.period_end
+            AND own.period IS NOT DISTINCT FROM later.period
+        JOIN filings own_filed ON own_filed.id = own.filing_id
+        WHERE COALESCE(later.axis, '') <> ''
+            AND NOT later.is_abstract
+            AND NOT own.is_abstract
+            AND later_filed.fiscal_period_end <> later.period_end
+            AND own_filed.fiscal_period_end = own.period_end
+            AND ABS(own.value - later.value) > CASE
+                WHEN later.value <> 0 AND later.value % 1000000 = 0 THEN 500000
+                WHEN later.value <> 0 AND later.value % 1000 = 0 THEN 500
+                ELSE 0
+            END
+    ),
     ranked AS (
         SELECT
             r.*,
             COALESCE(fiscal.id, r.filing_id) AS fiscal_filing_id,
+            recast.filing_id IS NOT NULL AS is_recast,
             FIRST_VALUE(r.value) OVER filing_order AS winner_value,
             ROW_NUMBER() OVER filing_order AS filing_rank
         FROM rolled_up_facts r
         LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id
         LEFT JOIN filings filed ON filed.id = r.filing_id
+        LEFT JOIN recast_filings recast
+            ON recast.company_id = r.company_id
+            AND recast.statement = r.statement
+            AND recast.normalized_label = r.normalized_label
+            AND recast.axis = r.axis
+            AND recast.period_end = r.period_end
+            AND recast.filing_id = r.filing_id
         LEFT JOIN fiscal_filings fiscal
             ON fiscal.company_id = r.company_id
             AND fiscal.fiscal_period_end = r.period_end
@@ -513,6 +555,7 @@ BEGIN
                 -- be recast under other members; the line itself is only
                 -- kept from that filing
                 (filed.fiscal_period_end = r.period_end) DESC NULLS LAST,
+                recast.filing_id IS NOT NULL,
                 filed.filing_date DESC NULLS LAST,
                 -- a published quarter beats the year-to-date total of the same date
                 CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
@@ -531,6 +574,7 @@ BEGIN
                 PARTITION BY k.company_id, k.statement, k.normalized_label,
                              k.axis, k.member, k.period_end
                 ORDER BY
+                    k.is_recast,
                     (
                         k.value = k.winner_value
                         OR (
@@ -582,7 +626,7 @@ BEGIN
             parent_id,
             abstract_id,
             is_synthetic,
-            rn > 1 AS is_duplicate
+            rn > 1 OR is_recast AS is_duplicate
         FROM deduped
         ORDER BY id, is_duplicate ASC
     )

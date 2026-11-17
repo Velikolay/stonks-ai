@@ -155,6 +155,8 @@ class FinancialFactsOverrideResponse(BaseModel):
     form_type: Optional[str] = None
     from_period: Optional[date] = None
     to_period: Optional[date] = None
+    from_filing_period: Optional[date] = None
+    to_filing_period: Optional[date] = None
     to_concept: str
     to_axis: Optional[str] = None
     to_member: Optional[str] = None
@@ -1244,6 +1246,8 @@ async def list_financial_facts_overrides(
                 form_type=o.form_type,
                 from_period=o.from_period,
                 to_period=o.to_period,
+                from_filing_period=o.from_filing_period,
+                to_filing_period=o.to_filing_period,
                 to_concept=o.to_concept,
                 to_axis=o.to_axis,
                 to_member=o.to_member,
@@ -1286,6 +1290,8 @@ async def create_financial_facts_override(
             form_type=created.form_type,
             from_period=created.from_period,
             to_period=created.to_period,
+            from_filing_period=created.from_filing_period,
+            to_filing_period=created.to_filing_period,
             to_concept=created.to_concept,
             to_axis=created.to_axis,
             to_member=created.to_member,
@@ -1332,6 +1338,8 @@ async def update_financial_facts_override(
             form_type=updated.form_type,
             from_period=updated.from_period,
             to_period=updated.to_period,
+            from_filing_period=updated.from_filing_period,
+            to_filing_period=updated.to_filing_period,
             to_concept=updated.to_concept,
             to_axis=updated.to_axis,
             to_member=updated.to_member,
@@ -1405,6 +1413,8 @@ async def export_financial_facts_overrides_to_csv(
             "form_type",
             "from_period",
             "to_period",
+            "from_filing_period",
+            "to_filing_period",
             "to_concept",
             "to_axis",
             "to_member",
@@ -1429,6 +1439,12 @@ async def export_financial_facts_overrides_to_csv(
                     "form_type": o.form_type or "",
                     "from_period": str(o.from_period) if o.from_period else "",
                     "to_period": str(o.to_period) if o.to_period else "",
+                    "from_filing_period": (
+                        str(o.from_filing_period) if o.from_filing_period else ""
+                    ),
+                    "to_filing_period": (
+                        str(o.to_filing_period) if o.to_filing_period else ""
+                    ),
                     "to_concept": o.to_concept,
                     "to_axis": o.to_axis or "",
                     "to_member": o.to_member or "",
@@ -1517,6 +1533,10 @@ async def import_financial_facts_overrides_from_csv(
                     form_type=(row.get("form_type", "").strip() or None),
                     from_period=(row.get("from_period", "").strip() or None),
                     to_period=(row.get("to_period", "").strip() or None),
+                    from_filing_period=(
+                        row.get("from_filing_period", "").strip() or None
+                    ),
+                    to_filing_period=(row.get("to_filing_period", "").strip() or None),
                     to_concept=row["to_concept"].strip(),
                     to_axis=(row.get("to_axis", "").strip() or None),
                     to_member=(row.get("to_member", "").strip() or None),
@@ -1537,6 +1557,8 @@ async def import_financial_facts_overrides_from_csv(
                         form_type=override_create.form_type,
                         from_period=override_create.from_period,
                         to_period=override_create.to_period,
+                        from_filing_period=override_create.from_filing_period,
+                        to_filing_period=override_create.to_filing_period,
                         to_concept=override_create.to_concept,
                         to_axis=override_create.to_axis,
                         to_member=override_create.to_member,

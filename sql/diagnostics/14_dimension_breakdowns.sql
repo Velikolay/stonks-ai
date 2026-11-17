@@ -202,6 +202,128 @@ ORDER BY b.company_id, b.statement, b.normalized_label, b.axis, b.parent_member,
          p.fiscal_year
 LIMIT 50;
 
+\echo '--- Members the chart draws with a remainder: no breakdown the API sends adds up to the member, and one falls short ---'
+-- Mirrors _breakdowns_to_show in api/financials.py: on one axis, only sets
+-- sharing a year with the latest set are sent, and only at a granularity that
+-- reports two of their members. The chart opens a member into a split wherever
+-- one of its members is present, and draws the shortfall as
+-- "<member> (remainder)". A shortfall against the undimensioned line is the
+-- gray metric bar instead, which partial disclosures are expected to leave.
+WITH layers AS (
+    SELECT 'quarterly' AS granularity, company_id, statement, normalized_label,
+           axis, member, period_end, value
+    FROM quarterly_financials
+    WHERE value IS NOT NULL
+    UNION ALL
+    SELECT 'yearly', company_id, statement, normalized_label,
+           axis, member, period_end, value
+    FROM yearly_financials
+    WHERE value IS NOT NULL
+),
+breakdown_years AS (
+    SELECT b.*, fy
+    FROM dimension_breakdowns b
+    CROSS JOIN LATERAL unnest(b.fiscal_years) AS fy
+),
+current_years AS (
+    SELECT y.company_id, y.statement, y.normalized_label, y.parent_member, y.axis,
+           array_agg(DISTINCT y.fy) AS years
+    FROM breakdown_years y
+    JOIN (
+        SELECT company_id, statement, normalized_label, parent_member, axis,
+               MAX(fy) AS latest_year
+        FROM breakdown_years
+        GROUP BY company_id, statement, normalized_label, parent_member, axis
+    ) l USING (company_id, statement, normalized_label, parent_member, axis)
+    WHERE l.latest_year = ANY(y.fiscal_years)
+    GROUP BY y.company_id, y.statement, y.normalized_label, y.parent_member, y.axis
+),
+member_rows AS (
+    SELECT b.company_id, b.statement, b.normalized_label, b.axis, b.parent_member,
+           b.members, m.granularity, m.period_end, m.member, m.value
+    FROM dimension_breakdowns b
+    JOIN current_years cy
+        USING (company_id, statement, normalized_label, parent_member, axis)
+    JOIN layers m
+        ON m.company_id = b.company_id
+        AND m.statement = b.statement
+        AND m.normalized_label = b.normalized_label
+        AND m.axis = b.axis
+        AND m.member = ANY(b.members)
+    WHERE cy.years && b.fiscal_years
+),
+member_totals AS (
+    SELECT company_id, statement, normalized_label, axis, parent_member, members,
+           granularity, period_end, SUM(value) AS total,
+           string_agg(member, '; ' ORDER BY member) AS present
+    FROM member_rows
+    GROUP BY company_id, statement, normalized_label, axis, parent_member, members,
+             granularity, period_end
+),
+sent AS (
+    SELECT company_id, statement, normalized_label, axis, parent_member, members,
+           granularity
+    FROM member_rows
+    GROUP BY company_id, statement, normalized_label, axis, parent_member, members,
+             granularity
+    HAVING COUNT(DISTINCT member) >= 2
+),
+checked AS (
+    SELECT t.*, p.value AS parent_value,
+           ABS(t.total - p.value) <= GREATEST(1, ABS(p.value) * 0.000001) AS adds_up,
+           p.value - t.total > GREATEST(1, ABS(p.value) * 0.000001) AS falls_short
+    FROM member_totals t
+    JOIN sent USING (company_id, statement, normalized_label, axis, parent_member,
+                     members, granularity)
+    JOIN layers p
+        ON p.granularity = t.granularity
+        AND p.company_id = t.company_id
+        AND p.statement = t.statement
+        AND p.normalized_label = t.normalized_label
+        AND p.axis = t.axis
+        AND p.member = t.parent_member
+        AND p.period_end = t.period_end
+    WHERE t.parent_member <> ''
+),
+remainders AS (
+    SELECT DISTINCT ON (company_id, statement, normalized_label, axis, parent_member,
+                        granularity, period_end)
+        *
+    FROM checked c
+    WHERE falls_short
+      AND NOT EXISTS (
+          SELECT 1
+          FROM checked x
+          WHERE x.adds_up
+            AND x.company_id = c.company_id
+            AND x.statement = c.statement
+            AND x.normalized_label = c.normalized_label
+            AND x.axis = c.axis
+            AND x.parent_member = c.parent_member
+            AND x.granularity = c.granularity
+            AND x.period_end = c.period_end
+      )
+    ORDER BY company_id, statement, normalized_label, axis, parent_member,
+             granularity, period_end, total DESC
+)
+SELECT
+    company_id,
+    statement,
+    normalized_label,
+    axis,
+    parent_member,
+    granularity,
+    COUNT(*) AS periods,
+    MIN(period_end) AS first_period,
+    MAX(period_end) AS last_period,
+    MAX(round((100 * (1 - total / parent_value))::numeric, 1)) AS max_remainder_pct,
+    (array_agg(array_to_string(members, '; ') ORDER BY period_end))[1] AS split_in_first,
+    (array_agg(present ORDER BY period_end))[1] AS present_in_first
+FROM remainders
+GROUP BY company_id, statement, normalized_label, axis, parent_member, granularity
+ORDER BY company_id, statement, normalized_label, axis, parent_member, granularity
+LIMIT 50;
+
 \echo '--- Every breakdown with the 10-K years it adds up in ---'
 SELECT
     company_id,

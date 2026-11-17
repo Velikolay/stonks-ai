@@ -20,6 +20,8 @@ class FinancialFactsOverrideBase(BaseModel):
     form_type: Optional[str] = None
     from_period: Optional[date] = None
     to_period: Optional[date] = None
+    from_filing_period: Optional[date] = None
+    to_filing_period: Optional[date] = None
 
     to_concept: str
     to_axis: Optional[str] = None
@@ -52,6 +54,8 @@ class FinancialFactsOverrideUpdate(BaseModel):
     form_type: Optional[str] = None
     from_period: Optional[date] = None
     to_period: Optional[date] = None
+    from_filing_period: Optional[date] = None
+    to_filing_period: Optional[date] = None
 
     to_concept: Optional[str] = None
     to_axis: Optional[str] = None
