@@ -1,5 +1,8 @@
 CREATE OR REPLACE PROCEDURE refresh_quarterly_financials(company_ids int[])
 LANGUAGE plpgsql
+-- CTEs carry no row statistics. A merge join on (company, statement) then
+-- filters the remaining keys pair by pair, which is quadratic in facts.
+SET enable_mergejoin = off
 AS $$
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
@@ -23,6 +26,7 @@ BEGIN
         SELECT
             o.id,
             o.company_id,
+            o.fiscal_period_end,
             o.fiscal_year,
             o.fiscal_quarter,
             CASE
@@ -66,15 +70,25 @@ BEGIN
             ff.is_abstract,
             ff.is_synthetic,
             ff.form_type AS source_type,
-            f.fiscal_year,
+            -- A prior-year column is stored on the filing that printed it and
+            -- placed in the fiscal period that closed on period_end.
+            -- Zero on the filing that closed period_end. Otherwise that
+            -- filing was never ingested; shift by the calendar gap.
+            f.fiscal_year - (
+                EXTRACT(YEAR FROM f.fiscal_period_end)::int
+                - EXTRACT(YEAR FROM ff.period_end)::int
+            ) AS fiscal_year,
             f.fiscal_quarter,
-            f.fiscal_tag,
+            -- With no filing of its own, the source filing's 10-K is another
+            -- year; leave the row out of the Q4 residual.
+            CASE WHEN f.fiscal_period_end = ff.period_end THEN f.fiscal_tag END
+                AS fiscal_tag,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
             FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings_cte f
-            ON ff.company_id = f.company_id
-            AND ff.filing_id = f.id
+            ON f.company_id = ff.company_id
+            AND f.id = ff.fiscal_filing_id
         WHERE ff.company_id = ANY(company_ids)
           AND ff.is_duplicate = false
         WINDOW w AS (
@@ -170,6 +184,35 @@ BEGIN
             s.company_id, s.statement, s.normalized_label, s.axis, s.member,
             n.period_end
     ),
+    -- Year-to-date total kept beside a published quarter of the same date.
+    -- It is a duplicate of that quarter, so it is not shown; Q4 still
+    -- subtracts it from the annual figure. It must be the same line of the
+    -- same filing as the quarter, since one filing can print two lines under
+    -- one label.
+    ytd_anchor AS (
+        SELECT DISTINCT ON (
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.period_end, ff.filing_id, ff.concept
+        )
+            ff.company_id,
+            ff.statement,
+            ff.normalized_label,
+            ff.axis,
+            ff.member,
+            ff.period_end,
+            ff.filing_id,
+            ff.concept,
+            ff.value
+        FROM financial_facts_normalized ff
+        WHERE
+            ff.company_id = ANY(company_ids)
+            AND ff.is_duplicate = true
+            AND ff.period = 'YTD'
+            AND NOT ff.is_abstract
+        ORDER BY
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.period_end, ff.filing_id, ff.concept, ff.id DESC
+    ),
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
@@ -185,9 +228,11 @@ BEGIN
                 )
             ) AS is_non_additive,
             LAG(q.period_end) OVER w AS prev_period_end,
+            -- A year-to-date total after a published quarter subtracts that
+            -- quarter's year-to-date total, not the quarter.
             CASE
                 WHEN (q.period_end - LAG(q.period_end) OVER w) BETWEEN 80 AND 100
-                THEN LAG(q.value) OVER w
+                THEN LAG(COALESCE(prev_ytd.value, q.value)) OVER w
                 ELSE NULL
             END AS prev_value
         FROM (
@@ -196,33 +241,20 @@ BEGIN
             SELECT * FROM comparative_backfill
         ) q
         LEFT JOIN filings k ON k.id = q.fiscal_tag
+        LEFT JOIN ytd_anchor prev_ytd
+            ON q.period = 'Q'
+            AND prev_ytd.company_id = q.company_id
+            AND prev_ytd.statement = q.statement
+            AND prev_ytd.normalized_label = q.normalized_label
+            AND prev_ytd.axis = q.axis
+            AND prev_ytd.member = q.member
+            AND prev_ytd.period_end = q.period_end
+            AND prev_ytd.filing_id = q.filing_id
+            AND prev_ytd.concept = q.concept
         WINDOW w AS (
             PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member
             ORDER BY q.period_end
         )
-    ),
-    -- Year-to-date total kept beside a published quarter of the same date.
-    -- It is a duplicate of that quarter, so it is not shown; Q4 still
-    -- subtracts it from the annual figure.
-    ytd_anchor AS (
-        SELECT DISTINCT ON (
-            company_id, statement, normalized_label, axis, member, period_end
-        )
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            member,
-            period_end,
-            value
-        FROM financial_facts_normalized
-        WHERE
-            company_id = ANY(company_ids)
-            AND is_duplicate = true
-            AND period = 'YTD'
-            AND NOT is_abstract
-        ORDER BY
-            company_id, statement, normalized_label, axis, member, period_end, id
     ),
     quarterly_filings AS (
         SELECT
@@ -295,6 +327,8 @@ BEGIN
             AND a.axis = q.axis
             AND a.member = q.member
             AND a.period_end = q.period_end
+            AND a.filing_id = q.filing_id
+            AND a.concept = q.concept
     ),
     annual_filings AS (
         SELECT
@@ -327,32 +361,330 @@ BEGIN
     ),
     quarterly_aggregation AS (
         SELECT
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            member,
-            fiscal_tag,
+            q.company_id,
+            q.statement,
+            q.normalized_label,
+            q.axis,
+            q.member,
+            q.fiscal_tag,
+            -- A backfilled comparative was printed a year later; it is not
+            -- when the quarters were filed.
+            MAX(src.filing_date) FILTER (WHERE NOT q.is_comparative_backfill)
+                AS filed,
             -- Three discrete quarters sum to Q1–Q3. A published quarter keeps
             -- the nine-month total for Q4, because the earlier quarters can be
             -- on the previous classification. Otherwise subtract that total
             -- when a quarter is missing. Per-share rows have no q3_ytd.
             CASE
-                WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
-                    AND NOT COALESCE(bool_or(prefer_ytd_anchor), false)
-                THEN SUM(value) FILTER (WHERE NOT drop_ytd)
-                ELSE MAX(q3_ytd)
+                WHEN COUNT(DISTINCT q.fiscal_quarter) FILTER (WHERE NOT q.drop_ytd) = 3
+                    AND NOT COALESCE(bool_or(q.prefer_ytd_anchor), false)
+                THEN SUM(q.value) FILTER (WHERE NOT q.drop_ytd)
+                ELSE MAX(q.q3_ytd)
             END AS value
-        FROM quarterly_filings
+        FROM quarterly_filings q
+        JOIN filings src ON src.id = q.filing_id
         GROUP BY
+            q.company_id,
+            q.statement,
+            q.normalized_label,
+            q.axis,
+            q.member,
+            q.fiscal_tag
+    ),
+    -- Every 10-K that reports a member for the year, including later 10-Ks
+    -- that recast the year and lost to the year's own 10-K in dedup.
+    annual_members AS (
+        SELECT
+            a.*,
+            f.fiscal_year,
+            f.fiscal_quarter,
+            f.id AS fiscal_tag,
+            src.filing_date,
+            src.form_type = '10-K/A' AS is_amendment
+        FROM financial_facts_normalized a
+        JOIN filings src ON src.id = a.filing_id
+        JOIN filings f
+            ON f.id = a.fiscal_filing_id
+            AND f.fiscal_period_end = a.period_end
+        WHERE a.company_id = ANY(company_ids)
+            AND a.form_type IN ('10-K', '10-K/A')
+            AND a.period = 'YTD'
+            AND a.axis <> ''
+            AND NOT a.is_abstract
+    ),
+    quarter_members AS (
+        SELECT company_id, statement, normalized_label, axis, fiscal_tag, COUNT(*) AS members
+        FROM quarterly_aggregation
+        WHERE value IS NOT NULL
+        GROUP BY company_id, statement, normalized_label, axis, fiscal_tag
+    ),
+    -- Every 10-Q that printed the nine months before a 10-K, including
+    -- reprints a year later under that year's members.
+    nine_months AS (
+        SELECT DISTINCT ON (
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.filing_id, f.fiscal_tag
+        )
+            ff.company_id,
+            ff.statement,
+            ff.normalized_label,
+            ff.axis,
+            ff.member,
+            ff.filing_id,
+            src.filing_date,
+            f.fiscal_tag,
+            ff.value
+        FROM financial_facts_normalized ff
+        JOIN filings src ON src.id = ff.filing_id
+        JOIN filings_cte f
+            ON f.id = ff.fiscal_filing_id
+            AND f.fiscal_period_end = ff.period_end
+        JOIN filings k ON k.id = f.fiscal_tag
+        WHERE ff.company_id = ANY(company_ids)
+            AND ff.form_type IN ('10-Q', '10-Q/A')
+            AND ff.period = 'YTD'
+            AND ff.axis <> ''
+            AND NOT ff.is_abstract
+            AND (k.fiscal_period_end - ff.period_end) BETWEEN 80 AND 100
+        ORDER BY
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.filing_id, f.fiscal_tag, ff.is_duplicate, ff.id
+    ),
+    -- A 10-K's year minus the nine months of a 10-Q on the 10-K's split. A
+    -- 10-Q a year later is on it when the first 10-K after that 10-Q prints
+    -- the year as this 10-K did: no shared member at another value beyond
+    -- rounding. Its reprint is then used when all its members are the
+    -- 10-K's, which covers a 10-K that moved a line out of another.
+    -- Otherwise a 10-Q with the same members, the year's own first, so a
+    -- 10-K that recast its year pairs with the 10-Q that reprinted the nine
+    -- months that way and not with quarters filed on the earlier members.
+    nine_month_candidates AS (
+        SELECT
+            a.company_id,
+            a.statement,
+            a.normalized_label,
+            a.axis,
+            a.fiscal_tag,
+            a.filing_id,
+            a.filing_date,
+            n.filing_id AS nine_month_filing_id,
+            n.filing_date AS nine_month_filing_date,
+            n.members = a.members AS same_members,
+            next_annual.filing_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM annual_members own
+                    JOIN annual_members later
+                        ON later.filing_id = next_annual.filing_id
+                        AND later.company_id = own.company_id
+                        AND later.statement = own.statement
+                        AND later.normalized_label = own.normalized_label
+                        AND later.axis = own.axis
+                        AND later.member = own.member
+                        AND later.fiscal_tag = own.fiscal_tag
+                    WHERE own.filing_id = a.filing_id
+                        AND own.company_id = a.company_id
+                        AND own.statement = a.statement
+                        AND own.normalized_label = a.normalized_label
+                        AND own.axis = a.axis
+                        AND own.fiscal_tag = a.fiscal_tag
+                        AND ABS(own.value - later.value) > CASE
+                            WHEN later.value <> 0 AND later.value % 1000000 = 0
+                                THEN 500000
+                            WHEN later.value <> 0 AND later.value % 1000 = 0
+                                THEN 500
+                            ELSE 0
+                        END
+                ) AS on_annual_split
+        FROM (
+            SELECT
+                company_id, statement, normalized_label, axis, fiscal_tag,
+                filing_id, filing_date,
+                array_agg(DISTINCT member ORDER BY member) AS members
+            FROM annual_members
+            GROUP BY
+                company_id, statement, normalized_label, axis, fiscal_tag,
+                filing_id, filing_date
+        ) a
+        JOIN (
+            SELECT
+                company_id, statement, normalized_label, axis, fiscal_tag,
+                filing_id, filing_date,
+                array_agg(DISTINCT member ORDER BY member) AS members
+            FROM nine_months
+            GROUP BY
+                company_id, statement, normalized_label, axis, fiscal_tag,
+                filing_id, filing_date
+        ) n
+            ON n.company_id = a.company_id
+            AND n.statement = a.statement
+            AND n.normalized_label = a.normalized_label
+            AND n.axis = a.axis
+            AND n.fiscal_tag = a.fiscal_tag
+            AND n.members <@ a.members
+        LEFT JOIN LATERAL (
+            SELECT b.filing_id
+            FROM annual_members b
+            WHERE b.company_id = a.company_id
+                AND b.statement = a.statement
+                AND b.normalized_label = a.normalized_label
+                AND b.axis = a.axis
+                AND b.fiscal_tag = a.fiscal_tag
+                AND b.filing_date > n.filing_date
+                AND n.filing_date > a.filing_date
+            ORDER BY b.filing_date, b.filing_id
+            LIMIT 1
+        ) next_annual ON TRUE
+    ),
+    nine_month_split AS MATERIALIZED (
+        SELECT DISTINCT ON (
+            company_id, statement, normalized_label, axis, fiscal_tag, filing_id
+        )
             company_id,
             statement,
             normalized_label,
             axis,
-            member,
-            fiscal_tag
+            fiscal_tag,
+            filing_id,
+            nine_month_filing_id
+        FROM nine_month_candidates
+        WHERE same_members OR on_annual_split
+        ORDER BY
+            company_id, statement, normalized_label, axis, fiscal_tag, filing_id,
+            on_annual_split DESC,
+            nine_month_filing_date < filing_date DESC,
+            ABS(nine_month_filing_date - filing_date), nine_month_filing_id
     ),
+    -- Q4 subtracts the quarters from one 10-K's split of the year. Prefer an
+    -- amendment, then the year's own 10-K, then a 10-K on the split the
+    -- quarters were filed on: every member has quarters and every member
+    -- with quarters is in it. Then the first 10-K filed after the quarters,
+    -- then the latest before them. A member that 10-K leaves out comes from
+    -- the next one in that order.
+    annual_split AS (
+        SELECT
+            company_id, statement, normalized_label, axis, fiscal_tag, filing_id,
+            ROW_NUMBER() OVER (
+                PARTITION BY company_id, statement, normalized_label, axis, fiscal_tag
+                ORDER BY
+                    is_amendment DESC,
+                    filing_id = fiscal_tag DESC,
+                    matches_quarters DESC NULLS LAST,
+                    filing_date >= quarters_filed DESC,
+                    CASE WHEN filing_date >= quarters_filed THEN filing_date END ASC,
+                    filing_date DESC,
+                    filing_id DESC
+            ) AS split_rank
+        FROM (
+            SELECT
+                a.company_id,
+                a.statement,
+                a.normalized_label,
+                a.axis,
+                a.fiscal_tag,
+                a.filing_id,
+                a.filing_date,
+                a.is_amendment,
+                bool_and(q.value IS NOT NULL OR a.value = 0)
+                    AND COUNT(DISTINCT q.member) FILTER (WHERE q.value IS NOT NULL)
+                        = MAX(qm.members)
+                    AS matches_quarters,
+                MAX(MAX(q.filed)) OVER (
+                    PARTITION BY a.company_id, a.statement, a.normalized_label,
+                        a.axis, a.fiscal_tag
+                ) AS quarters_filed
+            FROM annual_members a
+            LEFT JOIN quarterly_aggregation q
+                ON q.company_id = a.company_id
+                AND q.statement = a.statement
+                AND q.normalized_label = a.normalized_label
+                AND q.axis = a.axis
+                AND q.member = a.member
+                AND q.fiscal_tag = a.fiscal_tag
+            LEFT JOIN quarter_members qm
+                ON qm.company_id = a.company_id
+                AND qm.statement = a.statement
+                AND qm.normalized_label = a.normalized_label
+                AND qm.axis = a.axis
+                AND qm.fiscal_tag = a.fiscal_tag
+            GROUP BY
+                a.company_id, a.statement, a.normalized_label, a.axis,
+                a.fiscal_tag, a.filing_id, a.filing_date, a.is_amendment
+        ) candidates
+    ),
+    -- A member of the year's chosen 10-K takes its Q4 from nine months on
+    -- the same members even when its quarters are not shown, because they
+    -- were only printed by a later 10-Q that recast the year.
     missing_quarters AS (
+        (SELECT DISTINCT ON (
+            a.company_id, a.statement, a.normalized_label, a.axis, a.member,
+            a.fiscal_tag
+        )
+            a.company_id,
+            a.filing_id,
+            a.id,
+            a.parent_id,
+            a.fiscal_year,
+            a.fiscal_quarter,
+            a.concept,
+            a.label,
+            a.value - COALESCE(nm.value, q.value) AS value,
+            a.unit,
+            a.weight,
+            a.print_sign,
+            a.axis,
+            a.member,
+            a.statement,
+            a.abstract_id,
+            a.period_end,
+            a.normalized_label,
+            a.position,
+            a.is_abstract,
+            a.is_synthetic,
+            'calculated' AS source_type
+        FROM annual_split split
+        JOIN annual_members a
+            ON a.filing_id = split.filing_id
+            AND a.company_id = split.company_id
+            AND a.statement = split.statement
+            AND a.normalized_label = split.normalized_label
+            AND a.axis = split.axis
+            AND a.fiscal_tag = split.fiscal_tag
+        LEFT JOIN quarterly_aggregation q
+            ON q.company_id = a.company_id
+            AND q.statement = a.statement
+            AND q.normalized_label = a.normalized_label
+            AND q.axis = a.axis
+            AND q.member = a.member
+            AND q.fiscal_tag = a.fiscal_tag
+        LEFT JOIN nine_month_split nms
+            ON nms.filing_id = split.filing_id
+            AND nms.company_id = a.company_id
+            AND nms.statement = a.statement
+            AND nms.normalized_label = a.normalized_label
+            AND nms.axis = a.axis
+            AND nms.fiscal_tag = a.fiscal_tag
+        LEFT JOIN nine_months nm
+            ON nm.filing_id = nms.nine_month_filing_id
+            AND nm.company_id = a.company_id
+            AND nm.statement = a.statement
+            AND nm.normalized_label = a.normalized_label
+            AND nm.axis = a.axis
+            AND nm.member = a.member
+            AND nm.fiscal_tag = a.fiscal_tag
+        WHERE
+            (q.value IS NOT NULL OR (split.split_rank = 1 AND nm.value IS NOT NULL))
+            AND a.statement != 'Balance Sheet'
+            AND a.concept NOT IN (
+                'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+            )
+        ORDER BY
+            a.company_id, a.statement, a.normalized_label, a.axis, a.member,
+            a.fiscal_tag, split.split_rank, a.is_duplicate, a.id)
+
+        UNION ALL
+
         SELECT
             a.company_id,
             a.filing_id,
@@ -385,7 +717,8 @@ BEGIN
             AND q.member = a.member
             AND q.fiscal_tag = a.fiscal_tag
         WHERE
-            a.statement != 'Balance Sheet'
+            COALESCE(a.axis, '') = ''
+            AND a.statement != 'Balance Sheet'
             -- Instant stocks are not annual−Σquarters flows.
             AND a.period IS NOT NULL
             AND a.concept NOT IN (
@@ -491,7 +824,9 @@ BEGIN
 
     -- Rows in financial_rewrites with granularity quarterly. Yearly rows
     -- are applied by refresh_yearly_financials. delete removes a member
-    -- for one period, set replaces its value, and add copies a sibling.
+    -- for one period, set replaces its value, and add copies a sibling on
+    -- that axis. When the axis has no row yet, add copies the undimensioned
+    -- line so the first member of an axis can be introduced.
     DELETE FROM tmp_quarterly_financials_new t
     USING financial_rewrites o
     WHERE
@@ -564,10 +899,10 @@ BEGIN
             t.company_id = o.company_id
             AND t.statement = o.statement
             AND t.normalized_label = o.normalized_label
-            AND t.axis = o.axis
             AND t.period_end = o.period_end
             AND NOT t.is_abstract
-        ORDER BY t.member
+            AND (t.axis = o.axis OR t.axis = '')
+        ORDER BY CASE WHEN t.axis = o.axis THEN 0 ELSE 1 END, t.member
         LIMIT 1
     ) s ON true
     WHERE

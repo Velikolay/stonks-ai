@@ -647,9 +647,8 @@ class SECXBRLParser:
 
             # Face rows keep the latest column. A year-to-date column sorts
             # after the quarter column of the same date, and the quarterly
-            # procedure reduces that total. Dimension rows use the quarter
-            # column when the filing published one, and keep the year-to-date
-            # total beside it for the annual-minus-nine-month quarter.
+            # procedure reduces that total. Dimension rows keep every column
+            # of that shape, including prior years.
             latest_period_col = sorted(period_columns)[-1]
             comparative_period_col = self._extract_comparative_period_column(
                 period_columns, latest_period_col
@@ -660,11 +659,6 @@ class SECXBRLParser:
             )
             ytd_period_col = self._same_date_ytd_column(
                 period_columns, quarter_period_col
-            )
-            ytd_comparative_col = (
-                self._extract_comparative_period_column(period_columns, ytd_period_col)
-                if ytd_period_col
-                else None
             )
 
             # Track global fact position (only for facts, not abstracts)
@@ -714,51 +708,167 @@ class SECXBRLParser:
             ):
                 collapsed_members = self._collapsed_dimension_members(dimensions_df)
                 for _, row in dimensions_df.iterrows():
-                    fact = self._create_dimension_fact(
-                        row=row,
-                        statement_type=statement_type,
-                        period_col=quarter_period_col,
-                        comparative_period_col=quarter_comparative_col,
-                        base_label_by_concept=base_label_by_concept,
-                        collapsed_members=collapsed_members,
+                    facts.extend(
+                        self._dimension_period_facts(
+                            row,
+                            statement_type,
+                            period_columns,
+                            quarter_period_col,
+                            ytd_period_col,
+                            base_label_by_concept,
+                            collapsed_members,
+                        )
                     )
-                    if (
-                        fact is None
-                        and ytd_period_col
-                        and ytd_period_col != quarter_period_col
-                    ):
-                        fact = self._create_dimension_fact(
-                            row=row,
-                            statement_type=statement_type,
-                            period_col=ytd_period_col,
-                            comparative_period_col=ytd_comparative_col,
-                            base_label_by_concept=base_label_by_concept,
-                            collapsed_members=collapsed_members,
-                        )
-                    elif (
-                        fact is not None
-                        and fact.period == PeriodType.Q
-                        and ytd_period_col
-                        and ytd_period_col != quarter_period_col
-                    ):
-                        ytd_fact = self._create_dimension_fact(
-                            row=row,
-                            statement_type=statement_type,
-                            period_col=ytd_period_col,
-                            comparative_period_col=ytd_comparative_col,
-                            base_label_by_concept=base_label_by_concept,
-                            collapsed_members=collapsed_members,
-                        )
-                        if ytd_fact is not None and ytd_fact.period == PeriodType.YTD:
-                            ytd_fact.key = f"{ytd_fact.key}|ytd"
-                            facts.append(ytd_fact)
-                    if fact:
-                        facts.append(fact)
 
         except Exception:
             logger.exception(f"Error parsing {statement_type}")
 
         return facts
+
+    def _dimension_period_facts(
+        self,
+        row,
+        statement_type: str,
+        period_columns: list[str],
+        quarter_period_col: str,
+        ytd_period_col: Optional[str],
+        base_label_by_concept: dict[str, str],
+        collapsed_members: set[str],
+    ) -> list[FinancialFactCreate]:
+        """Emit one fact for every populated column of this dimension row.
+
+        A 10-K prints two or three years, and a 10-Q prints the prior-year
+        quarter beside the current one. Keeping only the latest column leaves
+        the earlier periods out of the series. Each column becomes its own
+        fact. The closest earlier column of the same shape stays the
+        comparative, for rename chaining. A year-to-date column beside a
+        quarter of the same date keeps the ``|ytd`` key suffix.
+
+        Args:
+            row: Dimension row from the statement frame.
+            statement_type: Statement name.
+            period_columns: Period columns that contain values.
+            quarter_period_col: Column for the filing's current period.
+            ytd_period_col: Year-to-date column ending on that date, if any.
+            base_label_by_concept: Face label for each concept.
+            collapsed_members: Member ids reused for several children.
+
+        Returns:
+            Facts for the columns that have a value.
+        """
+        # Section headers are not period amounts. numpy bools compare equal
+        # to True and are not the same object.
+        if row.get("abstract") == True:  # noqa: E712
+            fact = self._create_dimension_fact(
+                row=row,
+                statement_type=statement_type,
+                period_col=quarter_period_col,
+                comparative_period_col=None,
+                base_label_by_concept=base_label_by_concept,
+                collapsed_members=collapsed_members,
+            )
+            return [fact] if fact else []
+
+        current_columns = self._columns_of_same_shape(
+            period_columns, quarter_period_col
+        )
+        ytd_columns: list[str] = []
+        if ytd_period_col and ytd_period_col not in current_columns:
+            ytd_columns = self._columns_of_same_shape(period_columns, ytd_period_col)
+
+        facts: list[FinancialFactCreate] = []
+        quarter_ends = set()
+        for column in current_columns:
+            fact = self._create_dimension_fact(
+                row=row,
+                statement_type=statement_type,
+                period_col=column,
+                comparative_period_col=self._prior_period_column(
+                    current_columns, column
+                ),
+                base_label_by_concept=base_label_by_concept,
+                collapsed_members=collapsed_members,
+            )
+            if fact is None:
+                continue
+            if fact.period == PeriodType.Q:
+                quarter_ends.add(fact.period_end)
+            facts.append(fact)
+
+        for column in ytd_columns:
+            fact = self._create_dimension_fact(
+                row=row,
+                statement_type=statement_type,
+                period_col=column,
+                comparative_period_col=self._prior_period_column(ytd_columns, column),
+                base_label_by_concept=base_label_by_concept,
+                collapsed_members=collapsed_members,
+            )
+            if fact is None or fact.period != PeriodType.YTD:
+                continue
+            if fact.period_end in quarter_ends:
+                fact.key = f"{fact.key}|ytd"
+            facts.append(fact)
+        return facts
+
+    @classmethod
+    def _column_shape(cls, column: str) -> str:
+        """Return the period token after the date, such as ``q`` or ``fy``.
+
+        Every quarter is ``q``: edgartools numbers quarters from the calendar
+        for some filers, so a fiscal Q1 can sit beside a prior-year "Q2".
+
+        Args:
+            column: A period column name.
+
+        Returns:
+            The lowercased token, or an empty string when the column is a date.
+        """
+        parts = column.split(" ", 1)
+        if len(parts) < 2:
+            return ""
+        if cls._is_quarter_column(column):
+            return "q"
+        return parts[1].lower()
+
+    @staticmethod
+    def _columns_of_same_shape(period_columns: list[str], exemplar: str) -> list[str]:
+        """Return columns with the same period token as exemplar.
+
+        A Q3 column matches the prior-year Q3, not the YTD beside it and not
+        a Q1 in the same frame.
+
+        Args:
+            period_columns: Period column names.
+            exemplar: Column whose token to match.
+
+        Returns:
+            Matching columns, oldest first.
+        """
+        shape = SECXBRLParser._column_shape(exemplar)
+        matched = [
+            column
+            for column in period_columns
+            if SECXBRLParser._column_shape(column) == shape
+        ]
+        return sorted(matched, key=lambda column: column.split(" ")[0])
+
+    @staticmethod
+    def _prior_period_column(columns: list[str], column: str) -> Optional[str]:
+        """Return the closest earlier column of the same shape.
+
+        Args:
+            columns: Columns sorted oldest first, one shape only.
+            column: The column whose comparative is needed.
+
+        Returns:
+            The prior column, or None for the oldest.
+        """
+        end = column.split(" ")[0]
+        earlier = [candidate for candidate in columns if candidate.split(" ")[0] < end]
+        if not earlier:
+            return None
+        return earlier[-1]
 
     def _collapsed_dimension_members(self, dimensions_df: pd.DataFrame) -> set[str]:
         """Return member ids that edgartools reused across several children.
@@ -1391,13 +1501,13 @@ class SECXBRLParser:
             )
         elif len(period_info) == 2:
             period_date = period_info[0]
-            period_quarter = period_info[1]
+            shape = self._column_shape(latest_period_col)
             return next(
                 (
                     x
                     for _, x in enumerate(period_columns)
                     if len(x.split(" ")) == 2
-                    and period_quarter in x
+                    and self._column_shape(x) == shape
                     and period_date not in x
                 ),
                 None,

@@ -1,5 +1,8 @@
 CREATE OR REPLACE PROCEDURE refresh_financial_facts_normalized(company_ids int[])
 LANGUAGE plpgsql
+-- CTEs carry no row statistics. A merge join on (company, statement) then
+-- filters filing and concept pair by pair, which is quadratic in facts.
+SET enable_mergejoin = off
 AS $$
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
@@ -72,11 +75,28 @@ BEGIN
         WHERE ffo.company_id = ANY(company_ids)
             AND ffo.source_fact_id IS NOT NULL
     ),
+    -- A restatement is the same slot reported again by a later filing. Dedup
+    -- keeps that filing; the earlier value stays so a quarter can still be
+    -- derived from the annual figure the quarters belong to. A slot whose
+    -- latest filing still reports two values is a real conflict: drop it.
     conflicting_fact_keys AS (
         SELECT unnest(array_agg(id)) AS id
-        FROM financial_facts_base
-        GROUP BY company_id, statement, concept, label, axis, member, member_label, period_end, form_type, period
-        HAVING COUNT(DISTINCT value) > 1
+        FROM (
+            SELECT
+                ffb.*,
+                f.filing_date,
+                MAX(f.filing_date) OVER (
+                    PARTITION BY ffb.company_id, ffb.statement, ffb.concept, ffb.label,
+                        ffb.axis, ffb.member, ffb.member_label, ffb.period_end,
+                        ffb.form_type, ffb.period
+                ) AS latest_date
+            FROM financial_facts_base ffb
+            JOIN filings f ON f.id = ffb.filing_id
+        ) dated
+        GROUP BY
+            company_id, statement, concept, label, axis, member, member_label,
+            period_end, form_type, period
+        HAVING COUNT(DISTINCT value) FILTER (WHERE filing_date = latest_date) > 1
     ),
     financial_facts_overridden_cte AS (
         SELECT ffb.*
@@ -452,29 +472,140 @@ BEGIN
             GROUP BY cw.id
         ) id_chain ON id_chain.id = r.id
     ),
-    deduped AS (
+    -- A column for an earlier year is stored on the filing that printed it.
+    -- Its fiscal year and quarter come from the filing of the same form family
+    -- that closed on that period_end, so a 2015 10-K column for 2013 lands in
+    -- fiscal 2013. The source filing stands in when that one was never ingested.
+    fiscal_filings AS (
+        SELECT DISTINCT ON (company_id, fiscal_period_end, form_type)
+            id,
+            company_id,
+            fiscal_period_end,
+            form_type
+        FROM filings
+        WHERE company_id = ANY(company_ids)
+        ORDER BY company_id, fiscal_period_end, form_type, id
+    ),
+    -- A later filing that prints a member of an earlier period at another
+    -- value than the period's own filing has recast that split. None of its
+    -- members for that period are shown; Q4 still reads them as duplicates.
+    -- One that only adds members, rounded or not, extends the split.
+    recast_filings AS (
+        SELECT DISTINCT
+            later.company_id,
+            later.statement,
+            later.normalized_label,
+            later.axis,
+            later.period_end,
+            later.filing_id
+        FROM rolled_up_facts later
+        JOIN filings later_filed ON later_filed.id = later.filing_id
+        JOIN rolled_up_facts own
+            ON own.company_id = later.company_id
+            AND own.statement = later.statement
+            AND own.normalized_label = later.normalized_label
+            AND own.axis = later.axis
+            AND own.member = later.member
+            AND own.period_end = later.period_end
+            AND own.period IS NOT DISTINCT FROM later.period
+        JOIN filings own_filed ON own_filed.id = own.filing_id
+        WHERE COALESCE(later.axis, '') <> ''
+            AND NOT later.is_abstract
+            AND NOT own.is_abstract
+            AND later_filed.fiscal_period_end <> later.period_end
+            AND own_filed.fiscal_period_end = own.period_end
+            AND ABS(own.value - later.value) > CASE
+                WHEN later.value <> 0 AND later.value % 1000000 = 0 THEN 500000
+                WHEN later.value <> 0 AND later.value % 1000 = 0 THEN 500
+                ELSE 0
+            END
+    ),
+    ranked AS (
         SELECT
             r.*,
-            ROW_NUMBER() OVER (
-                PARTITION BY r.company_id, r.statement, r.normalized_label,
-                             r.axis, r.member, r.period_end
-                ORDER BY
-                    -- prefer amendments over original filings
-                    CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
-                    -- a published quarter beats the year-to-date total of the same date
-                    CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
-                    -- prefer longer chains
-                    COALESCE(cs.chain_size, 1) DESC,
-                    r.id ASC
-            ) AS rn
+            COALESCE(fiscal.id, r.filing_id) AS fiscal_filing_id,
+            recast.filing_id IS NOT NULL AS is_recast,
+            FIRST_VALUE(r.value) OVER filing_order AS winner_value,
+            ROW_NUMBER() OVER filing_order AS filing_rank
         FROM rolled_up_facts r
         LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id
+        LEFT JOIN filings filed ON filed.id = r.filing_id
+        LEFT JOIN recast_filings recast
+            ON recast.company_id = r.company_id
+            AND recast.statement = r.statement
+            AND recast.normalized_label = r.normalized_label
+            AND recast.axis = r.axis
+            AND recast.period_end = r.period_end
+            AND recast.filing_id = r.filing_id
+        LEFT JOIN fiscal_filings fiscal
+            ON fiscal.company_id = r.company_id
+            AND fiscal.fiscal_period_end = r.period_end
+            AND fiscal.form_type = CASE
+                WHEN filed.form_type IN ('10-K', '10-K/A') THEN '10-K'
+                WHEN filed.form_type IN ('10-Q', '10-Q/A') THEN '10-Q'
+                ELSE filed.form_type
+            END
+        WINDOW filing_order AS (
+            PARTITION BY r.company_id, r.statement, r.normalized_label,
+                         r.axis, r.member, r.period_end
+            ORDER BY
+                -- prefer amendments over original filings
+                CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
+                -- the period's own filing beats a later reprint, which may
+                -- be recast under other members; the line itself is only
+                -- kept from that filing
+                (filed.fiscal_period_end = r.period_end) DESC NULLS LAST,
+                recast.filing_id IS NOT NULL,
+                filed.filing_date DESC NULLS LAST,
+                -- a published quarter beats the year-to-date total of the same date
+                CASE WHEN r.period = 'Q' THEN 0 ELSE 1 END,
+                -- prefer longer chains
+                COALESCE(cs.chain_size, 1) DESC,
+                r.id ASC
+        )
+    ),
+    -- Later filings reprint earlier years rounded to thousands or millions.
+    -- A row that rounds to the winner, within 0.1%, keeps its digits, so
+    -- members still add up to a line taken from the original filing.
+    deduped AS (
+        SELECT
+            k.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY k.company_id, k.statement, k.normalized_label,
+                             k.axis, k.member, k.period_end
+                ORDER BY
+                    k.is_recast,
+                    (
+                        k.value = k.winner_value
+                        OR (
+                            k.winner_value <> 0
+                            AND k.winner_value % 1000 = 0
+                            AND ROUND(k.value / k.winner_rounding) * k.winner_rounding
+                                = k.winner_value
+                            AND ABS(k.value - k.winner_value)
+                                <= ABS(k.winner_value) / 1000
+                        )
+                    ) DESC NULLS LAST,
+                    k.value % 1000 = 0,
+                    k.value % 1000000 = 0,
+                    k.filing_rank
+            ) AS rn
+        FROM (
+            SELECT
+                ranked.*,
+                CASE
+                    WHEN winner_value % 1000000 = 0 THEN 1000000
+                    ELSE 1000
+                END AS winner_rounding
+            FROM ranked
+        ) k
     ),
     deduped_by_id AS (
         SELECT DISTINCT ON (id)
             id,
             company_id,
             filing_id,
+            fiscal_filing_id,
             form_type,
             concept,
             label,
@@ -495,7 +626,7 @@ BEGIN
             parent_id,
             abstract_id,
             is_synthetic,
-            rn > 1 AS is_duplicate
+            rn > 1 OR is_recast AS is_duplicate
         FROM deduped
         ORDER BY id, is_duplicate ASC
     )
@@ -514,6 +645,7 @@ BEGIN
         id,
         company_id,
         filing_id,
+        fiscal_filing_id,
         form_type,
         concept,
         label,
@@ -540,6 +672,7 @@ BEGIN
         id,
         company_id,
         filing_id,
+        fiscal_filing_id,
         form_type,
         concept,
         label,
@@ -566,6 +699,7 @@ BEGIN
     SET
         company_id = EXCLUDED.company_id,
         filing_id = EXCLUDED.filing_id,
+        fiscal_filing_id = EXCLUDED.fiscal_filing_id,
         form_type = EXCLUDED.form_type,
         concept = EXCLUDED.concept,
         label = EXCLUDED.label,

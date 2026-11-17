@@ -246,7 +246,11 @@ class TestXBRLFilingsLoader:
         mock_database.financial_facts.insert_financial_facts_batch.assert_called_once()
 
     async def test_load_single_filing_uses_nearby_statement_period(self):
-        """A cover date one day off the XBRL period still keeps that period."""
+        """A cover date one day off the XBRL period still names the filing.
+
+        A prior-period dimension fact is stored and a prior-period face fact
+        is not. The filing row stays on the period the statements close.
+        """
         mock_database = Mock(spec=AsyncFilingsDatabase)
         mock_database.companies = Mock()
         mock_database.filings = Mock()
@@ -256,7 +260,7 @@ class TestXBRLFilingsLoader:
         mock_database.filings.get_filing_by_number = AsyncMock(return_value=None)
         mock_database.filings.insert_filing = AsyncMock(return_value=1)
         mock_database.financial_facts.insert_financial_facts_batch = AsyncMock(
-            return_value=[1]
+            return_value=[1, 2]
         )
 
         mock_filing = Mock()
@@ -268,15 +272,22 @@ class TestXBRLFilingsLoader:
 
         current = Mock(spec=FinancialFactCreate)
         current.period_end = date(2013, 3, 30)
+        current.axis = None
         comparative = Mock(spec=FinancialFactCreate)
         comparative.period_end = date(2012, 3, 31)
-        loader.parser.parse_filing = Mock(return_value=[current, comparative])
+        comparative.axis = "srt:ProductOrServiceAxis"
+        face_comparative = Mock(spec=FinancialFactCreate)
+        face_comparative.period_end = date(2012, 3, 31)
+        face_comparative.axis = None
+        loader.parser.parse_filing = Mock(
+            return_value=[current, comparative, face_comparative]
+        )
 
         result, was_updated = await loader._load_single_filing(
             mock_filing, 10, 1, override=False
         )
 
-        assert result == 1
+        assert result == 2
         assert was_updated is False
         call_args = mock_database.filings.insert_filing.call_args[0][0]
         assert call_args.fiscal_period_end == date(2013, 3, 30)
@@ -285,7 +296,7 @@ class TestXBRLFilingsLoader:
         inserted = mock_database.financial_facts.insert_financial_facts_batch.call_args[
             0
         ][0]
-        assert inserted == [current]
+        assert inserted == [current, comparative]
 
     async def test_load_single_filing_new_call_args(self):
         """Verify insert_filing call args from test_load_single_filing_new."""

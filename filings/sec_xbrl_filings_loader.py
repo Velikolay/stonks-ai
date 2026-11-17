@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # A 52/53-week filer can put the calendar month-end on the submission header
-# and the last Saturday in XBRL. Six days covers that gap. A prior quarter
-# or prior year sits far outside it, so comparative columns stay excluded.
+# and the last Saturday in XBRL. Six days covers that gap when choosing the
+# filing's own period. Prior-period columns are stored as their own facts.
 _PERIOD_MATCH_DAYS = 6
 _PERIODIC_FORMS = ("10-K", "10-Q")
 
@@ -491,7 +491,7 @@ class SECXBRLFilingsLoader:
             cover_period_end: ``period_of_report`` from the submission header.
 
         Returns:
-            The period end to store on the filing and to keep facts for.
+            The period end to store on the filing. Prior-period facts are kept.
         """
         if cover_period_end is None:
             return None
@@ -622,10 +622,19 @@ class SECXBRLFilingsLoader:
                 logger.error(f"Failed to insert filing {filing.accession_number}")
                 return 0, False
 
+            # A 10-K prints earlier years and a 10-Q prints the prior-year
+            # quarter, so dimension rows keep those columns as facts for their
+            # own period. A face row off the filing period is an earlier column
+            # the parser fell back to; that year's own filing reports it.
+            period_end = filing_data.fiscal_period_end
             valid_facts = [
                 fact
                 for fact in facts
-                if fact.period_end == filing_data.fiscal_period_end
+                if fact.period_end is not None
+                and (
+                    fact.period_end == period_end
+                    or (fact.axis and period_end and fact.period_end < period_end)
+                )
             ]
 
             if not valid_facts:
@@ -636,9 +645,8 @@ class SECXBRLFilingsLoader:
 
             if len(valid_facts) != len(facts):
                 logger.warning(
-                    "Skipped %s facts outside period %s for filing %s",
+                    "Skipped %s facts with no period end for filing %s",
                     len(facts) - len(valid_facts),
-                    filing_data.fiscal_period_end,
                     filing.accession_number,
                 )
 

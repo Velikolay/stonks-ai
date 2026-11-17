@@ -1,13 +1,12 @@
--- Facts silently dropped before normalization.
+-- Slots where two filings disagree.
 --
--- refresh_financial_facts_normalized builds conflicting_fact_keys and excludes
--- every fact whose (company, statement, concept, label, axis, member,
--- member_label, period_end, form_type, period) group reports more than one
--- distinct value. A quarter and its year-to-date total share a date and are
--- not a conflict. A real conflict is usually a restatement across two filings.
--- Nothing downstream reports the loss, so check it here.
+-- Normalization keeps the latest filing in the group and drops the earlier
+-- facts. A group whose latest filing still reports two values is dropped
+-- entirely. A quarter and its year-to-date total share a date and are not a
+-- conflict, because period is part of the group. Nothing downstream reports
+-- which value won, so check it here.
 
-\echo '--- Fact groups excluded because they report conflicting values ---'
+\echo '--- Fact groups where filings report conflicting values ---'
 WITH base AS (
     SELECT
         ff.id,

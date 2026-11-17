@@ -1080,11 +1080,87 @@ class TestSECXBRLParser:
 
         facts = parser._parse_statement(frame, "Income Statement", True)
         face = {fact.period: fact for fact in facts if not fact.axis}
-        geo = {fact.period: fact for fact in facts if fact.member == "country:US"}
+        geo = {
+            (fact.period, fact.period_end): fact
+            for fact in facts
+            if fact.member == "country:US"
+        }
 
         assert face[PeriodType.Q].value == Decimal("57006")
         assert face[PeriodType.YTD].value == Decimal("147811")
-        assert geo[PeriodType.Q].value == Decimal("39177")
-        assert geo[PeriodType.Q].comparative_value == Decimal("19620")
-        assert geo[PeriodType.YTD].value == Decimal("97759")
-        assert geo[PeriodType.YTD].key.endswith("|ytd")
+        current = geo[(PeriodType.Q, date(2025, 10, 26))]
+        prior = geo[(PeriodType.Q, date(2024, 10, 27))]
+        assert current.value == Decimal("39177")
+        assert current.comparative_value == Decimal("19620")
+        assert prior.value == Decimal("19620")
+        assert prior.comparative_value is None
+        current_ytd = geo[(PeriodType.YTD, date(2025, 10, 26))]
+        assert current_ytd.value == Decimal("97759")
+        assert current_ytd.comparative_value == Decimal("53873")
+        assert current_ytd.key.endswith("|ytd")
+        assert geo[(PeriodType.YTD, date(2024, 10, 27))].value == Decimal("53873")
+
+    def test_dimension_keeps_prior_quarter_numbered_differently(self):
+        """A fiscal Q1 labeled Q2 still pairs with the prior-year Q1 column."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Revenues", "us-gaap_Revenues"],
+                "label": ["Revenue", "Revenue - Gaming"],
+                "abstract": [False, False],
+                "dimension": [False, True],
+                "dimension_axis": [None, "srt:ProductOrServiceAxis"],
+                "dimension_member": [None, "nvda_GamingMember"],
+                "dimension_member_label": [None, "Gaming"],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                "2015-04-26 (Q1)": [1151.0, 499.0],
+                "2016-05-01 (Q2)": [1305.0, 687.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        face = [fact for fact in facts if not fact.axis]
+        gaming = {fact.period_end: fact for fact in facts if fact.axis}
+
+        assert face[0].comparative_value == Decimal("1151")
+        assert gaming[date(2016, 5, 1)].comparative_value == Decimal("499")
+        assert gaming[date(2015, 4, 26)].value == Decimal("499")
+
+    def test_dimension_keeps_every_annual_column(self):
+        """A three-year 10-K column is a fact for each year, not only the latest."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_SalesRevenueNet", "us-gaap_SalesRevenueNet"],
+                "label": ["Net sales", "Net sales - United States"],
+                "abstract": [False, False],
+                "dimension": [False, True],
+                "dimension_axis": [None, "us-gaap:StatementGeographicalAxis"],
+                "dimension_member": [None, "country_US"],
+                "dimension_member_label": [None, "United States"],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                "2013-12-31 (FY)": [74452000000.0, 43959000000.0],
+                "2014-12-31 (FY)": [88988000000.0, 54717000000.0],
+                "2015-12-31 (FY)": [107006000000.0, 70537000000.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        face = [fact for fact in facts if not fact.axis]
+        geo = {fact.period_end: fact for fact in facts if fact.member == "country:US"}
+
+        assert len(face) == 1
+        assert face[0].period_end == date(2015, 12, 31)
+        assert face[0].value == Decimal("107006000000")
+        assert geo[date(2015, 12, 31)].value == Decimal("70537000000")
+        assert geo[date(2015, 12, 31)].comparative_value == Decimal("54717000000")
+        assert geo[date(2014, 12, 31)].value == Decimal("54717000000")
+        assert geo[date(2014, 12, 31)].comparative_value == Decimal("43959000000")
+        assert geo[date(2013, 12, 31)].value == Decimal("43959000000")
+        assert geo[date(2013, 12, 31)].comparative_value is None

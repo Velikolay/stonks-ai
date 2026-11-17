@@ -237,6 +237,12 @@ def parse_facts_rows(path: Path = FACTS_CSV) -> List[dict]:
             "form_type": _optional(row.get("form_type")),
             "from_period": _parse_date(row.get("from_period"), row_num, "from_period"),
             "to_period": _parse_date(row.get("to_period"), row_num, "to_period"),
+            "from_filing_period": _parse_date(
+                row.get("from_filing_period"), row_num, "from_filing_period"
+            ),
+            "to_filing_period": _parse_date(
+                row.get("to_filing_period"), row_num, "to_filing_period"
+            ),
             "is_global": _parse_bool(row.get("is_global"), row_num, "is_global"),
             "to_concept": row["to_concept"].strip(),
             "to_axis": to_axis,
@@ -258,9 +264,10 @@ def parse_rewrite_rows(path: Path = REWRITES_CSV) -> List[dict]:
 
     ``granularity`` is ``quarterly`` or ``yearly``. ``delete`` removes one
     member for one period. ``set`` replaces its value. ``add`` inserts a
-    member copied from a sibling in that period. Blank ``axis`` and
-    ``member`` are the undimensioned line. ``value`` is required for ``set``
-    and ``add`` and must be blank for ``delete``.
+    member copied from a sibling on that axis, or from the undimensioned
+    line when the axis has no row yet. Blank ``axis`` and ``member`` are
+    the undimensioned line. ``value`` is required for ``set`` and ``add``
+    and must be blank for ``delete``.
     """
     parsed = []
     for row_num, row in _read_csv(path):

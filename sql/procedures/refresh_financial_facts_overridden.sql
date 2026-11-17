@@ -22,6 +22,7 @@ BEGIN
         r.id AS fact_override_id,
         NULL::bigint AS source_fact_id
     FROM financial_facts ff
+    JOIN filings filed ON filed.id = ff.filing_id
     JOIN LATERAL (
         SELECT r.*
         FROM financial_facts_overrides r
@@ -36,6 +37,8 @@ BEGIN
             AND (r.form_type IS NULL OR r.form_type = ff.form_type)
             AND (r.from_period IS NULL OR ff.period_end >= r.from_period)
             AND (r.to_period IS NULL OR ff.period_end <= r.to_period)
+            AND (r.from_filing_period IS NULL OR filed.fiscal_period_end >= r.from_filing_period)
+            AND (r.to_filing_period IS NULL OR filed.fiscal_period_end <= r.to_filing_period)
         ORDER BY
             (r.company_id = ff.company_id) DESC,
             (
@@ -45,6 +48,8 @@ BEGIN
                 + (r.form_type IS NOT NULL)::int
                 + (r.from_period IS NOT NULL)::int
                 + (r.to_period IS NOT NULL)::int
+                + (r.from_filing_period IS NOT NULL)::int
+                + (r.to_filing_period IS NOT NULL)::int
             ) DESC,
             (r.to_period - r.from_period) ASC NULLS LAST,
             r.updated_at DESC
@@ -76,6 +81,7 @@ BEGIN
         r.id AS fact_override_id,
         ff.id AS source_fact_id
     FROM financial_facts ff
+    JOIN filings filed ON filed.id = ff.filing_id
     JOIN financial_facts_overrides r
         ON r.action = 'clone'
         AND r.statement = ff.statement
@@ -87,6 +93,8 @@ BEGIN
         AND (r.form_type IS NULL OR r.form_type = ff.form_type)
         AND (r.from_period IS NULL OR ff.period_end >= r.from_period)
         AND (r.to_period IS NULL OR ff.period_end <= r.to_period)
+        AND (r.from_filing_period IS NULL OR filed.fiscal_period_end >= r.from_filing_period)
+        AND (r.to_filing_period IS NULL OR filed.fiscal_period_end <= r.to_filing_period)
     WHERE ff.company_id = ANY(company_ids);
 
     DELETE FROM financial_facts_overridden ffo

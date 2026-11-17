@@ -101,6 +101,9 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("filing_id", sa.Integer(), nullable=False),
+        # The filing that closed period_end, which gives the fact its fiscal
+        # year and quarter. filing_id when that filing was never ingested.
+        sa.Column("fiscal_filing_id", sa.Integer(), nullable=False),
         sa.Column("form_type", sa.String(), nullable=False),
         sa.Column("concept", sa.String(), nullable=False),
         sa.Column("label", sa.String(), nullable=False),

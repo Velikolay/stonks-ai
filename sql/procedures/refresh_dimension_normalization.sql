@@ -1,5 +1,8 @@
 CREATE OR REPLACE PROCEDURE refresh_dimension_normalization(company_ids int[])
 LANGUAGE plpgsql
+-- CTEs carry no row statistics. A merge join on (company, statement) then
+-- filters the remaining keys pair by pair, which is quadratic in facts.
+SET enable_mergejoin = off
 AS $$
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
@@ -324,6 +327,8 @@ BEGIN
             AND f1.statement = f2.statement
             AND f1.normalized_label = f2.normalized_label
             AND f1.normalized_comparative_value = f2.normalized_value
+            -- Zero is the value of every line that did not occur that year.
+            AND f2.normalized_value <> 0
             AND f1.comparative_period_end = f2.period_end
         WHERE
             (

@@ -81,9 +81,9 @@ make refresh COMPANY_IDS=1,2
 **Stop when**, for the company under work, coverage shows no missing 10-K years
 or empty filings, period gaps inside a real series are gone, orphaned parents
 are gone, no fiscal year fails the four-quarters-sum-to-the-10-K check, Balance
-Sheet identities hold, and dimension axis splits are gone. Explain each
-remaining rollup, sign-flip, conflicting-fact, and value-anomaly row as a
-source-data artifact.
+Sheet identities hold, dimension axis splits are gone, and `14` lists no member
+the chart draws with a remainder. Explain each remaining rollup, sign-flip,
+conflicting-fact, value-anomaly, and remainder row as a source-data artifact.
 
 Duplicate and disjoint rows are not themselves a reason to keep going:
 
@@ -156,7 +156,7 @@ is what you need after fixing a parser bug.
 
 Run in this order; each stage reads the previous one. `refresh_financials(int[])`
 in [sql/procedures/refresh_financials.sql](sql/procedures/refresh_financials.sql)
-chains all eight.
+chains all eight, one company at a time.
 
 | Procedure | Writes | What it does |
 | --- | --- | --- |
@@ -206,7 +206,9 @@ least two 10-Ks (a year where one of its members could be swapped for another
 member of equal value does not count, so a region and a country that coincide
 never mix) and writes it into `dimension_breakdowns`; a set that only expands
 another one (iPhone, iPad, Mac, Wearables and Services beside Products and
-Services) is dropped. A year where the set falls short is not stored.
+Services) is dropped. A year where the set falls short is not stored. Members
+coarser than their parent, such as millions a later 10-K reprinted beside a
+total in thousands, may miss it by half a unit each, up to 0.1%.
 Diagnostic 14 finds those years by comparing the members to
 `yearly_financials`: at least two members present, none negative, and short of
 a positive parent. The shortfall is unallocated. Several breakdowns of one
@@ -223,14 +225,24 @@ member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
 than 16 members and per-share amounts are skipped.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
-member and period, then ranked: amendments first, then longest comparative-value
-chain, then lowest id. Losers get `is_duplicate = true`, and both
-`yearly_financials` and `quarterly_financials` filter them out. If a value
-vanishes from the presentation layer, this is usually why — check
-`financial_facts_normalized` before assuming ingestion dropped it.
+member and period, then ranked: amendments first, then the period's own filing,
+then the later filing, then a published quarter over the year-to-date total of
+the same date, then the longest comparative-value chain, then lowest id. The
+undimensioned line is only kept from the period's own filing, so its members
+are too. A later filing fills members the period's own filing left out only
+when it extends that split: if it prints any shared member at another value,
+beyond rounding, it recast the period (NVIDIA's fiscal 2025 10-K carving
+Singapore out of fiscal 2023 and 2024), and all of its members for that period
+become duplicates, which only the Q4 calculation reads. A row that rounds to the
+winner's value, within 0.1%, beats it, so a later reprint in millions does not
+replace the original's digits. Losers get `is_duplicate = true`, and both `yearly_financials` and
+`quarterly_financials` filter them out. If a value vanishes from the
+presentation layer, this is usually why — check `financial_facts_normalized`
+before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
-the previous quarter when that quarter ended 80 to 100 days earlier. A dimension
+the previous quarter when that quarter ended 80 to 100 days earlier, or that
+quarter's year-to-date total when it was published beside it. A dimension
 column marked as a quarter is stored as that quarter, and its year-to-date
 total is kept only so Q4 can subtract the nine-month figure. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
@@ -240,7 +252,24 @@ left out of the quarterly table, unless the next year's filing reports that
 missing period as a comparative. That comparative is added as a
 `comparative_backfill` prior period, so the opening YTD reduces to one
 quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
-figure minus the nine-month YTD on the quarter before the 10-K. A later gap
+figure of that same member minus the nine-month YTD on the quarter before the
+10-K. A later filing can recast the year under new members, so every member's
+Q4 on one axis comes from the same 10-K, including rows dedup ranked lower: an
+amendment, then the year's own 10-K, then one on the quarters' split (its
+members all have quarters and every member with quarters is in it), then the
+first 10-K filed after the quarters (a backfilled comparative does not count),
+then the latest before them. A member that 10-K leaves out comes from the next
+one in that order. The nine months come from the 10-Q a year later when the
+first 10-K after it prints the year as this 10-K did and all its members on that
+axis are the 10-K's: a 10-K that moved a line out of another (Tesla's fiscal
+2021 10-K taking regulatory credits out of automotive sales) subtracts the
+reprint on its own split. Otherwise they come from a 10-Q whose members are the
+10-K's, the year's own first, so a 10-K on new members subtracts a 10-Q that
+reprinted the nine months on them and not quarters filed on the old ones.
+Without such a 10-Q, Q1–Q3 are subtracted. A member of the first-ranked
+10-K gets Q4 from those nine months even when its Q1–Q3 are hidden as a recast
+(Amazon's 2016 10-K introduced new categories, and only the 2017 10-Qs printed
+2016's quarters on them). A later gap
 in an existing series stays as its own quarter. Rows in
 `financial-rewrites.csv` then delete, replace, or add one member for one
 period. `granularity=quarterly` is applied while building
@@ -277,7 +306,7 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | The same fact must also appear on another axis, and the original line stays | `financial-facts-overrides.csv` | `action=clone` |
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | Advertising and other revenue filed as their own concepts, with no axis | `financial-facts-overrides.csv` | `to_concept` is the face revenue concept, plus `to_axis`, `to_member`, `to_member_label` |
-| One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type` |
+| One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type`, `from_filing_period`, `to_filing_period` |
 
 Reach for `concept-normalization-overrides.csv` first. It is declarative and
 global-capable, so one row can fix every company at once. Use
@@ -288,7 +317,7 @@ rewrites raw data and is almost always company-specific.
 
 `company_id,statement,normalized_label,axis,member,period_end,granularity,action,value`
 
-One row edits one member on one layer. `granularity` is `quarterly` or `yearly`. `delete` removes it, `set` replaces its value, and `add` inserts a member copied from another member of that axis and period. Blank `axis` and `member` are the undimensioned line. `value` is set for `set` and `add` only. A quarterly row leaves the annual figure as filed.
+One row edits one member on one layer. `granularity` is `quarterly` or `yearly`. `delete` removes it, `set` replaces its value, and `add` inserts a member copied from another member of that axis and period, or from the undimensioned line when that axis has no row yet. Blank `axis` and `member` are the undimensioned line. `value` is set for `set` and `add` only. A quarterly row leaves the annual figure as filed.
 
 ```csv
 8,Income Statement,Revenue,Geographical,Other,2023-07-30,quarterly,delete,
@@ -360,6 +389,15 @@ per metric, so inference will not pull OI onto Product — override the members
 (and legacy names like Rides / Eats) explicitly. `13_dimension_axis_splits.sql`
 flags these splits.
 
+An override labels a whole group, not one member. Members that share an XBRL
+member name, a member label, or a normalized label are one group, and the
+override of the group's latest member wins. Tesla's 2014–2017 credits on
+`us-gaap:ProductOrServiceAxis` and the 2018 10-K's on `srt:ProductOrServiceAxis`
+both use `tsla:RegulatoryCreditsMember`, so two overrides on them land on one
+label. To give part of a series its own label, rewrite those facts onto another
+member with `financial-facts-overrides.csv` (bounded by `from_period` and
+`to_period`), and check `dimension_normalization` after the refresh.
+
 ### `dimension-breakdown-overrides.csv`
 
 `company_id,normalized_label,axis,parent_member,members`
@@ -390,12 +428,15 @@ that inference would find for it later.
 
 ### `financial-facts-overrides.csv`
 
-`id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global,action`
+`id,company_id,concept,statement,axis,member,label,form_type,from_period,to_period,to_concept,to_axis,to_member,to_member_label,to_weight,is_global,action,from_filing_period,to_filing_period`
 
 Left-hand columns match, `to_*` columns rewrite. `to_axis`, `to_member` and
 `to_member_label` must be all set or all blank; a check constraint enforces it.
 `to_concept` is required on every row, including a weight-only rewrite; repeat
-the source concept there. The `id` column is preserved so admin CSV exports
+the source concept there. `from_period` and `to_period` bound the fact's
+`period_end`; `from_filing_period` and `to_filing_period` bound the fiscal
+period of the filing it came from, so a rewrite can leave a later filing's
+comparatives alone. The `id` column is preserved so admin CSV exports
 round-trip. The loader inserts the file in one batch, so once any row has an
 `id`, a new row needs the next integer too. A blank `id` fails the load.
 
@@ -432,6 +473,14 @@ Scope a rewrite to a single filing period:
 7,5,us-gaap:NetIncomeLoss,Income Statement,,,,,2018-09-30,,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,,,,,False
 ```
 
+Give a line its own member while it meant something else. Tesla counted
+regulatory credits inside automotive sales until the fiscal 2021 10-K, and that
+10-K's comparatives moved them out, so the rewrite is bounded by the filing:
+
+```csv
+95,5,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,srt:ProductOrServiceAxis,tsla:AutomotiveRegulatoryCreditsMember,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ProductOrServiceAxis,tsla:RegulatoryCreditsInAutomotiveSalesMember,Regulatory credits included in automotive sales,,False,,,2021-09-30
+```
+
 Keep an undimensioned hedge and also report it on both cuts. The source
 concept stays; each clone is revenue on one axis:
 
@@ -464,12 +513,12 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `06_orphans.sql` | `parent_id` and `abstract_id` pointing at rows that do not exist |
 | `07_sign_flips.sql` | Series that change sign between periods; labels carrying conflicting weights |
 | `08_quarterly_vs_annual.sql` | Fiscal years where four quarters do not sum to the 10-K figure |
-| `09_conflicting_facts.sql` | Facts dropped before normalization because a group reports conflicting values |
+| `09_conflicting_facts.sql` | Slots where filings disagree. Dedup keeps the latest filing; a conflict inside that filing is dropped |
 | `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
-| `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, every breakdown with its years |
+| `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, members the chart draws with a remainder, every breakdown with its years |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -501,10 +550,33 @@ only for a split you confirmed in the filing. Partial disclosures (one country
 beside regions), segment profit before unallocated corporate costs, and
 equity-component or share-class axes are expected and stay listed.
 
-`09` deserves attention because nothing else surfaces it: the normalization
-procedure silently discards every fact whose group reports more than one distinct
-value for the same period, which is what a restatement looks like. If a line item
-is missing and appears nowhere else, check here.
+The remainder query is what the chart shows. It takes the breakdowns the API
+sends at each granularity and lists members, quarterly and yearly, where no
+sent split of the member adds up and one falls short, which the chart draws as
+"<member> (remainder)". A shortfall against the undimensioned line is the gray
+metric bar, which partial disclosures leave, so it is not listed. The usual
+causes, with `present_in_first` naming the members that were found:
+
+- A member is missing in those periods. Check whether its own filing tagged it
+ under another concept (Tesla's energy leasing under
+ `OperatingLeasesIncomeStatementLeaseRevenue` in 2019–2021), and rewrite those
+ facts onto the line's concept. A later filing that recast the period does
+ not fill it, because dedup marks all of its members as duplicates.
+- A stray member shares a label with a split member (Tesla's 2013 resale value
+ guarantee revenue filed as "Automotive sales"). Rewrite it onto its own member.
+- A member was relabeled into years where the rest of its split was never
+ reported (credits inside automotive sales before the 2018 split). Give those
+ years their own label, which the grouping note under the dimension cookbook
+ explains how to do.
+- `max_remainder_pct` rounds to 0.0. A member was reprinted in millions or
+ rounded to 100k beside an exact parent. The chart tolerates only one unit, so
+ it still draws that small gap; explain it rather than override it.
+
+`09` deserves attention because nothing else surfaces it: when filings disagree
+on one slot, dedup keeps the latest filing and the earlier value stays on a
+duplicate row. A slot whose latest filing still reports two values is dropped
+entirely. If a
+line item is missing and appears nowhere else, check here.
 
 `11` catches years that pass `08` but still look wrong: a Q4 whose sign flips
 against Q1–Q3, a Q4 that is more than 3× any earlier quarter, the same Q4
@@ -579,7 +651,8 @@ Every condition on it is a way to miss a real rename: exact value equality fails
 on a restatement, both sides are multiplied by `weight` so a weight override on
 only one concept breaks the match, `form_type` must agree so a rename that
 appears first in a 10-Q is invisible, and a missing `comparative_value` means
-there is no bridge at all. The same multiplication works in reverse: a weight
+there is no bridge at all. A zero never bridges, since every line that did not
+occur that year shares it, so a rename that first prints as zero is not linked. The same multiplication works in reverse: a weight
 you just corrected can create a new match against an unrelated line that now
 shares the amount. The `false_matches` CTEs then drop a pair entirely for
 the whole company and statement if any period triple chains or any mirrored pair
@@ -647,7 +720,10 @@ override behaves differently for two companies. Procedures live in
 [0008](migrations/versions/0008_add_financials_procedures.py). Editing a `.sql`
 file does nothing until it is reinstalled: apply it with
 `psql "$DATABASE_URL" -f sql/procedures/<name>.sql`, then `make refresh`. Add a
-new migration to make the change permanent.
+new migration to make the change permanent. A procedure change affects every
+company, so refresh them all and re-run `08` and `14` unfiltered, not only for
+the company that prompted it. A dedup rule written for one filer's recast
+dropped another filer's only copy of a member, and only `14` showed it.
 
 **edgartools bug.** Suspect this when the fact is wrong in
 `financial_facts` but correct in the filing itself, which the `public_url` column
