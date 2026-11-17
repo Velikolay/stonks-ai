@@ -30,13 +30,18 @@ BEGIN
             ff.period_end,
             ff.is_abstract,
             ff.is_synthetic,
-            f.fiscal_year,
+            CASE
+                WHEN f.fiscal_period_end = ff.period_end THEN f.fiscal_year
+                ELSE f.fiscal_year - (
+                    EXTRACT(YEAR FROM f.fiscal_period_end)::int
+                    - EXTRACT(YEAR FROM ff.period_end)::int
+                )
+            END AS fiscal_year,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
             FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings f
-            ON ff.company_id = f.company_id
-            AND ff.filing_id = f.id
+            ON f.id = filing_for_period(ff.company_id, ff.filing_id, ff.period_end)
         WHERE
             ff.company_id = ANY(company_ids)
             AND ff.form_type IN ('10-K', '10-K/A')
@@ -73,7 +78,9 @@ BEGIN
 
     -- Rows in financial_rewrites with granularity yearly. Quarterly rows
     -- are applied by refresh_quarterly_financials. delete removes a member
-    -- for one period, set replaces its value, and add copies a sibling.
+    -- for one period, set replaces its value, and add copies a sibling on
+    -- that axis. When the axis has no row yet, add copies the undimensioned
+    -- line so the first member of an axis can be introduced.
     DELETE FROM tmp_yearly_financials_new t
     USING financial_rewrites o
     WHERE
@@ -144,10 +151,10 @@ BEGIN
             t.company_id = o.company_id
             AND t.statement = o.statement
             AND t.normalized_label = o.normalized_label
-            AND t.axis = o.axis
             AND t.period_end = o.period_end
             AND NOT t.is_abstract
-        ORDER BY t.member
+            AND (t.axis = o.axis OR t.axis = '')
+        ORDER BY CASE WHEN t.axis = o.axis THEN 0 ELSE 1 END, t.member
         LIMIT 1
     ) s ON true
     WHERE

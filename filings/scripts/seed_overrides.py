@@ -258,9 +258,10 @@ def parse_rewrite_rows(path: Path = REWRITES_CSV) -> List[dict]:
 
     ``granularity`` is ``quarterly`` or ``yearly``. ``delete`` removes one
     member for one period. ``set`` replaces its value. ``add`` inserts a
-    member copied from a sibling in that period. Blank ``axis`` and
-    ``member`` are the undimensioned line. ``value`` is required for ``set``
-    and ``add`` and must be blank for ``delete``.
+    member copied from a sibling on that axis, or from the undimensioned
+    line when the axis has no row yet. Blank ``axis`` and ``member`` are
+    the undimensioned line. ``value`` is required for ``set`` and ``add``
+    and must be blank for ``delete``.
     """
     parsed = []
     for row_num, row in _read_csv(path):

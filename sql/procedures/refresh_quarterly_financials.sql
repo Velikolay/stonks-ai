@@ -23,6 +23,7 @@ BEGIN
         SELECT
             o.id,
             o.company_id,
+            o.fiscal_period_end,
             o.fiscal_year,
             o.fiscal_quarter,
             CASE
@@ -66,15 +67,27 @@ BEGIN
             ff.is_abstract,
             ff.is_synthetic,
             ff.form_type AS source_type,
-            f.fiscal_year,
+            -- A prior-year column is stored on the filing that printed it.
+            -- Place it in the fiscal year that closed on period_end. When that
+            -- filing was never ingested, shift the source year by the calendar
+            -- gap and keep its quarter.
+            CASE
+                WHEN f.fiscal_period_end = ff.period_end THEN f.fiscal_year
+                ELSE f.fiscal_year - (
+                    EXTRACT(YEAR FROM f.fiscal_period_end)::int
+                    - EXTRACT(YEAR FROM ff.period_end)::int
+                )
+            END AS fiscal_year,
             f.fiscal_quarter,
             f.fiscal_tag,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
             FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings_cte f
-            ON ff.company_id = f.company_id
-            AND ff.filing_id = f.id
+            ON f.company_id = ff.company_id
+            AND f.id = filing_for_period(
+                ff.company_id, ff.filing_id, ff.period_end
+            )
         WHERE ff.company_id = ANY(company_ids)
           AND ff.is_duplicate = false
         WINDOW w AS (
@@ -206,23 +219,26 @@ BEGIN
     -- subtracts it from the annual figure.
     ytd_anchor AS (
         SELECT DISTINCT ON (
-            company_id, statement, normalized_label, axis, member, period_end
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.period_end
         )
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            member,
-            period_end,
-            value
-        FROM financial_facts_normalized
+            ff.company_id,
+            ff.statement,
+            ff.normalized_label,
+            ff.axis,
+            ff.member,
+            ff.period_end,
+            ff.value
+        FROM financial_facts_normalized ff
+        JOIN filings filed ON filed.id = ff.filing_id
         WHERE
-            company_id = ANY(company_ids)
-            AND is_duplicate = true
-            AND period = 'YTD'
-            AND NOT is_abstract
+            ff.company_id = ANY(company_ids)
+            AND ff.is_duplicate = true
+            AND ff.period = 'YTD'
+            AND NOT ff.is_abstract
         ORDER BY
-            company_id, statement, normalized_label, axis, member, period_end, id
+            ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
+            ff.period_end, filed.filing_date DESC, ff.id DESC
     ),
     quarterly_filings AS (
         SELECT
@@ -327,32 +343,146 @@ BEGIN
     ),
     quarterly_aggregation AS (
         SELECT
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            member,
-            fiscal_tag,
+            q.company_id,
+            q.statement,
+            q.normalized_label,
+            q.axis,
+            q.member,
+            q.fiscal_tag,
+            MIN(raw.member) AS raw_member,
             -- Three discrete quarters sum to Q1–Q3. A published quarter keeps
             -- the nine-month total for Q4, because the earlier quarters can be
             -- on the previous classification. Otherwise subtract that total
             -- when a quarter is missing. Per-share rows have no q3_ytd.
             CASE
-                WHEN COUNT(DISTINCT fiscal_quarter) FILTER (WHERE NOT drop_ytd) = 3
-                    AND NOT COALESCE(bool_or(prefer_ytd_anchor), false)
-                THEN SUM(value) FILTER (WHERE NOT drop_ytd)
-                ELSE MAX(q3_ytd)
+                WHEN COUNT(DISTINCT q.fiscal_quarter) FILTER (WHERE NOT q.drop_ytd) = 3
+                    AND NOT COALESCE(bool_or(q.prefer_ytd_anchor), false)
+                THEN SUM(q.value) FILTER (WHERE NOT q.drop_ytd)
+                ELSE MAX(q.q3_ytd)
             END AS value
-        FROM quarterly_filings
+        FROM quarterly_filings q
+        LEFT JOIN financial_facts raw ON raw.id = q.id
         GROUP BY
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            member,
-            fiscal_tag
+            q.company_id,
+            q.statement,
+            q.normalized_label,
+            q.axis,
+            q.member,
+            q.fiscal_tag
+    ),
+    -- Q4 subtracts the quarters from the annual figure of the same member.
+    -- A later filing can recast that year under new members. The latest
+    -- annual of this member that still covers the quarters is the one the
+    -- quarters were filed against, including a row dedup retired.
+    same_member_annual AS (
+        SELECT DISTINCT ON (
+            q.company_id, q.statement, q.normalized_label, q.axis, q.member,
+            q.fiscal_tag
+        )
+            a.company_id,
+            a.filing_id,
+            a.id,
+            a.parent_id,
+            tag.fiscal_year,
+            tag.fiscal_quarter,
+            a.concept,
+            a.label,
+            a.value,
+            q.value AS quarters,
+            a.unit,
+            a.weight,
+            a.print_sign,
+            a.axis,
+            q.member,
+            a.statement,
+            a.abstract_id,
+            tag.fiscal_period_end AS period_end,
+            a.normalized_label,
+            a.position,
+            a.is_abstract,
+            a.is_synthetic
+        FROM quarterly_aggregation q
+        JOIN filings tag ON tag.id = q.fiscal_tag
+        JOIN financial_facts_normalized a
+            ON a.company_id = q.company_id
+            AND a.statement = q.statement
+            AND a.normalized_label = q.normalized_label
+            AND a.axis = q.axis
+            AND a.period_end = tag.fiscal_period_end
+            AND a.form_type IN ('10-K', '10-K/A')
+            AND a.period = 'YTD'
+            AND NOT a.is_abstract
+            AND a.value >= q.value
+        JOIN financial_facts raw
+            ON raw.id = a.id
+            AND (
+                raw.member = q.raw_member
+                -- The 10-K renamed the member. Use that annual only when this
+                -- quarterly member has no annual of its own.
+                OR (
+                    a.member = q.member
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM financial_facts_normalized earlier
+                        JOIN financial_facts earlier_raw
+                            ON earlier_raw.id = earlier.id
+                        WHERE earlier.company_id = q.company_id
+                            AND earlier.statement = q.statement
+                            AND earlier.normalized_label = q.normalized_label
+                            AND earlier.axis = q.axis
+                            AND earlier.period_end = tag.fiscal_period_end
+                            AND earlier.form_type IN ('10-K', '10-K/A')
+                            AND earlier.period = 'YTD'
+                            AND NOT earlier.is_abstract
+                            AND earlier.value >= q.value
+                            AND earlier_raw.member = q.raw_member
+                    )
+                )
+            )
+        JOIN filings src ON src.id = a.filing_id
+        WHERE COALESCE(q.axis, '') <> ''
+            AND q.raw_member IS NOT NULL
+            AND q.value IS NOT NULL
+        ORDER BY
+            q.company_id, q.statement, q.normalized_label, q.axis, q.member,
+            q.fiscal_tag,
+            CASE WHEN raw.member = q.raw_member THEN 0 ELSE 1 END,
+            src.filing_date DESC, a.id DESC
     ),
     missing_quarters AS (
+        SELECT
+            a.company_id,
+            a.filing_id,
+            a.id,
+            a.parent_id,
+            a.fiscal_year,
+            a.fiscal_quarter,
+            a.concept,
+            a.label,
+            a.value - a.quarters AS value,
+            a.unit,
+            a.weight,
+            a.print_sign,
+            a.axis,
+            a.member,
+            a.statement,
+            a.abstract_id,
+            a.period_end,
+            a.normalized_label,
+            a.position,
+            a.is_abstract,
+            a.is_synthetic,
+            'calculated' AS source_type
+        FROM same_member_annual a
+        WHERE
+            a.statement != 'Balance Sheet'
+            AND a.concept NOT IN (
+                'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+            )
+
+        UNION ALL
+
         SELECT
             a.company_id,
             a.filing_id,
@@ -385,7 +515,8 @@ BEGIN
             AND q.member = a.member
             AND q.fiscal_tag = a.fiscal_tag
         WHERE
-            a.statement != 'Balance Sheet'
+            COALESCE(a.axis, '') = ''
+            AND a.statement != 'Balance Sheet'
             -- Instant stocks are not annual−Σquarters flows.
             AND a.period IS NOT NULL
             AND a.concept NOT IN (
@@ -491,7 +622,9 @@ BEGIN
 
     -- Rows in financial_rewrites with granularity quarterly. Yearly rows
     -- are applied by refresh_yearly_financials. delete removes a member
-    -- for one period, set replaces its value, and add copies a sibling.
+    -- for one period, set replaces its value, and add copies a sibling on
+    -- that axis. When the axis has no row yet, add copies the undimensioned
+    -- line so the first member of an axis can be introduced.
     DELETE FROM tmp_quarterly_financials_new t
     USING financial_rewrites o
     WHERE
@@ -564,10 +697,10 @@ BEGIN
             t.company_id = o.company_id
             AND t.statement = o.statement
             AND t.normalized_label = o.normalized_label
-            AND t.axis = o.axis
             AND t.period_end = o.period_end
             AND NOT t.is_abstract
-        ORDER BY t.member
+            AND (t.axis = o.axis OR t.axis = '')
+        ORDER BY CASE WHEN t.axis = o.axis THEN 0 ELSE 1 END, t.member
         LIMIT 1
     ) s ON true
     WHERE

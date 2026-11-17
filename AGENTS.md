@@ -223,11 +223,14 @@ member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
 than 16 members and per-share amounts are skipped.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
-member and period, then ranked: amendments first, then longest comparative-value
-chain, then lowest id. Losers get `is_duplicate = true`, and both
-`yearly_financials` and `quarterly_financials` filter them out. If a value
-vanishes from the presentation layer, this is usually why — check
-`financial_facts_normalized` before assuming ingestion dropped it.
+member and period, then ranked: amendments first, then the later filing, then a
+published quarter over the year-to-date total of the same date, then the longest
+comparative-value chain, then lowest id. A later filing that reprints two or
+more members of an axis for an earlier period retires members that reprint
+leaves out. Losers get `is_duplicate = true`, and both `yearly_financials` and
+`quarterly_financials` filter them out. If a value vanishes from the
+presentation layer, this is usually why — check `financial_facts_normalized`
+before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
 the previous quarter when that quarter ended 80 to 100 days earlier. A dimension
@@ -240,7 +243,10 @@ left out of the quarterly table, unless the next year's filing reports that
 missing period as a comparative. That comparative is added as a
 `comparative_backfill` prior period, so the opening YTD reduces to one
 quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
-figure minus the nine-month YTD on the quarter before the 10-K. A later gap
+figure of that same member minus the nine-month YTD on the quarter before the
+10-K. A later filing can recast the year under new members; Q4 uses the latest
+annual of the member the quarters were filed against, including one dedup
+retired, so the residual stays with those quarters. A later gap
 in an existing series stays as its own quarter. Rows in
 `financial-rewrites.csv` then delete, replace, or add one member for one
 period. `granularity=quarterly` is applied while building
@@ -288,7 +294,7 @@ rewrites raw data and is almost always company-specific.
 
 `company_id,statement,normalized_label,axis,member,period_end,granularity,action,value`
 
-One row edits one member on one layer. `granularity` is `quarterly` or `yearly`. `delete` removes it, `set` replaces its value, and `add` inserts a member copied from another member of that axis and period. Blank `axis` and `member` are the undimensioned line. `value` is set for `set` and `add` only. A quarterly row leaves the annual figure as filed.
+One row edits one member on one layer. `granularity` is `quarterly` or `yearly`. `delete` removes it, `set` replaces its value, and `add` inserts a member copied from another member of that axis and period, or from the undimensioned line when that axis has no row yet. Blank `axis` and `member` are the undimensioned line. `value` is set for `set` and `add` only. A quarterly row leaves the annual figure as filed.
 
 ```csv
 8,Income Statement,Revenue,Geographical,Other,2023-07-30,quarterly,delete,
@@ -464,7 +470,7 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `06_orphans.sql` | `parent_id` and `abstract_id` pointing at rows that do not exist |
 | `07_sign_flips.sql` | Series that change sign between periods; labels carrying conflicting weights |
 | `08_quarterly_vs_annual.sql` | Fiscal years where four quarters do not sum to the 10-K figure |
-| `09_conflicting_facts.sql` | Facts dropped before normalization because a group reports conflicting values |
+| `09_conflicting_facts.sql` | Slots where filings disagree. Dedup keeps the latest filing; a conflict inside that filing is dropped |
 | `10_unlinked_series.sql` | Series that should be one series: renames the inference step failed to link |
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
@@ -501,10 +507,11 @@ only for a split you confirmed in the filing. Partial disclosures (one country
 beside regions), segment profit before unallocated corporate costs, and
 equity-component or share-class axes are expected and stay listed.
 
-`09` deserves attention because nothing else surfaces it: the normalization
-procedure silently discards every fact whose group reports more than one distinct
-value for the same period, which is what a restatement looks like. If a line item
-is missing and appears nowhere else, check here.
+`09` deserves attention because nothing else surfaces it: when filings disagree
+on one slot, dedup keeps the latest filing and the earlier value stays on a
+duplicate row. A slot whose latest filing still reports two values is dropped
+entirely. If a
+line item is missing and appears nowhere else, check here.
 
 `11` catches years that pass `08` but still look wrong: a Q4 whose sign flips
 against Q1–Q3, a Q4 that is more than 3× any earlier quarter, the same Q4
