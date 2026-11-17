@@ -27,7 +27,6 @@ def _read_sql(relative_path: str) -> str:
 
 
 def upgrade() -> None:
-    op.execute(_read_sql("sql/procedures/filing_for_period.sql"))
     op.execute(_read_sql("sql/procedures/refresh_financial_facts_overridden.sql"))
     op.execute(_read_sql("sql/procedures/refresh_concept_normalization.sql"))
     op.execute(_read_sql("sql/procedures/refresh_hierarchy_normalization.sql"))

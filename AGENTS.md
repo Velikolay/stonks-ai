@@ -156,7 +156,7 @@ is what you need after fixing a parser bug.
 
 Run in this order; each stage reads the previous one. `refresh_financials(int[])`
 in [sql/procedures/refresh_financials.sql](sql/procedures/refresh_financials.sql)
-chains all eight.
+chains all eight, one company at a time.
 
 | Procedure | Writes | What it does |
 | --- | --- | --- |
@@ -244,9 +244,10 @@ missing period as a comparative. That comparative is added as a
 `comparative_backfill` prior period, so the opening YTD reduces to one
 quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
 figure of that same member minus the nine-month YTD on the quarter before the
-10-K. A later filing can recast the year under new members; Q4 uses the latest
-annual of the member the quarters were filed against, including one dedup
-retired, so the residual stays with those quarters. A later gap
+10-K. A later filing can recast the year under new members, so every member's
+Q4 on one axis comes from the same 10-K, including rows dedup retired: one
+whose members all have quarters, then an amendment, then the first 10-K filed
+after the quarters, then the latest before them. A later gap
 in an existing series stays as its own quarter. Rows in
 `financial-rewrites.csv` then delete, replace, or add one member for one
 period. `granularity=quarterly` is applied while building

@@ -30,18 +30,17 @@ BEGIN
             ff.period_end,
             ff.is_abstract,
             ff.is_synthetic,
-            CASE
-                WHEN f.fiscal_period_end = ff.period_end THEN f.fiscal_year
-                ELSE f.fiscal_year - (
-                    EXTRACT(YEAR FROM f.fiscal_period_end)::int
-                    - EXTRACT(YEAR FROM ff.period_end)::int
-                )
-            END AS fiscal_year,
+            -- Zero on the filing that closed period_end. Otherwise that
+            -- filing was never ingested; shift by the calendar gap.
+            f.fiscal_year - (
+                EXTRACT(YEAR FROM f.fiscal_period_end)::int
+                - EXTRACT(YEAR FROM ff.period_end)::int
+            ) AS fiscal_year,
             FIRST_VALUE(ff.abstract_id) OVER w AS latest_abstract_id,
             FIRST_VALUE(ff.position) OVER w AS latest_position
         FROM financial_facts_normalized ff
         JOIN filings f
-            ON f.id = filing_for_period(ff.company_id, ff.filing_id, ff.period_end)
+            ON f.id = ff.fiscal_filing_id
         WHERE
             ff.company_id = ANY(company_ids)
             AND ff.form_type IN ('10-K', '10-K/A')

@@ -623,9 +623,19 @@ class SECXBRLFilingsLoader:
                 return 0, False
 
             # A 10-K prints earlier years and a 10-Q prints the prior-year
-            # quarter. Those columns are facts for their own period. The
-            # filing row stays on the period it closed.
-            valid_facts = [fact for fact in facts if fact.period_end is not None]
+            # quarter, so dimension rows keep those columns as facts for their
+            # own period. A face row off the filing period is an earlier column
+            # the parser fell back to; that year's own filing reports it.
+            period_end = filing_data.fiscal_period_end
+            valid_facts = [
+                fact
+                for fact in facts
+                if fact.period_end is not None
+                and (
+                    fact.period_end == period_end
+                    or (fact.axis and period_end and fact.period_end < period_end)
+                )
+            ]
 
             if not valid_facts:
                 logger.warning(

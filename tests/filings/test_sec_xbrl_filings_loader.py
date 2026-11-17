@@ -248,8 +248,8 @@ class TestXBRLFilingsLoader:
     async def test_load_single_filing_uses_nearby_statement_period(self):
         """A cover date one day off the XBRL period still names the filing.
 
-        The prior-period fact is stored. The filing row stays on the period
-        the statements close.
+        A prior-period dimension fact is stored and a prior-period face fact
+        is not. The filing row stays on the period the statements close.
         """
         mock_database = Mock(spec=AsyncFilingsDatabase)
         mock_database.companies = Mock()
@@ -272,9 +272,16 @@ class TestXBRLFilingsLoader:
 
         current = Mock(spec=FinancialFactCreate)
         current.period_end = date(2013, 3, 30)
+        current.axis = None
         comparative = Mock(spec=FinancialFactCreate)
         comparative.period_end = date(2012, 3, 31)
-        loader.parser.parse_filing = Mock(return_value=[current, comparative])
+        comparative.axis = "srt:ProductOrServiceAxis"
+        face_comparative = Mock(spec=FinancialFactCreate)
+        face_comparative.period_end = date(2012, 3, 31)
+        face_comparative.axis = None
+        loader.parser.parse_filing = Mock(
+            return_value=[current, comparative, face_comparative]
+        )
 
         result, was_updated = await loader._load_single_filing(
             mock_filing, 10, 1, override=False

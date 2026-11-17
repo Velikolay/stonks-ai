@@ -1,5 +1,8 @@
 CREATE OR REPLACE PROCEDURE refresh_dimension_normalization(company_ids int[])
 LANGUAGE plpgsql
+-- CTEs carry no row statistics. A merge join on (company, statement) then
+-- filters the remaining keys pair by pair, which is quadratic in facts.
+SET enable_mergejoin = off
 AS $$
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN

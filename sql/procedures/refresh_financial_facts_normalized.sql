@@ -1,5 +1,8 @@
 CREATE OR REPLACE PROCEDURE refresh_financial_facts_normalized(company_ids int[])
 LANGUAGE plpgsql
+-- CTEs carry no row statistics. A merge join on (company, statement) then
+-- filters filing and concept pair by pair, which is quadratic in facts.
+SET enable_mergejoin = off
 AS $$
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
@@ -76,86 +79,24 @@ BEGIN
     -- keeps that filing; the earlier value stays so a quarter can still be
     -- derived from the annual figure the quarters belong to. A slot whose
     -- latest filing still reports two values is a real conflict: drop it.
-    conflict_groups AS (
-        SELECT
-            ffb.company_id,
-            ffb.statement,
-            ffb.concept,
-            ffb.label,
-            ffb.axis,
-            ffb.member,
-            ffb.member_label,
-            ffb.period_end,
-            ffb.form_type,
-            ffb.period,
-            COUNT(DISTINCT ffb.value) AS distinct_values,
-            MAX(f.filing_date) AS latest_date
-        FROM financial_facts_base ffb
-        JOIN filings f ON f.id = ffb.filing_id
-        GROUP BY
-            ffb.company_id, ffb.statement, ffb.concept, ffb.label, ffb.axis,
-            ffb.member, ffb.member_label, ffb.period_end, ffb.form_type, ffb.period
-        HAVING COUNT(DISTINCT ffb.value) > 1
-    ),
-    latest_conflict_values AS (
-        SELECT
-            g.company_id,
-            g.statement,
-            g.concept,
-            g.label,
-            g.axis,
-            g.member,
-            g.member_label,
-            g.period_end,
-            g.form_type,
-            g.period,
-            COUNT(DISTINCT ffb.value) AS distinct_values
-        FROM conflict_groups g
-        JOIN financial_facts_base ffb
-            ON ffb.company_id = g.company_id
-            AND ffb.statement = g.statement
-            AND ffb.concept = g.concept
-            AND ffb.label = g.label
-            AND ffb.axis = g.axis
-            AND ffb.member = g.member
-            AND ffb.member_label = g.member_label
-            AND ffb.period_end = g.period_end
-            AND ffb.form_type = g.form_type
-            AND ffb.period IS NOT DISTINCT FROM g.period
-        JOIN filings f
-            ON f.id = ffb.filing_id
-            AND f.filing_date = g.latest_date
-        GROUP BY
-            g.company_id, g.statement, g.concept, g.label, g.axis, g.member,
-            g.member_label, g.period_end, g.form_type, g.period
-    ),
     conflicting_fact_keys AS (
-        SELECT ffb.id
-        FROM financial_facts_base ffb
-        JOIN filings f ON f.id = ffb.filing_id
-        JOIN conflict_groups g
-            ON ffb.company_id = g.company_id
-            AND ffb.statement = g.statement
-            AND ffb.concept = g.concept
-            AND ffb.label = g.label
-            AND ffb.axis = g.axis
-            AND ffb.member = g.member
-            AND ffb.member_label = g.member_label
-            AND ffb.period_end = g.period_end
-            AND ffb.form_type = g.form_type
-            AND ffb.period IS NOT DISTINCT FROM g.period
-        JOIN latest_conflict_values latest
-            ON latest.company_id = g.company_id
-            AND latest.statement = g.statement
-            AND latest.concept = g.concept
-            AND latest.label = g.label
-            AND latest.axis = g.axis
-            AND latest.member = g.member
-            AND latest.member_label = g.member_label
-            AND latest.period_end = g.period_end
-            AND latest.form_type = g.form_type
-            AND latest.period IS NOT DISTINCT FROM g.period
-        WHERE latest.distinct_values > 1
+        SELECT unnest(array_agg(id)) AS id
+        FROM (
+            SELECT
+                ffb.*,
+                f.filing_date,
+                MAX(f.filing_date) OVER (
+                    PARTITION BY ffb.company_id, ffb.statement, ffb.concept, ffb.label,
+                        ffb.axis, ffb.member, ffb.member_label, ffb.period_end,
+                        ffb.form_type, ffb.period
+                ) AS latest_date
+            FROM financial_facts_base ffb
+            JOIN filings f ON f.id = ffb.filing_id
+        ) dated
+        GROUP BY
+            company_id, statement, concept, label, axis, member, member_label,
+            period_end, form_type, period
+        HAVING COUNT(DISTINCT value) FILTER (WHERE filing_date = latest_date) > 1
     ),
     financial_facts_overridden_cte AS (
         SELECT ffb.*
@@ -534,71 +475,88 @@ BEGIN
     -- A later filing that reprints an axis for an earlier period replaces
     -- that presentation. Members the reprint leaves out are the old
     -- categories. A reprint of one member does not retire the rest.
-    comparative_reprints AS (
-        SELECT
-            r.company_id,
-            r.statement,
-            r.normalized_label,
-            r.axis,
-            r.member,
-            r.period_end,
-            r.period,
-            filed.filing_date
-        FROM rolled_up_facts r
-        JOIN filings filed ON filed.id = r.filing_id
-        WHERE COALESCE(r.axis, '') <> ''
-            AND COALESCE(r.member, '') <> ''
-            AND NOT r.is_abstract
-            AND filed.fiscal_period_end IS DISTINCT FROM r.period_end
-    ),
-    latest_reprint_dates AS (
-        SELECT
-            company_id,
-            statement,
-            normalized_label,
-            axis,
-            period_end,
-            period,
-            MAX(filing_date) AS filing_date
-        FROM comparative_reprints
-        GROUP BY
-            company_id, statement, normalized_label, axis, period_end, period
-    ),
     latest_reprint_members AS (
-        SELECT DISTINCT
-            r.company_id,
-            r.statement,
-            r.normalized_label,
-            r.axis,
-            r.period_end,
-            r.period,
-            r.member
-        FROM comparative_reprints r
-        JOIN latest_reprint_dates d
-            ON d.company_id = r.company_id
-            AND d.statement = r.statement
-            AND d.normalized_label = r.normalized_label
-            AND d.axis = r.axis
-            AND d.period_end = r.period_end
-            AND d.period IS NOT DISTINCT FROM r.period
-            AND d.filing_date = r.filing_date
-    ),
-    latest_reprint_axes AS (
         SELECT
             company_id,
             statement,
             normalized_label,
             axis,
             period_end,
-            period
-        FROM latest_reprint_members
+            period_key,
+            member,
+            COUNT(*) OVER (
+                PARTITION BY company_id, statement, normalized_label, axis,
+                    period_end, period_key
+            ) AS reprinted_members
+        FROM (
+            SELECT
+                r.company_id,
+                r.statement,
+                r.normalized_label,
+                r.axis,
+                r.period_end,
+                COALESCE(r.period::text, '') AS period_key,
+                r.member,
+                filed.filing_date,
+                MAX(filed.filing_date) OVER (
+                    PARTITION BY r.company_id, r.statement, r.normalized_label,
+                        r.axis, r.period_end, r.period
+                ) AS latest_date
+            FROM rolled_up_facts r
+            JOIN filings filed ON filed.id = r.filing_id
+            WHERE COALESCE(r.axis, '') <> ''
+                AND COALESCE(r.member, '') <> ''
+                AND NOT r.is_abstract
+                AND filed.fiscal_period_end <> r.period_end
+        ) reprint
+        WHERE filing_date = latest_date
         GROUP BY
-            company_id, statement, normalized_label, axis, period_end, period
-        HAVING COUNT(*) >= 2
+            company_id, statement, normalized_label, axis, period_end, period_key,
+            member
+    ),
+    retired_member_ids AS (
+        SELECT r.id
+        FROM rolled_up_facts r
+        JOIN (
+            SELECT DISTINCT
+                company_id, statement, normalized_label, axis, period_end, period_key
+            FROM latest_reprint_members
+            WHERE reprinted_members >= 2
+        ) reprinted
+            ON reprinted.company_id = r.company_id
+            AND reprinted.statement = r.statement
+            AND reprinted.normalized_label = r.normalized_label
+            AND reprinted.axis = r.axis
+            AND reprinted.period_end = r.period_end
+            AND reprinted.period_key = COALESCE(r.period::text, '')
+        LEFT JOIN latest_reprint_members kept
+            ON kept.company_id = r.company_id
+            AND kept.statement = r.statement
+            AND kept.normalized_label = r.normalized_label
+            AND kept.axis = r.axis
+            AND kept.period_end = r.period_end
+            AND kept.period_key = COALESCE(r.period::text, '')
+            AND kept.member = r.member
+        WHERE kept.member IS NULL
+    ),
+    -- A column for an earlier year is stored on the filing that printed it.
+    -- Its fiscal year and quarter come from the filing of the same form family
+    -- that closed on that period_end, so a 2015 10-K column for 2013 lands in
+    -- fiscal 2013. The source filing stands in when that one was never ingested.
+    fiscal_filings AS (
+        SELECT DISTINCT ON (company_id, fiscal_period_end, form_type)
+            id,
+            company_id,
+            fiscal_period_end,
+            form_type
+        FROM filings
+        WHERE company_id = ANY(company_ids)
+        ORDER BY company_id, fiscal_period_end, form_type, id
     ),
     deduped AS (
         SELECT
             r.*,
+            COALESCE(fiscal.id, r.filing_id) AS fiscal_filing_id,
             ROW_NUMBER() OVER (
                 PARTITION BY r.company_id, r.statement, r.normalized_label,
                              r.axis, r.member, r.period_end
@@ -618,12 +576,21 @@ BEGIN
         FROM rolled_up_facts r
         LEFT JOIN chain_sizes_per_id cs ON cs.id = r.id
         LEFT JOIN filings filed ON filed.id = r.filing_id
+        LEFT JOIN fiscal_filings fiscal
+            ON fiscal.company_id = r.company_id
+            AND fiscal.fiscal_period_end = r.period_end
+            AND fiscal.form_type = CASE
+                WHEN filed.form_type IN ('10-K', '10-K/A') THEN '10-K'
+                WHEN filed.form_type IN ('10-Q', '10-Q/A') THEN '10-Q'
+                ELSE filed.form_type
+            END
     ),
     deduped_by_id AS (
         SELECT DISTINCT ON (id)
             id,
             company_id,
             filing_id,
+            fiscal_filing_id,
             form_type,
             concept,
             label,
@@ -644,30 +611,7 @@ BEGIN
             parent_id,
             abstract_id,
             is_synthetic,
-            rn > 1
-                OR (
-                    EXISTS (
-                        SELECT 1
-                        FROM latest_reprint_axes retired_axis
-                        WHERE retired_axis.company_id = deduped.company_id
-                            AND retired_axis.statement = deduped.statement
-                            AND retired_axis.normalized_label = deduped.normalized_label
-                            AND retired_axis.axis = deduped.axis
-                            AND retired_axis.period_end = deduped.period_end
-                            AND retired_axis.period IS NOT DISTINCT FROM deduped.period
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM latest_reprint_members kept
-                        WHERE kept.company_id = deduped.company_id
-                            AND kept.statement = deduped.statement
-                            AND kept.normalized_label = deduped.normalized_label
-                            AND kept.axis = deduped.axis
-                            AND kept.period_end = deduped.period_end
-                            AND kept.period IS NOT DISTINCT FROM deduped.period
-                            AND kept.member = deduped.member
-                    )
-                ) AS is_duplicate
+            rn > 1 OR id IN (SELECT id FROM retired_member_ids) AS is_duplicate
         FROM deduped
         ORDER BY id, is_duplicate ASC
     )
@@ -686,6 +630,7 @@ BEGIN
         id,
         company_id,
         filing_id,
+        fiscal_filing_id,
         form_type,
         concept,
         label,
@@ -712,6 +657,7 @@ BEGIN
         id,
         company_id,
         filing_id,
+        fiscal_filing_id,
         form_type,
         concept,
         label,
@@ -738,6 +684,7 @@ BEGIN
     SET
         company_id = EXCLUDED.company_id,
         filing_id = EXCLUDED.filing_id,
+        fiscal_filing_id = EXCLUDED.fiscal_filing_id,
         form_type = EXCLUDED.form_type,
         concept = EXCLUDED.concept,
         label = EXCLUDED.label,
