@@ -3,3 +3,29 @@ company_id,statement,normalized_label,axis,member,period_end,granularity,action,
 8,Income Statement,Revenue,Product,Automotive,2018-07-29,quarterly,set,161000000
 8,Income Statement,Revenue,Product,OEM and Other,2018-07-29,quarterly,add,116000000
 8,Income Statement,Revenue,Geographical,Other,2024-01-28,quarterly,set,1159000000
+13,Income Statement,Revenue,,,2012-03-31,quarterly,set,1035000000
+13,Income Statement,Revenue,,,2012-06-30,quarterly,set,1072000000
+13,Income Statement,Revenue,,,2012-09-30,quarterly,set,1116000000
+13,Income Statement,Revenue,,,2012-12-31,quarterly,set,1227000000
+13,Income Statement,Cost of Revenue,,,2012-03-31,quarterly,set,361000000
+13,Income Statement,Cost of Revenue,,,2012-06-30,quarterly,set,352000000
+13,Income Statement,Cost of Revenue,,,2012-09-30,quarterly,set,367000000
+13,Income Statement,Cost of Revenue,,,2012-12-31,quarterly,set,380000000
+13,Income Statement,Selling and general expenses,,,2012-03-31,quarterly,set,361000000
+13,Income Statement,Selling and general expenses,,,2012-06-30,quarterly,set,379000000
+13,Income Statement,Selling and general expenses,,,2012-09-30,quarterly,set,435000000
+13,Income Statement,Selling and general expenses,,,2012-12-31,quarterly,set,534000000
+13,Income Statement,Depreciation,,,2012-03-31,quarterly,set,22000000
+13,Income Statement,Depreciation,,,2012-09-30,quarterly,set,24000000
+13,Income Statement,Amortization of intangibles,,,2012-03-31,quarterly,set,9000000
+13,Income Statement,Amortization of intangibles,,,2012-06-30,quarterly,set,11000000
+13,Income Statement,Amortization of intangibles,,,2012-09-30,quarterly,set,15000000
+13,Income Statement,Amortization of intangibles,,,2012-12-31,quarterly,set,13000000
+13,Income Statement,Operating Expenses,,,2012-03-31,quarterly,set,753000000
+13,Income Statement,Operating Expenses,,,2012-06-30,quarterly,set,765000000
+13,Income Statement,Operating Expenses,,,2012-09-30,quarterly,set,841000000
+13,Income Statement,Operating Expenses,,,2012-12-31,quarterly,set,932000000
+13,Income Statement,Operating Income,,,2012-03-31,quarterly,set,282000000
+13,Income Statement,Operating Income,,,2012-06-30,quarterly,set,308000000
+13,Income Statement,Operating Income,,,2012-09-30,quarterly,set,275000000
+13,Income Statement,Operating Income,,,2012-12-31,quarterly,set,346000000

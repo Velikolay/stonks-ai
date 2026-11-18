@@ -215,7 +215,9 @@ class SECXBRLParser:
         members, which leaves a one-year hole in every series. A disclosure row
         is kept when it sits on a segment axis and either reuses an
         income-statement concept or label, or tags the revenue line with a
-        different revenue concept than the face. A company extension axis is
+        different revenue concept than the face. A company extension whose
+        local name matches a standard revenue concept, ignoring
+        capitalization, is that concept. A company extension axis is
         kept on the same terms when its total-revenue members for a period
         equal the face revenue for that period. The revenue concept and label
         are rewritten to the face line so the member joins that series. A
@@ -428,6 +430,29 @@ class SECXBRLParser:
                 kept.append(fact)
         return kept
 
+    @classmethod
+    def _is_total_revenue_concept(cls, concept: str) -> bool:
+        """Return True when ``concept`` is a total-revenue line.
+
+        A company extension that copies a standard revenue concept and only
+        changes the local-name capitalization is the same line. S&P Global
+        tags the ASC 606 total as
+        ``spgi:RevenuefromContractwithCustomerExcludingAssessedTax``.
+
+        Args:
+            concept: SEC concept, ``prefix:LocalName``.
+
+        Returns:
+            True for a standard total or a capitalization variant of one.
+        """
+        if concept in cls._TOTAL_REVENUE_CONCEPTS:
+            return True
+        local = concept.split(":")[-1].casefold()
+        return any(
+            known.split(":")[-1].casefold() == local
+            for known in cls._TOTAL_REVENUE_CONCEPTS
+        )
+
     def _face_revenue_fact(self, income_facts: list) -> Optional[FinancialFactCreate]:
         """Return the undimensioned revenue total on the face statement.
 
@@ -536,7 +561,7 @@ class SECXBRLParser:
         for fact in facts:
             if not fact.axis or fact.axis in self._SEGMENT_AXES:
                 continue
-            if fact.is_abstract or fact.concept not in self._TOTAL_REVENUE_CONCEPTS:
+            if fact.is_abstract or not self._is_total_revenue_concept(fact.concept):
                 continue
             if not isinstance(fact.value, Decimal) or fact.period_end is None:
                 continue
@@ -576,12 +601,13 @@ class SECXBRLParser:
             origin: Original concept of each accepted fact, before rewriting.
         """
         original_concept = fact.concept
-        revenue_concepts = (
-            self._TOTAL_REVENUE_CONCEPTS | self._COMPONENT_REVENUE_CONCEPTS
+        is_revenue = (
+            self._is_total_revenue_concept(original_concept)
+            or original_concept in self._COMPONENT_REVENUE_CONCEPTS
         )
         rewritten = (
             face_revenue is not None
-            and original_concept in revenue_concepts
+            and is_revenue
             and original_concept not in face_concepts
         )
         if rewritten and face_revenue is not None:
@@ -599,7 +625,7 @@ class SECXBRLParser:
             if original_concept != "us-gaap:OtherSalesRevenueNet":
                 if (
                     key in added
-                    and original_concept in self._TOTAL_REVENUE_CONCEPTS
+                    and self._is_total_revenue_concept(original_concept)
                     and origin.get(key) in self._COMPONENT_REVENUE_CONCEPTS
                 ):
                     added[key] = fact
@@ -761,7 +787,9 @@ class SECXBRLParser:
                 and dimensions_df is not None
                 and not dimensions_df.empty
             ):
-                collapsed_members = self._collapsed_dimension_members(dimensions_df)
+                collapsed_members, ambiguous_suffixes = (
+                    self._collapsed_dimension_members(dimensions_df)
+                )
                 for _, row in dimensions_df.iterrows():
                     facts.extend(
                         self._dimension_period_facts(
@@ -772,6 +800,7 @@ class SECXBRLParser:
                             ytd_period_col,
                             base_label_by_concept,
                             collapsed_members,
+                            ambiguous_suffixes,
                         )
                     )
 
@@ -789,6 +818,7 @@ class SECXBRLParser:
         ytd_period_col: Optional[str],
         base_label_by_concept: dict[str, str],
         collapsed_members: set[str],
+        ambiguous_suffixes: set[str],
     ) -> list[FinancialFactCreate]:
         """Emit one fact for every populated column of this dimension row.
 
@@ -807,6 +837,7 @@ class SECXBRLParser:
             ytd_period_col: Year-to-date column ending on that date, if any.
             base_label_by_concept: Face label for each concept.
             collapsed_members: Member ids reused for several children.
+            ambiguous_suffixes: Suffixes shared by more than one reused parent.
 
         Returns:
             Facts for the columns that have a value.
@@ -821,6 +852,7 @@ class SECXBRLParser:
                 comparative_period_col=None,
                 base_label_by_concept=base_label_by_concept,
                 collapsed_members=collapsed_members,
+                ambiguous_suffixes=ambiguous_suffixes,
             )
             return [fact] if fact else []
 
@@ -843,6 +875,7 @@ class SECXBRLParser:
                 ),
                 base_label_by_concept=base_label_by_concept,
                 collapsed_members=collapsed_members,
+                ambiguous_suffixes=ambiguous_suffixes,
             )
             if fact is None:
                 continue
@@ -858,6 +891,7 @@ class SECXBRLParser:
                 comparative_period_col=self._prior_period_column(ytd_columns, column),
                 base_label_by_concept=base_label_by_concept,
                 collapsed_members=collapsed_members,
+                ambiguous_suffixes=ambiguous_suffixes,
             )
             if fact is None or fact.period != PeriodType.YTD:
                 continue
@@ -925,19 +959,25 @@ class SECXBRLParser:
             return None
         return earlier[-1]
 
-    def _collapsed_dimension_members(self, dimensions_df: pd.DataFrame) -> set[str]:
-        """Return member ids that edgartools reused across several children.
+    def _collapsed_dimension_members(
+        self, dimensions_df: pd.DataFrame
+    ) -> tuple[set[str], set[str]]:
+        """Return reused member ids and suffixes those members share.
 
         Args:
             dimensions_df: Statement rows with ``dimension`` true.
 
         Returns:
             Member ids, in ``prefix:Name`` form, whose ``"{label} - "`` suffix
-            is not unique.
+            is not unique, and suffixes that must keep their parent. A suffix
+            keeps its parent when more than one reused member claims it, or
+            when the same statement has that name as its own member. Otherwise
+            the elimination of Subscription lands on Subscription.
         """
         suffixes: dict[str, set[str]] = {}
+        own_labels: set[str] = set()
         if dimensions_df is None or dimensions_df.empty:
-            return set()
+            return set(), set()
 
         for _, row in dimensions_df.iterrows():
             raw_member = row.get("dimension_member")
@@ -949,6 +989,7 @@ class SECXBRLParser:
                 continue
             prefix = f"{member_label} - "
             if not label.startswith(prefix):
+                own_labels.add(label.strip())
                 continue
             suffix = label[len(prefix) :].strip()
             if not suffix:
@@ -956,7 +997,19 @@ class SECXBRLParser:
             member = str(raw_member).replace("_", ":")
             suffixes.setdefault(member, set()).add(suffix)
 
-        return {member for member, found in suffixes.items() if len(found) > 1}
+        collapsed = {member for member, found in suffixes.items() if len(found) > 1}
+        parents_by_suffix: dict[str, set[str]] = {}
+        for member, found in suffixes.items():
+            if member not in collapsed:
+                continue
+            for suffix in found:
+                parents_by_suffix.setdefault(suffix, set()).add(member)
+        ambiguous = {
+            suffix
+            for suffix, parents in parents_by_suffix.items()
+            if len(parents) > 1 or suffix in own_labels
+        }
+        return collapsed, ambiguous
 
     def _create_dimension_fact(
         self,
@@ -966,6 +1019,7 @@ class SECXBRLParser:
         comparative_period_col: Optional[str],
         base_label_by_concept: dict[str, str],
         collapsed_members: Optional[set[str]] = None,
+        ambiguous_suffixes: Optional[set[str]] = None,
     ) -> Optional[FinancialFactCreate]:
         """Create a FinancialFact from a dimension row (dimension=True).
 
@@ -980,6 +1034,8 @@ class SECXBRLParser:
             base_label_by_concept: Mapping from SEC concept -> base fact label
             collapsed_members: Member ids reused for several children. Their
                 label suffix replaces the member.
+            ambiguous_suffixes: Suffixes shared by more than one reused parent.
+                Those keep the full label so the parents stay distinct.
 
         Returns:
             FinancialFactCreate or None if invalid
@@ -1006,8 +1062,13 @@ class SECXBRLParser:
                 and isinstance(label_text, str)
                 and label_text.startswith(prefix)
             ):
-                member = label_text[len(prefix) :]
-                member_label = member
+                suffix = label_text[len(prefix) :].strip()
+                if ambiguous_suffixes and suffix in ambiguous_suffixes:
+                    member = label_text.strip()
+                    member_label = member
+                else:
+                    member = label_text[len(prefix) :]
+                    member_label = member
 
             if not axis or member is None:
                 return None

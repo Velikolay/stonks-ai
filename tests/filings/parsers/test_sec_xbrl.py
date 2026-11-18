@@ -651,6 +651,76 @@ class TestSECXBRLParser:
         assert added[0].value == Decimal("60.0")
         xbrl.statements.get.assert_called_once_with("SegmentRevenue")
 
+    def test_supplement_accepts_revenue_concept_with_different_capitalization(self):
+        """A company extension of the revenue concept joins the face line."""
+        parser = SECXBRLParser()
+        face = Mock()
+        face.concept = "us-gaap:Revenues"
+        face.axis = ""
+        face.member = ""
+        face.label = "Revenue"
+        face.value = Decimal("100")
+        face.is_abstract = False
+        face.period = PeriodType.Q
+        face.period_end = date(2018, 3, 31)
+
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "spgi_RevenuefromContractwithCustomerExcludingAssessedTax",
+                    "spgi_RevenuefromContractwithCustomerExcludingAssessedTax",
+                    "spgi_SomeOtherRevenueMember",
+                ],
+                "label": ["Subscription", "Non-transaction", "Consulting"],
+                "abstract": [False, False, False],
+                "dimension": [True, True, True],
+                "dimension_axis": [
+                    "us-gaap:ProductOrServiceAxis",
+                    "us-gaap:ProductOrServiceAxis",
+                    "us-gaap:ProductOrServiceAxis",
+                ],
+                "dimension_member": [
+                    "spgi_SubscriptionMember",
+                    "spgi_NonTransactionMember",
+                    "spgi_ConsultingMember",
+                ],
+                "dimension_member_label": [
+                    "Subscription",
+                    "Non-transaction",
+                    "Consulting",
+                ],
+                "unit": ["usd", "usd", "usd"],
+                "weight": [1.0, 1.0, 1.0],
+                "preferred_sign": [1.0, 1.0, 1.0],
+                "point_in_time": [False, False, False],
+                "2018-03-31 (Q1)": [60.0, 40.0, 15.0],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenue Disaggregated by Revenue Type (Details)"],
+                "role_name": ["RevenueType"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = parser._supplement_segment_dimensions(xbrl, [face])
+        by_member = {fact.member: fact for fact in added}
+
+        assert set(by_member) == {
+            "spgi:SubscriptionMember",
+            "spgi:NonTransactionMember",
+        }
+        assert by_member["spgi:SubscriptionMember"].concept == "us-gaap:Revenues"
+        assert by_member["spgi:SubscriptionMember"].label == "Revenue"
+        assert by_member["spgi:SubscriptionMember"].value == Decimal("60.0")
+        assert by_member["spgi:NonTransactionMember"].value == Decimal("40.0")
+
     def test_supplement_keeps_revenue_components_as_their_own_members(self):
         """Advertising lines are kept; other sales on the segment total is split out."""
         parser = SECXBRLParser()
@@ -1174,6 +1244,114 @@ class TestSECXBRLParser:
         assert by_member["Embedded"] == "Embedded"
         assert by_member["amd:ClientMember"] == "Client"
         assert by_member["amd:GamingMember"] == "Gaming"
+
+    def test_dimension_suffix_keeps_parent_when_suffixes_collide(self):
+        """Two reused parents that share a child name stay on different members."""
+        parser = SECXBRLParser()
+        period = "2025-12-31 (FY)"
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax"
+                ]
+                * 4,
+                "label": [
+                    "Operating segments - Ratings",
+                    "Operating segments - Indices",
+                    "Intersegment Elimination - Ratings",
+                    "Intersegment Elimination - Indices",
+                ],
+                "abstract": [False] * 4,
+                "dimension": [True] * 4,
+                "dimension_axis": ["srt:ConsolidationItemsAxis"] * 4,
+                "dimension_member": [
+                    "us-gaap_OperatingSegmentsMember",
+                    "us-gaap_OperatingSegmentsMember",
+                    "us-gaap_IntersegmentEliminationMember",
+                    "us-gaap_IntersegmentEliminationMember",
+                ],
+                "dimension_member_label": [
+                    "Operating segments",
+                    "Operating segments",
+                    "Intersegment Elimination",
+                    "Intersegment Elimination",
+                ],
+                "unit": ["usd"] * 4,
+                "weight": [1.0] * 4,
+                "preferred_sign": [1.0] * 4,
+                "point_in_time": [False] * 4,
+                period: [4549.0, 1839.0, -175.0, -11.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        by_member = {fact.member: fact.value for fact in facts}
+
+        assert by_member["Operating segments - Ratings"] == Decimal("4549.0")
+        assert by_member["Operating segments - Indices"] == Decimal("1839.0")
+        assert by_member["Intersegment Elimination - Ratings"] == Decimal("-175.0")
+        assert by_member["Intersegment Elimination - Indices"] == Decimal("-11.0")
+
+    def test_dimension_suffix_keeps_parent_when_suffix_is_its_own_member(self):
+        """An elimination of a named member does not replace that member."""
+        parser = SECXBRLParser()
+        period = "2018-03-31 (Q1)"
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Revenues"] * 6,
+                "label": [
+                    "Subscription",
+                    "Non-transaction",
+                    "Intersegment Elimination - Subscription",
+                    "Intersegment Elimination - Non-transaction",
+                    "Operating Segments - Indices",
+                    "Operating Segments - Ratings",
+                ],
+                "abstract": [False] * 6,
+                "dimension": [True] * 6,
+                "dimension_axis": [
+                    "us-gaap:ProductOrServiceAxis",
+                    "us-gaap:ProductOrServiceAxis",
+                    "us-gaap:ConsolidationItemsAxis",
+                    "us-gaap:ConsolidationItemsAxis",
+                    "us-gaap:ConsolidationItemsAxis",
+                    "us-gaap:ConsolidationItemsAxis",
+                ],
+                "dimension_member": [
+                    "spgi_SubscriptionMember",
+                    "spgi_NonTransactionMember",
+                    "us-gaap_IntersegmentEliminationMember",
+                    "us-gaap_IntersegmentEliminationMember",
+                    "us-gaap_OperatingSegmentsMember",
+                    "us-gaap_OperatingSegmentsMember",
+                ],
+                "dimension_member_label": [
+                    "Subscription",
+                    "Non-transaction",
+                    "Intersegment Elimination",
+                    "Intersegment Elimination",
+                    "Operating Segments",
+                    "Operating Segments",
+                ],
+                "unit": ["usd"] * 6,
+                "weight": [1.0] * 6,
+                "preferred_sign": [1.0] * 6,
+                "point_in_time": [False] * 6,
+                period: [638.0, 352.0, 0.0, -28.0, 214.0, 748.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        by_member = {fact.member: fact.value for fact in facts}
+
+        assert by_member["spgi:SubscriptionMember"] == Decimal("638.0")
+        assert by_member["spgi:NonTransactionMember"] == Decimal("352.0")
+        assert by_member["Intersegment Elimination - Subscription"] == Decimal("0.0")
+        assert by_member["Intersegment Elimination - Non-transaction"] == Decimal(
+            "-28.0"
+        )
+        assert by_member["Indices"] == Decimal("214.0")
+        assert by_member["Ratings"] == Decimal("748.0")
 
     def test_dimension_uses_quarter_column_and_keeps_ytd(self):
         """A same-date year-to-date column does not replace the published quarter."""

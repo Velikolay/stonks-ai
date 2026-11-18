@@ -316,7 +316,16 @@ global-capable, so one row can fix every company at once. Use
 `financial-facts-overrides.csv` only when the fact itself is wrong, since it
 rewrites raw data and is almost always company-specific.
 
+`financial-rewrites.csv` is the last resort. Prefer a parser fix when the
+amount is in the filing's XBRL and never lands in `financial_facts`. Prefer an
+override when the fact is stored and the label, parent, member, sign, or
+period is wrong. A rewrite types one number onto the quarterly or yearly layer
+after derivation, and only when neither of those can express the correction.
+
 ### `financial-rewrites.csv`
+
+Last resort, after a parser fix and an override. One row edits one member on
+one already-derived layer.
 
 `company_id,statement,normalized_label,axis,member,period_end,granularity,action,value`
 
@@ -728,9 +737,10 @@ company, so refresh them all and re-run `08` and `14` unfiltered, not only for
 the company that prompted it. A dedup rule written for one filer's recast
 dropped another filer's only copy of a member, and only `14` showed it.
 
-**edgartools bug.** Suspect this when the fact is wrong in
-`financial_facts` but correct in the filing itself, which the `public_url` column
-on `filings` links to. There is precedent in
+**edgartools bug.** Suspect this when the fact is wrong or missing in
+`financial_facts` but present in the filing's XBRL, which the `public_url` column
+on `filings` links to. Fix the parser and re-ingest so the fact is stored
+with the rest of the filing. There is precedent in
 [filings/parsers/sec_xbrl.py](filings/parsers/sec_xbrl.py): `_is_column_mostly_empty`
 works around edgartools issue 408, where a period column comes back nearly empty,
 and `_create_dimension_fact` strips a duplicated member-label prefix. Parser

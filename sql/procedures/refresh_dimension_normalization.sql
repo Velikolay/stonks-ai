@@ -273,6 +273,14 @@ BEGIN
             AND ff.member = dng.member
             AND ff.member_label = dng.member_label
             AND ff.period_end <= dng.group_max_period_end
+        -- Pairing every member of a line is quadratic. Product and
+        -- Geographical are the cuts that get chained. A consolidation grid,
+        -- legal entity, or disposal group stays on its own axis: grouping
+        -- above already applied an override that moved a real segment here.
+        WHERE COALESCE(dng.normalized_axis_label, ff.axis) IN (
+            'Product',
+            'Geographical'
+        )
     ),
     same_period_pairs AS (
         SELECT DISTINCT

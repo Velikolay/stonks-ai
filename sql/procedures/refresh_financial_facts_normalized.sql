@@ -546,8 +546,9 @@ BEGIN
                 ELSE filed.form_type
             END
         WINDOW filing_order AS (
+            -- A header is not another copy of a total that shares its label.
             PARTITION BY r.company_id, r.statement, r.normalized_label,
-                         r.axis, r.member, r.period_end
+                         r.axis, r.member, r.period_end, r.is_abstract
             ORDER BY
                 -- prefer amendments over original filings
                 CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
@@ -572,7 +573,7 @@ BEGIN
             k.*,
             ROW_NUMBER() OVER (
                 PARTITION BY k.company_id, k.statement, k.normalized_label,
-                             k.axis, k.member, k.period_end
+                             k.axis, k.member, k.period_end, k.is_abstract
                 ORDER BY
                     k.is_recast,
                     (

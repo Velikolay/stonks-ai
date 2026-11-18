@@ -133,3 +133,26 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 5,srt:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
 5,us-gaap:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
 5,srt:StatementGeographicalAxis,tsla:OtherInternationalMember,,False,Geographical,Other International,2023 member id for the Other international line
+13,srt:ConsolidationItemsAxis,Ratings,,False,Product,Ratings,Reportable segment; same cut as operating income
+13,srt:ConsolidationItemsAxis,Operating Segments - Ratings,,False,Product,Ratings,2024 successor; external revenue kept distinct from intersegment and combined totals
+13,srt:ConsolidationItemsAxis,Operating segments - Ratings,,False,Product,Ratings,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Market Intelligence,,False,Product,Market Intelligence,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Market Intelligence,,False,Product,Market Intelligence,2024 successor of Market Intelligence
+13,srt:ConsolidationItemsAxis,Operating segments - Market Intelligence,,False,Product,Market Intelligence,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Indices,,False,Product,Indices,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Indices,,False,Product,Indices,2024 successor of Indices
+13,srt:ConsolidationItemsAxis,Operating segments - Indices,,False,Product,Indices,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Energy,,False,Product,Energy,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Energy,,False,Product,Energy,2025 successor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Operating segments - Energy,,False,Product,Energy,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Mobility,,False,Product,Mobility,2024 successor of Mobility
+13,srt:ConsolidationItemsAxis,Operating segments - Mobility,,False,Product,Mobility,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Engineering Solutions,,False,Product,Engineering Solutions,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating segments - Engineering Solutions,,False,Product,Engineering Solutions,External segment total
+13,srt:ConsolidationItemsAxis,Commodity Insights,,False,Product,Commodity Insights,Reportable segment through 2024
+13,srt:ConsolidationItemsAxis,Operating Segments - Commodity Insights,,False,Product,Commodity Insights,2024 successor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Operating segments - Commodity Insights,,False,Product,Commodity Insights,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Platts,,False,Product,Platts,2016-2021 predecessor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Corporate segment on the same cut as the reportable segments
+13,us-gaap:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Earlier corporate member on the legacy consolidation axis

@@ -217,14 +217,21 @@ BEGIN
         SELECT
             q.*,
             k.fiscal_period_end AS annual_period_end,
-            -- Stocks (period NULL) and weighted-average share counts are not
-            -- additive across sub-periods; never YTD-difference them. EPS stays
-            -- on the normal YTD→discrete path.
+            -- Stocks (period NULL), period-end shares outstanding, and
+            -- weighted-average share counts are not additive across
+            -- sub-periods; never YTD-difference them. A company extension of
+            -- the period-end count is still a balance. EPS stays on the
+            -- normal YTD→discrete path.
             (
                 q.period IS NULL
                 OR q.concept IN (
                     'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                     'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+                )
+                OR (
+                    COALESCE(q.unit, '') = 'shares'
+                    AND q.concept ILIKE '%SharesOutstanding%'
+                    AND q.concept NOT ILIKE '%WeightedAverage%'
                 )
             ) AS is_non_additive,
             LAG(q.period_end) OVER w AS prev_period_end,
@@ -286,12 +293,22 @@ BEGIN
             q.is_synthetic,
             q.source_type,
             q.is_comparative_backfill,
-            -- No earlier quarter: this YTD cannot be reduced to one quarter,
-            -- so it is not shown. A later gap stays.
+            -- A YTD that was not reduced to one quarter is not shown. That is
+            -- the opening of a series, and a later Q2 or Q3 whose prior
+            -- quarter is missing: the amount is still the six- or nine-month
+            -- total. An unreduced Q1 is that quarter. A discrete quarter
+            -- after a gap stays. An abstract has no amount, so this flag does
+            -- not remove it: lines point at the header of the latest filing.
             (
                 q.period = 'YTD'
-                AND q.prev_period_end IS NULL
                 AND NOT q.is_non_additive
+                AND (
+                    q.prev_period_end IS NULL
+                    OR (
+                        q.prev_value IS NULL
+                        AND q.fiscal_quarter IN (2, 3)
+                    )
+                )
             ) AS drop_ytd,
             -- Raw nine-month total on the quarter before the 10-K. A published
             -- quarter keeps that total on its duplicate row. Otherwise value
@@ -725,8 +742,8 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
-            -- Abstracts have no value but children point at the 10-K header.
-            AND (q.value IS NOT NULL OR a.is_abstract)
+            AND q.value IS NOT NULL
+            AND NOT a.is_abstract
     )
     SELECT
         id,
@@ -752,7 +769,7 @@ BEGIN
         is_synthetic,
         source_type
     FROM quarterly_filings
-    WHERE NOT drop_ytd
+    WHERE (NOT drop_ytd OR is_abstract)
         AND NOT is_comparative_backfill
 
     UNION ALL
@@ -783,6 +800,9 @@ BEGIN
     FROM annual_filings
     WHERE
         statement = 'Balance Sheet'
+        -- A section header filed only on the 10-K. Lines point at it, and a
+        -- 10-Q never carries that row.
+        OR is_abstract
         OR concept IN (
             'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
             'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
