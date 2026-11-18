@@ -156,3 +156,58 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 13,srt:ConsolidationItemsAxis,Platts,,False,Product,Platts,2016-2021 predecessor of Commodity Insights
 13,srt:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Corporate segment on the same cut as the reportable segments
 13,us-gaap:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Earlier corporate member on the legacy consolidation axis
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartUSMember,,False,Product,Walmart U.S.,Walmart U.S. segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartInternationalMember,,False,Product,Walmart International,Walmart International segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:SamsClubMember,,False,Product,Sam's Club,Sam's Club segment
+15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:WalmartUSMember,,False,Product,Walmart U.S.,Walmart U.S. segment
+15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:WalmartInternationalMember,,False,Product,Walmart International,Walmart International segment
+15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:SamsClubMember,,False,Product,Sam's Club,Sam's Club segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartUSSegmentMember,,False,Product,Walmart U.S.,Later member id for the Walmart U.S. segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartInternationalSegmentMember,,False,Product,Walmart International,Later member id for the Walmart International segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:SamsClubSegmentMember,,False,Product,Sam's Club,Later member id for the Sam's Club segment
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:SamsClubUSMember,,False,Product,Sam's Club,Sam's Club U.S. is the same segment
+15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:WalmartUsMember,,False,Product,Walmart U.S.,2009-2010 member id for Walmart U.S.
+15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:SamSClubMember,,False,Product,Sam's Club,2009-2010 member id for Sam's Club
+15,us-gaap:StatementBusinessSegmentsAxis,wmt:CorporateAndSupportMember,,False,Product,Corporate and support,Operating-income reconciling item
+15,srt:ConsolidationItemsAxis,wmt:CorporateAndReconcilingItemsMember,,False,Product,Corporate and support,Operating-income reconciling item
+15,srt:ConsolidationItemsAxis,Operating Segments - Walmart U.S.,,False,Product,Walmart U.S.,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Operating Segments - Walmart U.S.,,False,Product,Walmart U.S.,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Walmart U.S.,,False,Product,Walmart U.S.,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Walmart U.S.,,False,Product,Walmart U.S.,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Operating Segments - Walmart International,,False,Product,Walmart International,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Walmart International,,False,Product,Walmart International,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Operating Segments - Sam's Club,,False,Product,Sam's Club,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Sam's Club,,False,Product,Sam's Club,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Operating Segments - Sam's Club U.S.,,False,Product,Sam's Club,Same segment total as the business-segment member
+15,srt:ConsolidationItemsAxis,Sam's Club U.S.,,False,Product,Sam's Club,Same segment total as the business-segment member
+15,us-gaap:StatementScenarioAxis,wmt:WalmartInternationalMember,,False,us-gaap:StatementScenarioAxis,Walmart International,"Restatement column, not the segment total"
+15,srt:ProductOrServiceAxis,Grocery - Walmart U.S.,,False,Product,Grocery,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Grocery - Walmart U.S.,,False,Product,Grocery,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,General merchandise - Walmart U.S.,,False,Product,General merchandise,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,General merchandise - Walmart U.S.,,False,Product,General merchandise,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and Wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and Wellness - Walmart U S,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and Wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and Wellness - Sams Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Grocery - Sam's Club U.S.,,False,Product,Grocery - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,General merchandise - Sam's Club U.S.,,False,Product,General merchandise - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,srt:ProductOrServiceAxis,Health and wellness - Sam's Club U.S.,,False,Product,Health and wellness - Sam's Club U.S.,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Grocery - Walmart U.S.,,False,Product,Grocery,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Grocery - Walmart U.S.,,False,Product,Grocery,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,General merchandise - Walmart U.S.,,False,Product,General merchandise,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,General merchandise - Walmart U.S.,,False,Product,General merchandise,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and Wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and wellness - Walmart U.S.,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and Wellness - Walmart U S,,False,Product,Health and wellness,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and Wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and wellness - Sam's Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and Wellness - Sams Club,,False,Product,Health and wellness - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Grocery - Sam's Club U.S.,,False,Product,Grocery - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,General merchandise - Sam's Club U.S.,,False,Product,General merchandise - Sam's Club,Merchandise category; wording and nbsp variants of one line
+15,us-gaap:ProductOrServiceAxis,Health and wellness - Sam's Club U.S.,,False,Product,Health and wellness - Sam's Club U.S.,Merchandise category; wording and nbsp variants of one line

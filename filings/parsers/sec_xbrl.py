@@ -640,6 +640,29 @@ class SECXBRLParser:
         added[key] = fact
         origin[key] = original_concept
 
+    @classmethod
+    def _keeps_published_quarter(cls, fact: FinancialFactCreate) -> bool:
+        """Return True when the face row should keep its printed quarter column.
+
+        Revenue totals keep the quarter so a dimension split can match the
+        printed total after a restatement. Per-share amounts keep it because
+        they are not additive across sub-periods: subtracting year-to-date
+        totals invents a false quarter after a stock split.
+
+        Args:
+            fact: Face fact already built from the latest period column.
+
+        Returns:
+            Whether a same-date quarter column should also be stored.
+        """
+        if fact.concept in cls._TOTAL_REVENUE_CONCEPTS:
+            return True
+        unit = (fact.unit or "").casefold()
+        if unit in {"usdpershare", "usdeps"}:
+            return True
+        local = fact.concept.split(":")[-1]
+        return local.endswith("PerShare") or local.startswith("EarningsPerShare")
+
     def _published_quarter_fact(
         self,
         row,
@@ -655,6 +678,8 @@ class SECXBRLParser:
         the quarterly procedure reconstructs the quarter by subtraction. A
         restated comparative makes that residual miss the quarter the filing
         printed, which drops a dimension split that matches the printed total.
+        Per-share amounts are not additive, so their printed quarter is kept
+        for the same reason.
 
         Args:
             row: Undimensioned statement row.
@@ -665,12 +690,13 @@ class SECXBRLParser:
             latest_period_col: Column used for ``ytd_fact``.
 
         Returns:
-            The published quarter fact, or nothing when it is not a revenue total.
+            The published quarter fact, or nothing when the row does not keep
+            a printed quarter.
         """
         if (
             ytd_fact.is_abstract
             or ytd_fact.axis
-            or ytd_fact.concept not in self._TOTAL_REVENUE_CONCEPTS
+            or not self._keeps_published_quarter(ytd_fact)
             or quarter_period_col == latest_period_col
         ):
             return []

@@ -25,6 +25,26 @@ _PERIOD_MATCH_DAYS = 6
 _PERIODIC_FORMS = ("10-K", "10-Q")
 
 
+def interim_fiscal_year(period_end: date, year_end_month: int) -> int:
+    """Return the fiscal year a reporting period belongs to.
+
+    A January year-end closes on the January after its April, July and
+    October quarters, so those quarters take the next calendar year. The
+    January report itself, and every other year-end, keeps the calendar
+    year of the period end.
+
+    Args:
+        period_end: Statement period end.
+        year_end_month: Month of the company's 10-K period end, 1-12.
+
+    Returns:
+        Fiscal year, numbered by the year the fiscal year ends.
+    """
+    if year_end_month == 1 and period_end.month not in (1, 2):
+        return period_end.year + 1
+    return period_end.year
+
+
 def _cik_number(value: Any) -> Optional[int]:
     """Return a CIK as an int, ignoring blank and non-numeric values."""
     if value is None or isinstance(value, bool):
@@ -273,6 +293,14 @@ class SECXBRLFilingsLoader:
                             f"Error loading filing {getattr(filing, 'accession_number', '<unknown>')}: {e}"
                         )
                         continue
+
+            shifted = await self.database.filings.align_january_year_end(company.id)
+            if shifted:
+                logger.info(
+                    "Moved %s interim filings onto the January year-end for %s",
+                    shifted,
+                    ticker,
+                )
 
             if total_loaded == 0:
                 logger.info(f"No {form} filings found for {ticker}")

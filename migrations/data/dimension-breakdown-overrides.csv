@@ -7,3 +7,8 @@ company_id,normalized_label,axis,parent_member,members
 8,Revenue,Geographical,,China (including Hong Kong);Europe;Other;Other Asia Pacific;Taiwan;United States
 8,Revenue,Geographical,,China (including Hong Kong);Other;Taiwan;United States
 8,Revenue,Geographical,,China (including Hong Kong);Other;Singapore;Taiwan;United States
+15,Net sales,Product,,Walmart U.S.;Walmart International;Sam's Club
+15,Net sales,Product,Walmart U.S.,Grocery;General merchandise;Health and wellness;Other categories
+15,Net sales,Product,Sam's Club,"Grocery and consumables;Fuel, tobacco and other categories;Home and apparel;Technology, office and entertainment;Health and wellness - Sam's Club"
+15,Net sales,Product,Sam's Club,Grocery - Sam's Club;General merchandise - Sam's Club;Health and wellness - Sam's Club U.S.;Fuel and other
+15,Net sales,Geographical,,Walmart U.S.;Sam's Club;Canada;China;Mexico and Central America;United Kingdom;Other

@@ -220,8 +220,10 @@ BEGIN
             -- Stocks (period NULL), period-end shares outstanding, and
             -- weighted-average share counts are not additive across
             -- sub-periods; never YTD-difference them. A company extension of
-            -- the period-end count is still a balance. EPS stays on the
-            -- normal YTD→discrete path.
+            -- the period-end count is still a balance. Per-share amounts are
+            -- also not additive, but a filing that only stored the
+            -- year-to-date column still reduces on this path until that
+            -- filing is re-ingested with its printed quarter.
             (
                 q.period IS NULL
                 OR q.concept IN (
@@ -930,6 +932,9 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
+            -- Per-share amounts are not annual−Σquarters. A mid-year stock
+            -- split leaves the early quarters on another share basis.
+            AND COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
         ORDER BY
             a.company_id, a.statement, a.normalized_label, a.axis, a.member,
             a.fiscal_tag, split.split_rank, a.is_duplicate, a.id)
@@ -976,6 +981,7 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
+            AND COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
             AND q.value IS NOT NULL
             AND NOT a.is_abstract
     )

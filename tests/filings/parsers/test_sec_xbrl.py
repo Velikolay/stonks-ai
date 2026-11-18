@@ -1193,6 +1193,33 @@ class TestSECXBRLParser:
         assert by_period[PeriodType.YTD].value == Decimal("289007.0")
         assert by_period[PeriodType.Q].key != by_period[PeriodType.YTD].key
 
+    def test_face_eps_keeps_the_published_quarter(self):
+        """A printed per-share quarter is stored beside the year-to-date total."""
+        parser = SECXBRLParser()
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_EarningsPerShareDiluted"],
+                "label": ["Diluted earnings per share"],
+                "abstract": [False],
+                "dimension": [False],
+                "parent_concept": [None],
+                "parent_abstract_concept": [None],
+                "unit": ["usdPerShare"],
+                "weight": [1.0],
+                "preferred_sign": [1.0],
+                "point_in_time": [False],
+                "2024-08-04 (Q3)": [-0.40],
+                "2024-08-04 (YTD)": [0.33],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", False)
+        by_period = {fact.period: fact for fact in facts}
+
+        assert by_period[PeriodType.Q].value == Decimal("-0.40")
+        assert by_period[PeriodType.YTD].value == Decimal("0.33")
+        assert by_period[PeriodType.Q].key != by_period[PeriodType.YTD].key
+
     def test_dimension_suffix_rewrites_only_reused_members(self):
         """A shared parent member takes the label suffix; a distinct member does not."""
         parser = SECXBRLParser()

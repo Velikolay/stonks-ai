@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, insert, select
+from sqlalchemy import MetaData, insert, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -184,3 +184,54 @@ class FilingOperationsAsync:
         except SQLAlchemyError as e:
             logger.error(f"Error getting filings by company: {e}")
             return []
+
+    async def align_january_year_end(self, company_id: int) -> int:
+        """Move a January year-end's interim quarters onto the year they close.
+
+        April, July and October belong to the fiscal year that ends the
+        following January. January 10-Ks already carry that year. Other
+        year-ends are left as stored.
+
+        Args:
+            company_id: Company whose filings to realign.
+
+        Returns:
+            Number of filings whose fiscal year changed.
+        """
+        try:
+            async with self.engine.begin() as conn:
+                year_end = await conn.execute(
+                    text(
+                        """
+                        SELECT MODE() WITHIN GROUP (
+                            ORDER BY EXTRACT(MONTH FROM fiscal_period_end)::int
+                        )
+                        FROM filings
+                        WHERE company_id = :company_id
+                          AND form_type IN ('10-K', '10-K/A')
+                          AND fiscal_period_end IS NOT NULL
+                        """
+                    ),
+                    {"company_id": company_id},
+                )
+                if year_end.scalar() != 1:
+                    return 0
+                result = await conn.execute(
+                    text(
+                        """
+                        UPDATE filings
+                        SET fiscal_year = EXTRACT(YEAR FROM fiscal_period_end)::int + 1
+                        WHERE company_id = :company_id
+                          AND form_type IN ('10-Q', '10-Q/A')
+                          AND fiscal_period_end IS NOT NULL
+                          AND EXTRACT(MONTH FROM fiscal_period_end) NOT IN (1, 2)
+                          AND fiscal_year IS DISTINCT FROM
+                              EXTRACT(YEAR FROM fiscal_period_end)::int + 1
+                        """
+                    ),
+                    {"company_id": company_id},
+                )
+                return result.rowcount or 0
+        except SQLAlchemyError as e:
+            logger.error("Error aligning January year-end for %s: %s", company_id, e)
+            return 0
