@@ -254,7 +254,14 @@ member). A YTD with no earlier quarter in the series is not a quarter and is
 left out of the quarterly table, unless the next year's filing reports that
 missing period as a comparative. That comparative is added as a
 `comparative_backfill` prior period, so the opening YTD reduces to one
-quarter, and the backfill row is filtered out of the result. Q4 is otherwise the annual
+quarter, and the backfill row is filtered out of the result. When the year's own
+first three quarters overshoot its 10-K by more than 5% and the next year's
+quarterly comparatives still fit under that 10-K, those comparatives replace
+the three quarters and Q4 is the 10-K minus them. Other undimensioned income
+statement lines of that year follow when the next year's annual comparative
+still equals this 10-K, so a subtotal stays on the same basis. Per-share
+amounts and share counts stay on the filed quarters. A reversal smaller than
+5%, or comparatives that overshoot the same way, stays as filed. Q4 is otherwise the annual
 figure of that same member minus the nine-month YTD on the quarter before the
 10-K. A later filing can recast the year under new members, so every member's
 Q4 on one axis comes from the same 10-K, including rows dedup ranked lower: an

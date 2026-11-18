@@ -293,6 +293,7 @@ BEGIN
             q.is_synthetic,
             q.source_type,
             q.is_comparative_backfill,
+            q.is_non_additive,
             -- A YTD that was not reduced to one quarter is not shown. That is
             -- the opening of a series, and a later Q2 or Q3 whose prior
             -- quarter is missing: the amount is still the six- or nine-month
@@ -376,6 +377,236 @@ BEGIN
         FROM all_filings_data
         WHERE source_type IN ('10-K', '10-K/A')
     ),
+    -- The next year's 10-Q comparatives of this year's undimensioned
+    -- income-statement quarters. A published quarter's comparative is that
+    -- quarter; a year-to-date one subtracts the cumulative comparative of
+    -- the quarter before it in the same filing year.
+    comparative_quarters AS (
+        SELECT
+            company_id,
+            statement,
+            normalized_label,
+            period_end,
+            CASE
+                WHEN quarter_value IS NOT NULL THEN quarter_value
+                WHEN fiscal_quarter = 1 THEN cumulative
+                WHEN (period_end - LAG(period_end) OVER w) BETWEEN 80 AND 100
+                THEN cumulative - LAG(cumulative) OVER w
+            END AS value
+        FROM (
+            SELECT
+                c.*,
+                COALESCE(
+                    c.ytd_value,
+                    SUM(c.quarter_value) OVER (
+                        PARTITION BY c.company_id, c.statement, c.normalized_label,
+                            c.fiscal_year
+                        ORDER BY c.period_end
+                    )
+                ) AS cumulative
+            FROM (
+                SELECT
+                    company_id,
+                    statement,
+                    normalized_label,
+                    fiscal_year,
+                    fiscal_quarter,
+                    comparative_period_end AS period_end,
+                    MAX(comparative_value) FILTER (WHERE period = 'Q') AS quarter_value,
+                    MAX(comparative_value) FILTER (WHERE period = 'YTD') AS ytd_value
+                FROM quarterly_filings_raw
+                WHERE statement = 'Income Statement'
+                    AND axis = ''
+                    AND NOT is_abstract
+                    AND comparative_value IS NOT NULL
+                    AND (period_end - comparative_period_end) BETWEEN 340 AND 380
+                GROUP BY
+                    company_id, statement, normalized_label, fiscal_year,
+                    fiscal_quarter, comparative_period_end
+            ) c
+        ) c
+        WINDOW w AS (
+            PARTITION BY company_id, statement, normalized_label, fiscal_year
+            ORDER BY period_end
+        )
+    ),
+    -- A line's own first three quarters beside their comparatives. Share
+    -- counts and per-share amounts do not add up to the year, so they are
+    -- left out. CTEs carry no row estimates, so rows are paired by grouping
+    -- rather than joined.
+    quarter_pairs AS (
+        SELECT
+            company_id,
+            statement,
+            normalized_label,
+            period_end,
+            MAX(fiscal_tag) AS fiscal_tag,
+            MAX(fiscal_quarter) AS fiscal_quarter,
+            SUM(own_value) AS own_value,
+            SUM(comparative_value) AS comparative_value
+        FROM (
+            SELECT
+                company_id,
+                statement,
+                normalized_label,
+                period_end,
+                fiscal_tag,
+                fiscal_quarter,
+                value AS own_value,
+                NULL::numeric AS comparative_value
+            FROM quarterly_filings
+            WHERE statement = 'Income Statement'
+                AND axis = ''
+                AND fiscal_quarter IN (1, 2, 3)
+                AND fiscal_tag IS NOT NULL
+                AND value IS NOT NULL
+                AND NOT is_abstract
+                AND NOT drop_ytd
+                AND NOT is_comparative_backfill
+                AND NOT is_non_additive
+                AND COALESCE(unit, '') <> 'usdPerShare'
+
+            UNION ALL
+
+            SELECT
+                company_id,
+                statement,
+                normalized_label,
+                period_end,
+                NULL::int,
+                NULL::int,
+                NULL::numeric,
+                value
+            FROM comparative_quarters
+            WHERE value IS NOT NULL
+        ) p
+        GROUP BY company_id, statement, normalized_label, period_end
+        HAVING COUNT(own_value) = 1 AND COUNT(comparative_value) = 1
+    ),
+    -- Per year: the three quarter pairs, this year's 10-K, and the next
+    -- 10-K's comparative of it.
+    quarter_basis AS (
+        SELECT
+            company_id,
+            statement,
+            normalized_label,
+            fiscal_tag,
+            SUM(own_value) AS own_sum,
+            SUM(comparative_value) AS comp_sum,
+            MAX(annual) AS annual,
+            MAX(next_annual) AS next_annual,
+            GREATEST(ABS(MAX(annual)) / 1000, 1) AS tolerance
+        FROM (
+            SELECT
+                company_id,
+                statement,
+                normalized_label,
+                fiscal_tag,
+                fiscal_quarter,
+                own_value,
+                comparative_value,
+                NULL::numeric AS annual,
+                NULL::numeric AS next_annual
+            FROM quarter_pairs
+
+            UNION ALL
+
+            SELECT
+                company_id,
+                statement,
+                normalized_label,
+                fiscal_tag,
+                NULL,
+                NULL,
+                NULL,
+                value,
+                next_annual
+            FROM (
+                SELECT
+                    company_id,
+                    statement,
+                    normalized_label,
+                    fiscal_tag,
+                    value,
+                    CASE
+                        WHEN LEAD(comparative_period_end) OVER w = period_end
+                        THEN LEAD(comparative_value) OVER w
+                    END AS next_annual
+                FROM all_filings_data
+                WHERE source_type IN ('10-K', '10-K/A')
+                    AND statement = 'Income Statement'
+                    AND axis = ''
+                    AND period = 'YTD'
+                    AND NOT is_abstract
+                WINDOW w AS (
+                    PARTITION BY company_id, statement, normalized_label
+                    ORDER BY period_end
+                )
+            ) a
+            WHERE fiscal_tag IS NOT NULL AND value IS NOT NULL
+        ) y
+        GROUP BY company_id, statement, normalized_label, fiscal_tag
+        HAVING COUNT(DISTINCT fiscal_quarter) = 3
+            AND COUNT(fiscal_quarter) = 3
+            AND COUNT(annual) = 1
+    ),
+    -- Lines whose year moves onto the next year's comparatives. A line whose
+    -- own nine months overshoot the 10-K by more than 5% would reverse the
+    -- year in Q4. Other lines of that year follow when the next 10-K
+    -- reprinted this one unchanged, so subtotals stay on one basis. Either
+    -- way the comparatives must fit: the 10-K minus them keeps its sign.
+    comparative_basis AS (
+        SELECT company_id, statement, normalized_label, fiscal_tag
+        FROM (
+            SELECT
+                b.*,
+                bool_or(b.overshoots) OVER (
+                    PARTITION BY b.company_id, b.statement, b.fiscal_tag
+                ) AS year_overshoots
+            FROM (
+                SELECT
+                    qb.*,
+                    SIGN(qb.own_sum) = SIGN(qb.annual)
+                        AND ABS(qb.own_sum) > ABS(qb.annual) * 1.05 AS overshoots
+                FROM quarter_basis qb
+                WHERE SIGN(qb.annual - qb.comp_sum) = SIGN(qb.annual)
+                    OR ABS(qb.annual - qb.comp_sum) <= qb.tolerance
+            ) b
+        ) b
+        WHERE overshoots
+            OR (
+                year_overshoots
+                AND ABS(next_annual - annual) <= tolerance
+                AND ABS(own_sum - comp_sum) > tolerance
+            )
+    ),
+    restated_quarters AS MATERIALIZED (
+        SELECT
+            p.company_id,
+            p.statement,
+            p.normalized_label,
+            p.period_end,
+            p.comparative_value
+        FROM comparative_basis b
+        JOIN quarter_pairs p
+            ON p.company_id = b.company_id
+            AND p.statement = b.statement
+            AND p.normalized_label = b.normalized_label
+            AND p.fiscal_tag = b.fiscal_tag
+    ),
+    quarterly_filings_restated AS (
+        SELECT q.*, r.comparative_value AS restated_value
+        FROM quarterly_filings q
+        LEFT JOIN restated_quarters r
+            ON r.company_id = q.company_id
+            AND r.statement = q.statement
+            AND r.normalized_label = q.normalized_label
+            AND r.period_end = q.period_end
+            AND q.axis = ''
+            AND NOT q.is_abstract
+            AND NOT q.drop_ytd
+            AND NOT q.is_comparative_backfill
+    ),
     quarterly_aggregation AS (
         SELECT
             q.company_id,
@@ -388,17 +619,20 @@ BEGIN
             -- when the quarters were filed.
             MAX(src.filing_date) FILTER (WHERE NOT q.is_comparative_backfill)
                 AS filed,
-            -- Three discrete quarters sum to Q1–Q3. A published quarter keeps
-            -- the nine-month total for Q4, because the earlier quarters can be
-            -- on the previous classification. Otherwise subtract that total
-            -- when a quarter is missing. Per-share rows have no q3_ytd.
+            -- Three discrete quarters sum to Q1–Q3. A restatement takes the
+            -- next year's comparatives, which fit this 10-K, so Q4 subtracts
+            -- those. A published quarter otherwise keeps the nine-month total
+            -- for Q4, because the earlier quarters can be on the previous
+            -- classification. Otherwise subtract that total when a quarter is
+            -- missing. Per-share rows have no q3_ytd.
             CASE
+                WHEN COUNT(q.restated_value) = 3 THEN SUM(q.restated_value)
                 WHEN COUNT(DISTINCT q.fiscal_quarter) FILTER (WHERE NOT q.drop_ytd) = 3
                     AND NOT COALESCE(bool_or(q.prefer_ytd_anchor), false)
                 THEN SUM(q.value) FILTER (WHERE NOT q.drop_ytd)
                 ELSE MAX(q.q3_ytd)
             END AS value
-        FROM quarterly_filings q
+        FROM quarterly_filings_restated q
         JOIN filings src ON src.id = q.filing_id
         GROUP BY
             q.company_id,
@@ -753,7 +987,7 @@ BEGIN
         concept,
         label,
         normalized_label,
-        value,
+        COALESCE(restated_value, value) AS value,
         weight,
         print_sign,
         unit,
@@ -767,8 +1001,9 @@ BEGIN
         position,
         is_abstract,
         is_synthetic,
-        source_type
-    FROM quarterly_filings
+        CASE WHEN restated_value IS NOT NULL THEN 'calculated' ELSE source_type END
+            AS source_type
+    FROM quarterly_filings_restated
     WHERE (NOT drop_ytd OR is_abstract)
         AND NOT is_comparative_backfill
 
