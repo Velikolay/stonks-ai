@@ -56,6 +56,9 @@ class SECXBRLParser:
             "us-gaap:StatementGeographicalAxis",
             "us-gaap:ConsolidationItemsAxis",
             "us-gaap:StatementBusinessSegmentsAxis",
+            "ifrs-full:SegmentsAxis",
+            "ifrs-full:GeographicalAreasAxis",
+            "ifrs-full:ProductsAndServicesAxis",
         }
     )
 
@@ -69,6 +72,8 @@ class SECXBRLParser:
             "us-gaap:SalesRevenueNet",
             "us-gaap:SalesRevenueGoodsNet",
             "us-gaap:SalesRevenueServicesNet",
+            "ifrs-full:Revenue",
+            "ifrs-full:RevenueFromContractsWithCustomers",
         }
     )
     # Pieces of that total. Kept when they name a member the total does not.
@@ -1523,7 +1528,7 @@ class SECXBRLParser:
         Returns:
             PeriodType.YTD if it's year-to-date, PeriodType.Q if it's a quarter
         """
-        if form_type == "10-K" or form_type == "10-K/A":
+        if form_type in ("10-K", "10-K/A", "20-F", "20-F/A"):
             return PeriodType.YTD
 
         if not period_start or not period_end:

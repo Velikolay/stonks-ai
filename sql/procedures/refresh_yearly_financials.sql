@@ -30,6 +30,10 @@ BEGIN
             ff.period_end,
             ff.is_abstract,
             ff.is_synthetic,
+            CASE
+                WHEN ff.form_type IN ('20-F', '20-F/A') THEN '20-F'
+                ELSE '10-K'
+            END AS source_type,
             -- Zero on the filing that closed period_end. Otherwise that
             -- filing was never ingested; shift by the calendar gap.
             f.fiscal_year - (
@@ -43,7 +47,7 @@ BEGIN
             ON f.id = ff.fiscal_filing_id
         WHERE
             ff.company_id = ANY(company_ids)
-            AND ff.form_type IN ('10-K', '10-K/A')
+            AND ff.form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
             AND ff.is_duplicate = false
         WINDOW w AS (
             PARTITION BY ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member
@@ -72,7 +76,7 @@ BEGIN
         latest_position AS position,
         is_abstract,
         is_synthetic,
-        '10-K' AS source_type
+        source_type
     FROM all_filings_data;
 
     -- Rows in financial_rewrites with granularity yearly. Quarterly rows

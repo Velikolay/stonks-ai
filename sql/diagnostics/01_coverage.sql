@@ -15,14 +15,14 @@ LEFT JOIN financial_facts ff ON ff.filing_id = f.id
 GROUP BY c.id, c.name, f.form_type, f.fiscal_year
 ORDER BY c.id, f.form_type, f.fiscal_year;
 
-\echo '--- Fiscal years with no 10-K between a company''s first and last 10-K ---'
+\echo '--- Fiscal years with no annual report between the first and last ---'
 WITH span AS (
     SELECT
         company_id,
         MIN(fiscal_year) AS first_year,
         MAX(fiscal_year) AS last_year
     FROM filings
-    WHERE form_type IN ('10-K', '10-K/A')
+    WHERE form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
     GROUP BY company_id
 )
 SELECT
@@ -34,7 +34,7 @@ WHERE NOT EXISTS (
     SELECT 1
     FROM filings f
     WHERE f.company_id = s.company_id
-      AND f.form_type IN ('10-K', '10-K/A')
+      AND f.form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
       AND f.fiscal_year = y.fiscal_year
 )
 ORDER BY s.company_id, y.fiscal_year;

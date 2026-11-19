@@ -22,7 +22,8 @@ load_dotenv()
 # and the last Saturday in XBRL. Six days covers that gap when choosing the
 # filing's own period. Prior-period columns are stored as their own facts.
 _PERIOD_MATCH_DAYS = 6
-_PERIODIC_FORMS = ("10-K", "10-Q")
+# 20-F is the annual report of a foreign private issuer.
+_PERIODIC_FORMS = ("10-K", "10-Q", "20-F")
 
 
 def _cik_number(value: Any) -> Optional[int]:
@@ -71,7 +72,7 @@ def _filer_ciks(filing: Any) -> Tuple[int, ...]:
 
 
 def _periodic_filings(company: Any) -> list:
-    """Return the company's 10-K and 10-Q filings, including amendments."""
+    """Return the company's annual and quarterly filings, including amendments."""
     filings = company.get_filings(form=list(_PERIODIC_FORMS))
     if not filings:
         return []
@@ -83,11 +84,11 @@ def earlier_registrant_ciks(
 ) -> Tuple[str, ...]:
     """Return CIKs this company filed under before its current registrant.
 
-    The earliest 10-K lists every filer on that submission. Another filer is
-    the previous registrant when its own 10-K and 10-Q periods end at or
-    before this company's first period. A co-registrant that keeps filing its
-    own reports is left out. The earliest 10-Q is checked when the 10-K does
-    not name an earlier filer.
+    The earliest annual report (10-K or 20-F) lists every filer on that
+    submission. Another filer is the previous registrant when its own periodic
+    reports end at or before this company's first period. A co-registrant that
+    keeps filing its own reports is left out. The earliest 10-Q is checked
+    when no annual report names an earlier filer.
 
     Args:
         company: EDGAR company for the current registrant.
@@ -138,13 +139,17 @@ def earlier_registrant_ciks(
 
 
 def _earliest_handoff(filings: Sequence[Any]) -> Any:
-    """Return the earliest 10-K, or the earliest 10-Q when there is no 10-K."""
-    ten_ks = [
+    """Return the earliest annual report, or the earliest 10-Q when there is none.
+
+    A 20-F is the annual report of a foreign private issuer, so it is the
+    handoff when the company files no 10-K.
+    """
+    annual = [
         filing
         for filing in filings
-        if str(getattr(filing, "form", "")).startswith("10-K")
+        if str(getattr(filing, "form", "")).startswith(("10-K", "20-F"))
     ]
-    chosen = ten_ks or [
+    chosen = annual or [
         filing
         for filing in filings
         if str(getattr(filing, "form", "")).startswith("10-Q")

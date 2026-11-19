@@ -262,6 +262,20 @@ class TestSECXBRLParser:
             "Q",
         ], f"Period should be YTD or Q, got {fact.period}"
 
+    def test_determine_period_type_treats_20f_as_annual(self):
+        """A 20-F is an annual report, so its duration facts are year-to-date."""
+        parser = SECXBRLParser()
+        period_end = date(2024, 12, 31)
+        period_start = date(2024, 1, 1)
+        assert (
+            parser._determine_period_type(period_start, period_end, "20-F")
+            == PeriodType.YTD
+        )
+        assert (
+            parser._determine_period_type(period_start, period_end, "20-F/A")
+            == PeriodType.YTD
+        )
+
     def test_determine_period_type_from_column_validation(self):
         """Test that _determine_period_type_from_column handles various inputs correctly."""
         parser = SECXBRLParser()

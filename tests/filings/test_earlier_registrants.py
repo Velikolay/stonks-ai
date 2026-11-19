@@ -51,6 +51,20 @@ def test_earliest_10k_keeps_a_registrant_whose_reports_stop() -> None:
     )
 
 
+def test_earliest_20f_keeps_a_registrant_whose_reports_stop() -> None:
+    """A 20-F filer's first annual report can name the previous registrant."""
+    current = [
+        _filing("20-F", date(2018, 2, 11), date(2017, 12, 31), "N-F", [2, 1]),
+    ]
+    previous = [
+        _filing("20-F", date(2017, 2, 11), date(2016, 12, 31), "O-F", [1]),
+        _filing("20-F", date(2018, 2, 11), date(2017, 12, 31), "N-F", [2, 1]),
+    ]
+    companies = {2: _company(2, current), 1: _company(1, previous)}
+
+    assert earlier_registrant_ciks(companies[2], resolve=companies.get) == ("1",)
+
+
 def test_a_coregistrant_that_keeps_filing_is_left_out() -> None:
     """A subsidiary that still files its own 10-Q is not the previous registrant."""
     parent_filings = [

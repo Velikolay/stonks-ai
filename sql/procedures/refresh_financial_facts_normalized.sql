@@ -543,6 +543,7 @@ BEGIN
             AND fiscal.form_type = CASE
                 WHEN filed.form_type IN ('10-K', '10-K/A') THEN '10-K'
                 WHEN filed.form_type IN ('10-Q', '10-Q/A') THEN '10-Q'
+                WHEN filed.form_type IN ('20-F', '20-F/A') THEN '20-F'
                 ELSE filed.form_type
             END
         WINDOW filing_order AS (
@@ -551,7 +552,10 @@ BEGIN
                          r.axis, r.member, r.period_end, r.is_abstract
             ORDER BY
                 -- prefer amendments over original filings
-                CASE WHEN r.form_type IN ('10-K/A', '10-Q/A') THEN 0 ELSE 1 END,
+                CASE
+                    WHEN r.form_type IN ('10-K/A', '10-Q/A', '20-F/A') THEN 0
+                    ELSE 1
+                END,
                 -- the period's own filing beats a later reprint, which may
                 -- be recast under other members; the line itself is only
                 -- kept from that filing

@@ -180,9 +180,10 @@ ORDER BY
 LIMIT 50;
 
 \echo '--- Statement slots where exactly one concept replaced exactly one other ---'
--- Restricted to 10-K so the seam is an annual boundary. A pair only qualifies
--- when its parent lost exactly one child at that period and gained exactly one
--- at the next; anything looser is a cross product of unrelated line items.
+-- Restricted to the annual report (10-K or 20-F) so the seam is an annual
+-- boundary. A pair only qualifies when its parent lost exactly one child at
+-- that period and gained exactly one at the next; anything looser is a cross
+-- product of unrelated line items.
 WITH slots AS (
     SELECT
         f.company_id,
@@ -197,7 +198,7 @@ WITH slots AS (
     WHERE NOT f.is_duplicate
       AND NOT f.is_abstract
       AND f.axis = ''
-      AND f.form_type = '10-K'
+      AND f.form_type IN ('10-K', '20-F')
     GROUP BY f.company_id, f.statement, p.normalized_label, f.concept, f.normalized_label
 ),
 span AS (
@@ -275,7 +276,7 @@ WITH dims AS (
         COUNT(*) AS facts
     FROM financial_facts ff
     WHERE ff.axis <> ''
-      AND ff.form_type = '10-K'
+      AND ff.form_type IN ('10-K', '20-F')
     GROUP BY ff.company_id, ff.statement, ff.axis, ff.member, ff.member_label
 ),
 labeled AS (

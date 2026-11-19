@@ -37,7 +37,7 @@ BEGIN
         ON f.id = ff.fiscal_filing_id
     WHERE
         ff.company_id = ANY(company_ids)
-        AND ff.form_type IN ('10-K', '10-K/A')
+        AND ff.form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
         AND NOT ff.is_duplicate
         AND NOT ff.is_abstract
         AND ff.value IS NOT NULL

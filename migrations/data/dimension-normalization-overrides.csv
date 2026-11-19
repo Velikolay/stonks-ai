@@ -242,3 +242,16 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 18,srt:StatementGeographicalAxis,United Kingdom - Geographic Concentration Risk,,False,Geographical,United Kingdom,Same revenue as country:GB
 18,srt:StatementGeographicalAxis,United States - Geographic Concentration Risk,,False,Geographical,United States,Same revenue as country:US
 18,srt:StatementGeographicalAxis,Rest of world - Geographic Concentration Risk,,False,Geographical,Rest of world,Same revenue as the rest-of-world member
+20,srt:ProductOrServiceAxis,asml:EuvMember,,False,Product,NXE,EUV systems; same value as NXE in the 2021 and 2022 20-F
+20,us-gaap:ProductOrServiceAxis,asml:EuvMember,,False,Product,NXE,EUV systems on the legacy product axis
+20,srt:ProductOrServiceAxis,Euv,,False,Product,NXE,2016-2018 label for EUV systems
+20,srt:ProductOrServiceAxis,asml:NXEMember,,False,Product,NXE,NXE is the EUV platform in the 2021-2025 20-F
+20,us-gaap:ConsolidationItemsAxis,EUV - System sales,,False,Product,NXE,2011-2013 system sales; equals product-axis EUV where both are filed
+20,srt:ProductOrServiceAxis,asml:ArfiMember,,False,Product,ArF immersion,ArFi; same value as ArF immersion in the 2022 and 2023 20-F
+20,us-gaap:ProductOrServiceAxis,asml:ArfiMember,,False,Product,ArF immersion,ArFi on the legacy product axis
+20,srt:ProductOrServiceAxis,Arfi,,False,Product,ArF immersion,2016-2018 label for ArFi
+20,srt:ProductOrServiceAxis,asml:ArfImmersionMember,,False,Product,ArF immersion,ArF immersion in the 2022-2025 20-F
+20,us-gaap:ConsolidationItemsAxis,ArF i - System sales,,False,Product,ArF immersion,2011-2013 system sales; equals product-axis ArFi where both are filed
+20,us-gaap:ConsolidationItemsAxis,ArF dry - System sales,,False,Product,ArF dry,2011-2013 system sales; equals product-axis ArF dry
+20,us-gaap:ConsolidationItemsAxis,KrF - System sales,,False,Product,KrF,2011-2013 system sales; equals product-axis KrF
+20,us-gaap:ConsolidationItemsAxis,I-line - System sales,,False,Product,I-line,2011-2013 system sales; equals product-axis I-line
