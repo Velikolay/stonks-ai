@@ -932,9 +932,14 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
-            -- Per-share amounts are not annual−Σquarters. A mid-year stock
-            -- split leaves the early quarters on another share basis.
-            AND COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+            -- Per-share Q4 is annual−Σquarters only when the earlier
+            -- quarters sit under the 10-K. A mid-year stock split leaves
+            -- those quarters on another share basis and overshoots.
+            AND (
+                COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+                OR ABS(COALESCE(nm.value, q.value))
+                    <= ABS(a.value) * 1.05 + 0.05
+            )
         ORDER BY
             a.company_id, a.statement, a.normalized_label, a.axis, a.member,
             a.fiscal_tag, split.split_rank, a.is_duplicate, a.id)
@@ -981,7 +986,10 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
-            AND COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+            AND (
+                COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+                OR ABS(q.value) <= ABS(a.value) * 1.05 + 0.05
+            )
             AND q.value IS NOT NULL
             AND NOT a.is_abstract
     )
