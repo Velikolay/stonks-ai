@@ -2,14 +2,49 @@ CREATE OR REPLACE PROCEDURE refresh_dimension_normalization(company_ids int[])
 LANGUAGE plpgsql
 -- CTEs carry no row statistics. A merge join on (company, statement) then
 -- filters the remaining keys pair by pair, which is quadratic in facts.
+-- The same-period pair set is the worst case: inlined, it is re-sorted for
+-- every candidate match. It is built once into a temp table that has statistics.
 SET enable_mergejoin = off
 AS $$
+DECLARE
+    tmp_name text;
 BEGIN
     IF company_ids IS NULL OR array_length(company_ids, 1) IS NULL THEN
         RETURN;
     END IF;
 
-    CREATE TEMP TABLE tmp_dimension_normalization_new ON COMMIT DROP AS
+    -- A second call in the same transaction, which refresh_financials does
+    -- once per company, finds the previous call's temp tables still open.
+    FOREACH tmp_name IN ARRAY ARRAY[
+        'tmp_dimension_normalization_new',
+        'tmp_dn_grouping',
+        'tmp_dn_facts',
+        'tmp_dn_spp'
+    ]
+    LOOP
+        IF to_regclass('pg_temp.' || tmp_name) IS NOT NULL THEN
+            EXECUTE format('DROP TABLE %I', tmp_name);
+        END IF;
+    END LOOP;
+
+    CREATE TEMP TABLE tmp_dn_grouping (
+        company_id integer,
+        statement character varying,
+        normalized_label character varying,
+        axis character varying,
+        member character varying,
+        member_label character varying,
+        normalized_axis_label character varying,
+        normalized_member_label character varying,
+        group_id character varying,
+        group_max_period_end date,
+        source character varying,
+        overridden boolean,
+        override_priority character varying,
+        override_level character varying
+    ) ON COMMIT DROP;
+
+    CREATE TEMP TABLE tmp_dn_facts ON COMMIT DROP AS
     WITH RECURSIVE financial_facts_base AS (
         SELECT
             ff.id,
@@ -282,25 +317,75 @@ BEGIN
             'Geographical'
         )
     ),
-    same_period_pairs AS (
+    store_grouping AS (
+        INSERT INTO tmp_dn_grouping
+        SELECT
+            company_id,
+            statement,
+            normalized_label,
+            axis,
+            member,
+            member_label,
+            normalized_axis_label,
+            normalized_member_label,
+            group_id,
+            group_max_period_end,
+            source,
+            overridden,
+            override_priority,
+            override_level
+        FROM dimension_normalization_grouping
+        RETURNING company_id
+    )
+    SELECT *
+    FROM facts
+    WHERE NOT EXISTS (SELECT 1 FROM store_grouping WHERE FALSE);
+
+    ANALYZE tmp_dn_facts;
+    ANALYZE tmp_dn_grouping;
+
+    -- One row per member that shares a period, then the pairs of those
+    -- members. Joining the facts themselves repeats every filing of a member
+    -- and sorts more than a million rows for a few tens of thousands of pairs.
+    CREATE TEMP TABLE tmp_dn_spp ON COMMIT DROP AS
+    WITH period_members AS (
         SELECT DISTINCT
-            f1.company_id,
-            f1.statement,
-            f1.normalized_label,
-            f1.normalized_axis_label AS normalized_axis_label1,
-            f1.normalized_member_label AS normalized_member_label1,
-            f2.normalized_axis_label AS normalized_axis_label2,
-            f2.normalized_member_label AS normalized_member_label2
-        FROM facts f1
-        JOIN facts f2
-            ON f1.company_id = f2.company_id
-            AND f1.statement = f2.statement
-            AND f1.normalized_label = f2.normalized_label
-            AND f1.period_end = f2.period_end
-        WHERE NOT (
-            f1.normalized_axis_label = f2.normalized_axis_label
-            AND f1.normalized_member_label = f2.normalized_member_label
-        )
+            company_id,
+            statement,
+            normalized_label,
+            period_end,
+            normalized_axis_label,
+            normalized_member_label
+        FROM tmp_dn_facts
+    )
+    SELECT DISTINCT
+        f1.company_id,
+        f1.statement,
+        f1.normalized_label,
+        f1.normalized_axis_label AS normalized_axis_label1,
+        f1.normalized_member_label AS normalized_member_label1,
+        f2.normalized_axis_label AS normalized_axis_label2,
+        f2.normalized_member_label AS normalized_member_label2
+    FROM period_members f1
+    JOIN period_members f2
+        ON f1.company_id = f2.company_id
+        AND f1.statement = f2.statement
+        AND f1.normalized_label = f2.normalized_label
+        AND f1.period_end = f2.period_end
+    WHERE NOT (
+        f1.normalized_axis_label = f2.normalized_axis_label
+        AND f1.normalized_member_label = f2.normalized_member_label
+    );
+
+    ANALYZE tmp_dn_spp;
+
+    CREATE TEMP TABLE tmp_dimension_normalization_new ON COMMIT DROP AS
+    WITH RECURSIVE
+    facts AS NOT MATERIALIZED (
+        SELECT * FROM tmp_dn_facts
+    ),
+    same_period_pairs AS NOT MATERIALIZED (
+        SELECT * FROM tmp_dn_spp
     ),
     matches AS (
         SELECT
@@ -504,6 +589,9 @@ BEGIN
             normalized_member_label,
             root_period DESC
     ),
+    dimension_normalization_grouping AS NOT MATERIALIZED (
+        SELECT * FROM tmp_dn_grouping
+    ),
     base AS (
         SELECT * FROM dimension_normalization_grouping
         UNION ALL
@@ -688,5 +776,12 @@ BEGIN
         overridden = EXCLUDED.overridden,
         override_priority = EXCLUDED.override_priority,
         override_level = EXCLUDED.override_level;
+
+    FOREACH tmp_name IN ARRAY ARRAY['tmp_dn_grouping', 'tmp_dn_facts', 'tmp_dn_spp']
+    LOOP
+        IF to_regclass('pg_temp.' || tmp_name) IS NOT NULL THEN
+            EXECUTE format('DROP TABLE %I', tmp_name);
+        END IF;
+    END LOOP;
 END;
 $$;

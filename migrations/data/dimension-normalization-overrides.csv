@@ -211,3 +211,7 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 15,us-gaap:ProductOrServiceAxis,Grocery - Sam's Club U.S.,,False,Product,Grocery - Sam's Club,Merchandise category; wording and nbsp variants of one line
 15,us-gaap:ProductOrServiceAxis,General merchandise - Sam's Club U.S.,,False,Product,General merchandise - Sam's Club,Merchandise category; wording and nbsp variants of one line
 15,us-gaap:ProductOrServiceAxis,Health and wellness - Sam's Club U.S.,,False,Product,Health and wellness - Sam's Club U.S.,Merchandise category; wording and nbsp variants of one line
+16,us-gaap:StatementBusinessSegmentsAxis,mco:MoodysInvestorsServiceMember,,False,Segment,Moody's Investors Service,External segment revenue. Same member label as early operating income on ConsolidationItems
+16,us-gaap:StatementBusinessSegmentsAxis,mco:MoodysAnalyticsMember,,False,Segment,Moody's Analytics,External segment revenue. Same member label as early operating income on ConsolidationItems
+16,srt:ConsolidationItemsAxis,MIS,,False,Segment,Moody's Investors Service,Segment operating income through 2017. Shares the MIS label with the revenue member
+16,srt:ConsolidationItemsAxis,MA,,False,Segment,Moody's Analytics,Segment operating income through 2017. Shares the MA label with the revenue member
