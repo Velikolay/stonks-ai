@@ -3,7 +3,7 @@
 import logging
 import math
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -16,6 +16,93 @@ logger = logging.getLogger(__name__)
 
 # Cover-page period focus. A 10-K declares FY; a 10-Q declares Q1, Q2, or Q3.
 _FOCUS_QUARTER = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4, "FY": 4}
+
+
+def _as_date(value: object) -> Optional[date]:
+    """Return a date from a fact period, or None when it is missing."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text or text.lower() == "nat":
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _reporting_unit(currency: str, unit_ref: object) -> str:
+    """Return the unit name for one reporting-currency fact."""
+    code = currency.lower()
+    ref = str(unit_ref or "").lower()
+    if "per_share" in ref or "pershare" in ref:
+        return f"{code}PerShare"
+    return code
+
+
+def reporting_currency_amounts(
+    facts: object,
+) -> dict[tuple[str, date], tuple[Decimal, str]]:
+    """Map each concept and period to its amount in the reporting currency.
+
+    A 20-F often tags the current year twice, once in the reporting currency
+    and once as a convenience translation. The statement frame keeps one of
+    them and stamps that unit on the whole row, so a prior-year column in the
+    reporting currency can sit beside a current-year translation. The
+    reporting currency is the one used by the most undimensioned facts. When
+    the filing has only one currency there is nothing to choose.
+
+    Args:
+        facts: edgartools facts dataframe, or None.
+
+    Returns:
+        ``(concept, period_end)`` to ``(amount, unit)`` for undimensioned
+        facts in the reporting currency. Empty when a choice is not needed.
+    """
+    if facts is None or not isinstance(facts, pd.DataFrame) or facts.empty:
+        return {}
+    required = {
+        "concept",
+        "numeric_value",
+        "currency",
+        "period_end",
+        "is_dimensioned",
+    }
+    if not required.issubset(facts.columns):
+        return {}
+
+    undimensioned = facts.loc[~facts["is_dimensioned"].fillna(False)].copy()
+    if undimensioned.empty:
+        return {}
+    currencies = undimensioned["currency"].dropna().astype(str).str.strip().str.upper()
+    currencies = currencies[currencies.str.fullmatch(r"[A-Z]{3}")]
+    if currencies.nunique() < 2:
+        return {}
+    reporting = str(currencies.value_counts().index[0])
+
+    chosen = undimensioned.loc[
+        undimensioned["currency"].astype(str).str.strip().str.upper() == reporting
+    ]
+    amounts: dict[tuple[str, date], tuple[Decimal, str]] = {}
+    for row in chosen.itertuples(index=False):
+        period_end = _as_date(row.period_end) or _as_date(
+            getattr(row, "period_instant", None)
+        )
+        concept = row.concept
+        if period_end is None or not isinstance(concept, str) or concept == "":
+            continue
+        if pd.isna(row.numeric_value):
+            continue
+        unit_ref = row.unit_ref if hasattr(row, "unit_ref") else ""
+        amounts[(concept, period_end)] = (
+            Decimal(str(row.numeric_value)),
+            _reporting_unit(reporting, unit_ref),
+        )
+    return amounts
 
 
 def fiscal_focus(
@@ -89,6 +176,7 @@ class SECXBRLParser:
     def __init__(self):
         """Initialize the parser."""
         self.fiscal_focus: tuple[Optional[int], Optional[int]] = (None, None)
+        self._reporting_amounts: dict[tuple[str, date], tuple[Decimal, str]] = {}
 
     @staticmethod
     def _is_nullish(value: object) -> bool:
@@ -153,10 +241,25 @@ class SECXBRLParser:
             List of FinancialFact objects
         """
         self.fiscal_focus = (None, None)
+        self._reporting_amounts = {}
         try:
             # Get XBRL data from the filing
             xbrl = filing.xbrl()
+            if xbrl is None:
+                logger.error(
+                    "Error parsing filing %s: no XBRL", filing.accession_number
+                )
+                return []
             self.fiscal_focus = fiscal_focus(getattr(xbrl, "entity_info", None))
+            try:
+                self._reporting_amounts = reporting_currency_amounts(
+                    xbrl.facts.to_dataframe()
+                )
+            except Exception:
+                logger.exception(
+                    "Could not read reporting-currency facts for %s",
+                    filing.accession_number,
+                )
 
             facts = []
 
@@ -1752,8 +1855,45 @@ class SECXBRLParser:
         """
         return column_name.replace("dim_", "").replace("_", ":", 1)
 
-    def _to_sec_concept(self, concept: str) -> str:
+    def _to_sec_concept(self, concept: object) -> Optional[str]:
+        """Return a concept with the first underscore as a colon.
+
+        A missing parent is NaN in the statement frame, which is not a string.
+        """
+        if not isinstance(concept, str) or not concept:
+            return None
         return concept.replace("_", ":", 1)
+
+    def _reporting_amount(
+        self,
+        concept: str,
+        period_end: Optional[date],
+        value: Optional[Decimal],
+        unit: Optional[str],
+    ) -> tuple[Optional[Decimal], Optional[str]]:
+        """Prefer the reporting-currency amount when the frame kept the other one.
+
+        Args:
+            concept: SEC concept of the face row.
+            period_end: Period the amount belongs to.
+            value: Amount taken from the statement frame.
+            unit: Unit taken from the statement frame.
+
+        Returns:
+            The reporting-currency amount and unit when they differ, otherwise
+            the frame amount and unit.
+        """
+        if period_end is None or value is None:
+            return value, unit
+        chosen = self._reporting_amounts.get((concept, period_end))
+        if chosen is None:
+            return value, unit
+        amount, reporting_unit = chosen
+        if amount == value or (
+            amount != 0 and abs(value - amount) <= abs(amount) * Decimal("1e-9")
+        ):
+            return value, unit
+        return amount, reporting_unit
 
     def _create_financial_fact_with_hierarchy(
         self,
@@ -1777,15 +1917,17 @@ class SECXBRLParser:
         """
         try:
             # Extract basic information
-            concept = self._to_sec_concept(row.get("concept", ""))
+            concept = self._to_sec_concept(row.get("concept", "")) or ""
+            parent_raw = row.get("parent_concept")
             parent_concept = (
-                self._to_sec_concept(row.get("parent_concept"))
-                if row.get("parent_concept")
+                self._to_sec_concept(parent_raw)
+                if isinstance(parent_raw, str) and parent_raw
                 else None
             )
+            abstract_raw = row.get("parent_abstract_concept")
             abstract_concept = (
-                self._to_sec_concept(row.get("parent_abstract_concept"))
-                if row.get("parent_abstract_concept")
+                self._to_sec_concept(abstract_raw)
+                if isinstance(abstract_raw, str) and abstract_raw
                 else None
             )
             label = row.get("label", concept)
@@ -1850,6 +1992,15 @@ class SECXBRLParser:
                 self._parse_date(comparative_period_col.split(" ")[0])
                 if comparative_period_col
                 else None
+            )
+            value_decimal, unit = self._reporting_amount(
+                concept, period_end, value_decimal, unit
+            )
+            comparative_value_decimal, _unit = self._reporting_amount(
+                concept,
+                comparative_period_end,
+                comparative_value_decimal,
+                unit,
             )
 
             # Determine period type based on the period column name

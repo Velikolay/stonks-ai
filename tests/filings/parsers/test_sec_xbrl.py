@@ -7,7 +7,11 @@ from unittest.mock import Mock, patch
 import pandas as pd
 
 from filings.models import PeriodType
-from filings.parsers.sec_xbrl import SECXBRLParser, fiscal_focus
+from filings.parsers.sec_xbrl import (
+    SECXBRLParser,
+    fiscal_focus,
+    reporting_currency_amounts,
+)
 
 
 class TestSECXBRLParser:
@@ -261,6 +265,131 @@ class TestSECXBRLParser:
             "YTD",
             "Q",
         ], f"Period should be YTD or Q, got {fact.period}"
+
+    def test_reporting_currency_keeps_the_majority_currency(self):
+        """A convenience translation does not replace the reporting currency."""
+        facts = pd.DataFrame(
+            [
+                {
+                    "concept": "ifrs-full:Revenue",
+                    "numeric_value": 1_339_255_000_000,
+                    "currency": "TWD",
+                    "unit_ref": "Unit_TWD",
+                    "period_end": "2020-12-31",
+                    "is_dimensioned": False,
+                },
+                {
+                    "concept": "ifrs-full:Revenue",
+                    "numeric_value": 47_694_300_000,
+                    "currency": "USD",
+                    "unit_ref": "Unit_USD",
+                    "period_end": "2020-12-31",
+                    "is_dimensioned": False,
+                },
+                {
+                    "concept": "ifrs-full:Equity",
+                    "numeric_value": 1_614_387_000_000,
+                    "currency": "TWD",
+                    "unit_ref": "Unit_TWD",
+                    "period_end": None,
+                    "period_instant": "2019-12-31",
+                    "is_dimensioned": False,
+                },
+                {
+                    "concept": "ifrs-full:Equity",
+                    "numeric_value": 53_974_800_000,
+                    "currency": "USD",
+                    "unit_ref": "Unit_USD",
+                    "period_end": None,
+                    "period_instant": "2019-12-31",
+                    "is_dimensioned": False,
+                },
+                {
+                    "concept": "ifrs-full:BasicEarningsLossPerShare",
+                    "numeric_value": 13.65,
+                    "currency": "TWD",
+                    "unit_ref": "Unit_TWD_per_Share",
+                    "period_end": "2019-12-31",
+                    "is_dimensioned": False,
+                },
+                {
+                    "concept": "ifrs-full:Revenue",
+                    "numeric_value": 9,
+                    "currency": "TWD",
+                    "unit_ref": "Unit_TWD",
+                    "period_end": "2020-12-31",
+                    "is_dimensioned": True,
+                },
+            ]
+        )
+
+        amounts = reporting_currency_amounts(facts)
+
+        assert amounts[("ifrs-full:Revenue", date(2020, 12, 31))] == (
+            Decimal("1339255000000"),
+            "twd",
+        )
+        assert amounts[("ifrs-full:Equity", date(2019, 12, 31))][0] == Decimal(
+            "1614387000000"
+        )
+        assert (
+            amounts[("ifrs-full:BasicEarningsLossPerShare", date(2019, 12, 31))][1]
+            == "twdPerShare"
+        )
+        assert ("ifrs-full:Revenue", date(2020, 12, 31)) in amounts
+
+    def test_reporting_currency_is_unused_for_one_currency(self):
+        """A filing that reports one currency needs no replacement."""
+        facts = pd.DataFrame(
+            [
+                {
+                    "concept": "us-gaap:Revenues",
+                    "numeric_value": 10,
+                    "currency": "USD",
+                    "unit_ref": "USD",
+                    "period_end": date(2024, 9, 28),
+                    "is_dimensioned": False,
+                }
+            ]
+        )
+        assert reporting_currency_amounts(facts) == {}
+        assert reporting_currency_amounts(None) == {}
+
+    def test_face_fact_uses_reporting_currency_when_the_frame_does_not(self):
+        """The current-year convenience translation is replaced on the face row."""
+        parser = SECXBRLParser()
+        parser._reporting_amounts = {
+            ("ifrs-full:Revenue", date(2020, 12, 31)): (
+                Decimal("1339255000000"),
+                "twd",
+            )
+        }
+        row = pd.Series(
+            {
+                "concept": "ifrs-full_Revenue",
+                "label": "NET REVENUE",
+                "2020-12-31 (FY)": 47694300000,
+                "2019-12-31 (FY)": 1069985000000,
+                "unit": "unit_usd",
+                "abstract": False,
+                "weight": 1,
+                "parent_concept": float("nan"),
+                "parent_abstract_concept": float("nan"),
+            }
+        )
+
+        fact = parser._create_financial_fact_with_hierarchy(
+            row=row,
+            statement_type="Income Statement",
+            period_col="2020-12-31 (FY)",
+            comparative_period_col="2019-12-31 (FY)",
+            position=0,
+        )
+
+        assert fact is not None
+        assert fact.value == Decimal("1339255000000")
+        assert fact.unit == "twd"
+        assert fact.comparative_value == Decimal("1069985000000")
 
     def test_determine_period_type_treats_20f_as_annual(self):
         """A 20-F is an annual report, so its duration facts are year-to-date."""

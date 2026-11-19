@@ -255,3 +255,10 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 20,us-gaap:ConsolidationItemsAxis,ArF dry - System sales,,False,Product,ArF dry,2011-2013 system sales; equals product-axis ArF dry
 20,us-gaap:ConsolidationItemsAxis,KrF - System sales,,False,Product,KrF,2011-2013 system sales; equals product-axis KrF
 20,us-gaap:ConsolidationItemsAxis,I-line - System sales,,False,Product,I-line,2011-2013 system sales; equals product-axis I-line
+0,ifrs-full:GeographicalAreasAxis,,,True,Geographical,,IFRS geography axis
+0,ifrs-full:ProductsAndServicesAxis,,,True,Product,,IFRS product or service axis
+19,ifrs-full:GeographicalAreasAxis,us-gaap:AsiaMember,,False,Geographical,Asia,2015-2017 Asia region on the geography axis
+19,ifrs-full:GeographicalAreasAxis,tsm:OtherCountriesMember,,False,Geographical,Other countries,Residual geography; not the product Others line
+19,ifrs-full:MeasurementAxis,,,False,Technology,,Wafer revenue by process node
+19,ifrs-full:MarketsOfCustomersAxis,,,False,Platform,,Revenue by end market
+19,ifrs-full:MarketsOfCustomersAxis,tsm:OtherPlatformsMember,,False,Platform,Other platforms,Residual end market; not the product Others line
