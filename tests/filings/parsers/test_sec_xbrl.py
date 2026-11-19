@@ -7,11 +7,24 @@ from unittest.mock import Mock, patch
 import pandas as pd
 
 from filings.models import PeriodType
-from filings.parsers.sec_xbrl import SECXBRLParser
+from filings.parsers.sec_xbrl import SECXBRLParser, fiscal_focus
 
 
 class TestSECXBRLParser:
     """Test the SEC XBRL parser."""
+
+    def test_fiscal_focus_reads_the_cover_facts(self):
+        """The cover year and period are the fiscal year and quarter."""
+        assert fiscal_focus({"fiscal_year": "2025", "fiscal_period": "Q1"}) == (2025, 1)
+        assert fiscal_focus({"fiscal_year": "2025", "fiscal_period": "FY"}) == (2025, 4)
+        assert fiscal_focus({"fiscal_year": "2024", "fiscal_period": "q3"}) == (2024, 3)
+
+    def test_fiscal_focus_missing_cover_is_unset(self):
+        """A filing without the cover facts leaves both values unset."""
+        assert fiscal_focus(None) == (None, None)
+        assert fiscal_focus({}) == (None, None)
+        assert fiscal_focus({"fiscal_year": "2025"}) == (2025, None)
+        assert fiscal_focus({"fiscal_period": "H1"}) == (None, None)
 
     def test_parse_disaggregated_revenues_product(self):
         """Test parsing disaggregated revenues by product."""

@@ -215,3 +215,23 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 16,us-gaap:StatementBusinessSegmentsAxis,mco:MoodysAnalyticsMember,,False,Segment,Moody's Analytics,External segment revenue. Same member label as early operating income on ConsolidationItems
 16,srt:ConsolidationItemsAxis,MIS,,False,Segment,Moody's Investors Service,Segment operating income through 2017. Shares the MIS label with the revenue member
 16,srt:ConsolidationItemsAxis,MA,,False,Segment,Moody's Analytics,Segment operating income through 2017. Shares the MA label with the revenue member
+17,srt:ConsolidationItemsAxis,,Canada,False,Geographical,Canada,Later name for the Canadian Operations segment
+17,srt:ConsolidationItemsAxis,,Canada Operations,False,Geographical,Canada,Same segment as Canadian Operations
+17,srt:ConsolidationItemsAxis,,Canadian Operations,False,Geographical,Canada,Canadian Operations segment
+17,srt:ConsolidationItemsAxis,,United States,False,Geographical,United States,Later name for the United States Operations segment
+17,srt:ConsolidationItemsAxis,,United States Operations,False,Geographical,United States,United States Operations segment
+17,srt:ConsolidationItemsAxis,,Other International,False,Geographical,Other International,Later name for the Other International Operations segment
+17,srt:ConsolidationItemsAxis,,Other International Operations,False,Geographical,Other International,Other International Operations segment
+17,us-gaap:ConsolidationItemsAxis,,CANADA,False,Geographical,Canada,Canadian Operations segment
+17,us-gaap:ConsolidationItemsAxis,,Canadian Operations,False,Geographical,Canada,Canadian Operations segment
+17,us-gaap:ConsolidationItemsAxis,,Operating Segments - CANADA,False,Geographical,Canada,Canadian Operations segment total
+17,us-gaap:ConsolidationItemsAxis,,UNITED STATES,False,Geographical,United States,United States Operations segment
+17,us-gaap:ConsolidationItemsAxis,,United States Operations,False,Geographical,United States,United States Operations segment
+17,us-gaap:ConsolidationItemsAxis,,Operating Segments - UNITED STATES,False,Geographical,United States,United States Operations segment total
+17,us-gaap:ConsolidationItemsAxis,,Other International Operations,False,Geographical,Other International,Other International Operations segment
+17,us-gaap:StatementGeographicalAxis,cost:CanadianOperationsMember,,False,Geographical,Canada,Canadian Operations member id
+17,us-gaap:StatementGeographicalAxis,cost:UnitedStatesOperationsMember,,False,Geographical,United States,United States Operations member id
+17,us-gaap:StatementGeographicalAxis,cost:OtherInternationalOperationsMember,,False,Geographical,Other International,Other International Operations member id
+17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:CanadianOperationsMember,,False,Geographical,Canada,Early Canadian Operations segment on the country axis
+17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:UnitedStatesOperationsMember,,False,Geographical,United States,Early United States Operations segment on the country axis
+17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:OtherInternationalOperationsMember,,False,Geographical,Other International,Early Other International Operations segment on the country axis

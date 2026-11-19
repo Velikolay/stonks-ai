@@ -8,7 +8,7 @@ import pytest
 from filings.db import AsyncFilingsDatabase
 from filings.models.filing import Filing
 from filings.models.financial_fact import FinancialFactCreate
-from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader, interim_fiscal_year
+from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 
 class TestXBRLFilingsLoaderSync:
@@ -30,19 +30,6 @@ class TestXBRLFilingsLoaderSync:
 
         assert loader.parser == mock_parser
         assert loader.database == mock_database
-
-    def test_interim_fiscal_year_january_year_end(self):
-        """April belongs to the fiscal year that ends the following January."""
-        assert interim_fiscal_year(date(2010, 4, 30), 1) == 2011
-        assert interim_fiscal_year(date(2010, 7, 31), 1) == 2011
-        assert interim_fiscal_year(date(2010, 10, 31), 1) == 2011
-        assert interim_fiscal_year(date(2011, 1, 31), 1) == 2011
-
-    def test_interim_fiscal_year_other_year_ends_keep_calendar_year(self):
-        """December and September year-ends stay on the period's calendar year."""
-        assert interim_fiscal_year(date(2024, 3, 31), 12) == 2024
-        assert interim_fiscal_year(date(2024, 9, 28), 9) == 2024
-        assert interim_fiscal_year(date(2024, 1, 31), 12) == 2024
 
     def test_calculate_fiscal_quarter(self):
         """Test fiscal quarter calculation from period end date."""
@@ -257,6 +244,38 @@ class TestXBRLFilingsLoader:
         assert call_args.fiscal_period_end == date(2024, 3, 31)
 
         mock_database.financial_facts.insert_financial_facts_batch.assert_called_once()
+
+    async def test_load_single_filing_uses_cover_fiscal_year(self):
+        """A January year-end's April quarter keeps the year the cover declares."""
+        mock_database = Mock(spec=AsyncFilingsDatabase)
+        mock_database.companies = Mock()
+        mock_database.filings = Mock()
+        mock_database.financial_facts = Mock()
+        loader = SECXBRLFilingsLoader(mock_database)
+        loader.parser.fiscal_focus = (2025, 1)
+
+        mock_database.filings.get_filing_by_number = AsyncMock(return_value=None)
+        mock_database.filings.insert_filing = AsyncMock(return_value=1)
+        mock_database.financial_facts.insert_financial_facts_batch = AsyncMock(
+            return_value=[1]
+        )
+
+        mock_filing = Mock()
+        mock_filing.accession_number = "0000104169-24-000123"
+        mock_filing.form = "10-Q"
+        mock_filing.filing_date = "2024-06-07"
+        mock_filing.period_of_report = "2024-04-30"
+        mock_filing.url = "https://example.com/filing"
+        fact = Mock(spec=FinancialFactCreate)
+        fact.period_end = date(2024, 4, 30)
+        fact.axis = None
+        loader.parser.parse_filing = Mock(return_value=[fact])
+
+        await loader._load_single_filing(mock_filing, 15, 1, override=False)
+
+        call_args = mock_database.filings.insert_filing.call_args[0][0]
+        assert call_args.fiscal_year == 2025
+        assert call_args.fiscal_quarter == 1
 
     async def test_load_single_filing_uses_nearby_statement_period(self):
         """A cover date one day off the XBRL period still names the filing.
@@ -522,8 +541,6 @@ class TestXBRLFilingsLoader:
             mock_database.companies.get_filing_entities_by_company_id = AsyncMock(
                 return_value=[Mock(id=123, number="0000320193")]
             )
-            mock_database.filings.align_january_year_end = AsyncMock(return_value=0)
-
             # Mock loading single filing with override - use AsyncMock for async method
             loader._load_single_filing = AsyncMock(return_value=(5, True))
 
@@ -570,8 +587,6 @@ class TestXBRLFilingsLoader:
         mock_database.companies.get_filing_entities_by_company_id = AsyncMock(
             return_value=[Mock(id=123, number="0000320193")]
         )
-        mock_database.filings.align_january_year_end = AsyncMock(return_value=0)
-
         result = await loader.load_company_filings("AAPL", "10-Q", limit=5)
 
         assert "message" in result

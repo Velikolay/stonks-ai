@@ -14,6 +14,32 @@ from ..models import FinancialFactCreate, PeriodType
 
 logger = logging.getLogger(__name__)
 
+# Cover-page period focus. A 10-K declares FY; a 10-Q declares Q1, Q2, or Q3.
+_FOCUS_QUARTER = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4, "FY": 4}
+
+
+def fiscal_focus(
+    entity_info: Optional[dict],
+) -> tuple[Optional[int], Optional[int]]:
+    """Return the fiscal year and quarter declared on the filing cover.
+
+    ``DocumentFiscalYearFocus`` and ``DocumentFiscalPeriodFocus`` are read by
+    edgartools into ``entity_info``. A missing or unrecognized value is left
+    unset so the caller can fall back to the period end.
+
+    Args:
+        entity_info: edgartools entity info, or None.
+
+    Returns:
+        Fiscal year and quarter. Either is None when the cover fact is absent.
+    """
+    if not entity_info:
+        return None, None
+    year_text = str(entity_info.get("fiscal_year") or "").strip()
+    year = int(year_text) if year_text.isdigit() and len(year_text) == 4 else None
+    period = str(entity_info.get("fiscal_period") or "").strip().upper()
+    return year, _FOCUS_QUARTER.get(period)
+
 
 class SECXBRLParser:
     """Parser for SEC XBRL (10-Q, 10-K, etc.) filings using edgartools."""
@@ -57,7 +83,7 @@ class SECXBRLParser:
 
     def __init__(self):
         """Initialize the parser."""
-        pass
+        self.fiscal_focus: tuple[Optional[int], Optional[int]] = (None, None)
 
     @staticmethod
     def _is_nullish(value: object) -> bool:
@@ -121,9 +147,11 @@ class SECXBRLParser:
         Returns:
             List of FinancialFact objects
         """
+        self.fiscal_focus = (None, None)
         try:
             # Get XBRL data from the filing
             xbrl = filing.xbrl()
+            self.fiscal_focus = fiscal_focus(getattr(xbrl, "entity_info", None))
 
             facts = []
 
