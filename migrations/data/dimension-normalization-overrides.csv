@@ -235,3 +235,10 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:CanadianOperationsMember,,False,Geographical,Canada,Early Canadian Operations segment on the country axis
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:UnitedStatesOperationsMember,,False,Geographical,United States,Early United States Operations segment on the country axis
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:OtherInternationalOperationsMember,,False,Geographical,Other International,Early Other International Operations segment on the country axis
+18,srt:ConsolidationItemsAxis,Commercial,,False,Product,Commercial,Commercial segment revenue
+18,srt:ConsolidationItemsAxis,Government,,False,Product,Government,Government segment revenue
+18,srt:ConsolidationItemsAxis,Government Operating Segment,,False,Product,Government,2022-2024 label for the same government segment
+18,srt:StatementGeographicalAxis,France - Geographic Concentration Risk,,False,Geographical,France,Same revenue as country:FR
+18,srt:StatementGeographicalAxis,United Kingdom - Geographic Concentration Risk,,False,Geographical,United Kingdom,Same revenue as country:GB
+18,srt:StatementGeographicalAxis,United States - Geographic Concentration Risk,,False,Geographical,United States,Same revenue as country:US
+18,srt:StatementGeographicalAxis,Rest of world - Geographic Concentration Risk,,False,Geographical,Rest of world,Same revenue as the rest-of-world member
