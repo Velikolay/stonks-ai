@@ -10,7 +10,7 @@ from typing import Optional
 import pandas as pd
 from edgar import Company, Filing
 
-from ..models import FinancialFactCreate, PeriodType
+from ..models import FactDimension, FinancialFactCreate, PeriodType
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +177,7 @@ class SECXBRLParser:
         """Initialize the parser."""
         self.fiscal_focus: tuple[Optional[int], Optional[int]] = (None, None)
         self._reporting_amounts: dict[tuple[str, date], tuple[Decimal, str]] = {}
+        self._axis_defaults: set[str] = set()
 
     @staticmethod
     def _is_nullish(value: object) -> bool:
@@ -251,6 +252,7 @@ class SECXBRLParser:
                 )
                 return []
             self.fiscal_focus = fiscal_focus(getattr(xbrl, "entity_info", None))
+            self._remember_axis_defaults(xbrl)
             try:
                 self._reporting_amounts = reporting_currency_amounts(
                     xbrl.facts.to_dataframe()
@@ -265,11 +267,7 @@ class SECXBRLParser:
 
             # Parse income statement
             income_facts = self._parse_statement(
-                xbrl.statements.income_statement().to_dataframe(
-                    include_unit=True,
-                    include_point_in_time=True,
-                    presentation=False,
-                ),
+                self._statement_frame(xbrl.statements.income_statement()),
                 "Income Statement",
                 include_dimensions=True,
             )
@@ -439,11 +437,7 @@ class SECXBRLParser:
                 statement = xbrl.statements.get(role)
                 if statement is None:
                     continue
-                frame = statement.to_dataframe(
-                    include_unit=True,
-                    include_point_in_time=True,
-                    presentation=False,
-                )
+                frame = self._statement_frame(statement)
             except Exception:
                 logger.exception("Could not read segment disclosure %s", role)
                 continue
@@ -1173,6 +1167,183 @@ class SECXBRLParser:
         }
         return collapsed, ambiguous
 
+    def _statement_frame(self, statement: object) -> pd.DataFrame:
+        """Return a statement grid with each row's XBRL dimensions attached.
+
+        Args:
+            statement: edgartools statement. Its dataframe has one dimension;
+                the raw rows carry the rest.
+
+        Returns:
+            The statement dataframe, with a ``dimension_metadata`` column when
+            the raw rows can be aligned to it.
+        """
+        frame = statement.to_dataframe(  # type: ignore[attr-defined]
+            include_unit=True,
+            include_point_in_time=True,
+            presentation=False,
+        )
+        return self._attach_dimension_metadata(frame, statement)
+
+    def _attach_dimension_metadata(
+        self, frame: pd.DataFrame, statement: object
+    ) -> pd.DataFrame:
+        """Copy dimension coordinates from raw statement rows onto the grid.
+
+        The dataframe drops an abstract the raw rows still contain, so the two
+        sequences are aligned by concept and label rather than by position.
+
+        Args:
+            frame: Statement dataframe from ``to_dataframe``.
+            statement: The same statement, used to read the raw rows.
+
+        Returns:
+            A copy of ``frame`` with ``dimension_metadata`` filled where a raw
+            row matched, or the original frame when the raw rows are unavailable.
+        """
+        if frame is None or frame.empty:
+            return frame
+        try:
+            from edgar.xbrl.statements import StatementView
+
+            raw = statement.get_raw_data(view=StatementView.DETAILED)  # type: ignore[attr-defined]
+        except Exception:
+            logger.exception("Could not read dimension metadata")
+            return frame
+        if not isinstance(raw, list) or not raw:
+            return frame
+
+        attached: list[object] = []
+        cursor = 0
+        for _, row in frame.iterrows():
+            label = self._cell_text(row.get("label"))
+            concept = self._cell_text(row.get("concept"))
+            is_dimension = self._flag(row.get("dimension"))
+            match = None
+            for index in range(cursor, len(raw)):
+                item = raw[index]
+                if (
+                    self._cell_text(item.get("label")) == label
+                    and self._cell_text(item.get("concept")) == concept
+                    and self._flag(item.get("is_dimension")) == is_dimension
+                ):
+                    match = index
+                    break
+            if match is None:
+                attached.append(None)
+                continue
+            cursor = match + 1
+            attached.append(raw[match].get("dimension_metadata"))
+
+        frame = frame.copy()
+        frame["dimension_metadata"] = attached
+        return frame
+
+    @staticmethod
+    def _flag(value: object) -> bool:
+        """Return True for a statement flag cell, including numpy booleans."""
+        if isinstance(value, bool):
+            return value
+        text = "" if value is None else str(value).strip().lower()
+        return text in {"true", "1"}
+
+    @staticmethod
+    def _cell_text(value: object) -> str:
+        """Return a statement cell as text, or an empty string when it is empty."""
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return ""
+        return str(value)
+
+    def _dimension_coordinates(
+        self,
+        row: object,
+        axis: object,
+        member: object,
+        member_label: object,
+    ) -> list[FactDimension]:
+        """Return every XBRL dimension on a row.
+
+        The display member can be a collapsed label. These coordinates stay the
+        members the instance reported, one per axis.
+
+        Args:
+            row: Statement row. ``dimension_metadata`` is a list of coordinates
+                when the statement grid was aligned to the raw rows.
+            axis: Display axis, used when the row has no raw coordinates.
+            member: Display member, used in that same case.
+            member_label: Display member label.
+
+        Returns:
+            One coordinate per XBRL dimension, or a single coordinate taken
+            from the display axis when the raw list is missing.
+        """
+        raw = row.get("dimension_metadata") if hasattr(row, "get") else None
+        coordinates: list[FactDimension] = []
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                dim_axis = str(item.get("dimension") or "").replace("_", ":")
+                dim_member = str(item.get("member") or "").replace("_", ":")
+                dim_label = item.get("member_label") or dim_member
+                if not dim_axis or not dim_member:
+                    continue
+                coordinates.append(
+                    FactDimension(
+                        axis=dim_axis,
+                        member=dim_member,
+                        member_label=str(dim_label),
+                        is_default=self._is_axis_total(dim_member),
+                    )
+                )
+        if coordinates:
+            return coordinates
+        if axis and member:
+            member_id = str(member)
+            return [
+                FactDimension(
+                    axis=str(axis),
+                    member=member_id,
+                    member_label=str(member_label or member),
+                    is_default=self._is_axis_total(member_id),
+                )
+            ]
+        return []
+
+    def _remember_axis_defaults(self, xbrl: object) -> None:
+        """Remember each axis default, the member that means the whole axis.
+
+        Args:
+            xbrl: Parsed filing. ``axes`` maps an axis id to its default member.
+        """
+        defaults: set[str] = set()
+        axes = getattr(xbrl, "axes", None) or {}
+        for axis in axes.values():
+            member = getattr(axis, "default_member_id", None)
+            if member:
+                defaults.add(str(member).replace("_", ":"))
+        self._axis_defaults = defaults
+
+    def _is_axis_total(self, member: str) -> bool:
+        """Return True when a member means the whole axis rather than a slice.
+
+        The definition linkbase names the domain as the axis default. Filers
+        also tag the consolidated total as OperatingSegmentsMember beside one
+        real slice, and that pair is still one region or one product.
+
+        Args:
+            member: Dimension member id, with a colon namespace.
+
+        Returns:
+            True for an axis default, a domain, or the operating-segments total.
+        """
+        local = member.rsplit(":", 1)[-1]
+        return (
+            member in self._axis_defaults
+            or local == "OperatingSegmentsMember"
+            or local.endswith("Domain")
+        )
+
     def _create_dimension_fact(
         self,
         row,
@@ -1313,6 +1484,7 @@ class SECXBRLParser:
                 axis=axis,
                 member=member,
                 member_label=member_label,
+                dimensions=self._dimension_coordinates(row, axis, member, member_label),
                 statement=statement_type,
                 period_end=period_end,
                 comparative_period_end=comparative_period_end,

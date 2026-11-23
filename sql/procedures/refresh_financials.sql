@@ -27,6 +27,7 @@ BEGIN
             tmp_dimension_normalization_new,
             tmp_financial_facts_normalized_new,
             tmp_breakdown_rows,
+            tmp_context_breakdowns,
             tmp_dimension_breakdowns_new,
             tmp_quarterly_financials_new,
             tmp_yearly_financials_new;

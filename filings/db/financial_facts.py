@@ -20,6 +20,7 @@ class FinancialFactOperationsAsync:
         self.engine = engine
         self.financial_facts_table = metadata.tables["financial_facts"]
         self.filings_table = metadata.tables["filings"]
+        self.dimensions_table = metadata.tables["financial_fact_dimensions"]
 
     async def insert_financial_fact(self, fact: FinancialFact) -> Optional[int]:
         """Insert a new financial fact and return its ID."""
@@ -116,6 +117,21 @@ class FinancialFactOperationsAsync:
                     fact_id = result.scalar()
                     fact_ids.append(fact_id)
                     key_id_map[fact.key] = fact_id
+                    if fact.dimensions:
+                        await conn.execute(
+                            insert(self.dimensions_table),
+                            [
+                                {
+                                    "fact_id": fact_id,
+                                    "ordinal": ordinal,
+                                    "axis": dimension.axis,
+                                    "member": dimension.member,
+                                    "member_label": dimension.member_label,
+                                    "is_default": dimension.is_default,
+                                }
+                                for ordinal, dimension in enumerate(fact.dimensions)
+                            ],
+                        )
 
                 for fact in facts:
                     if fact.abstract_key or fact.parent_key:

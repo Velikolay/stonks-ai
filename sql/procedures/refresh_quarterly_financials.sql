@@ -213,6 +213,15 @@ BEGIN
             ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
             ff.period_end, ff.filing_id, ff.concept, ff.id DESC
     ),
+    -- Amounts only. A statement header shares the label and the period, so
+    -- it sorts ahead of the total and the year-to-date figure subtracts
+    -- nothing. The year-end residual then goes negative.
+    amount_rows AS (
+        SELECT * FROM quarterly_filings_raw
+        WHERE NOT is_abstract
+        UNION ALL
+        SELECT * FROM comparative_backfill
+    ),
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
@@ -244,11 +253,7 @@ BEGIN
                 THEN LAG(COALESCE(prev_ytd.value, q.value)) OVER w
                 ELSE NULL
             END AS prev_value
-        FROM (
-            SELECT * FROM quarterly_filings_raw
-            UNION ALL
-            SELECT * FROM comparative_backfill
-        ) q
+        FROM amount_rows q
         LEFT JOIN filings k ON k.id = q.fiscal_tag
         LEFT JOIN ytd_anchor prev_ytd
             ON q.period = 'Q'
@@ -264,6 +269,20 @@ BEGIN
             PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member
             ORDER BY q.period_end
         )
+
+        UNION ALL
+
+        -- The header is not a quarter. It is appended so the statement tree
+        -- still has a row to point at. Its value is null, so the amount
+        -- columns above do not apply.
+        SELECT
+            a.*,
+            NULL::date AS annual_period_end,
+            false AS is_non_additive,
+            NULL::date AS prev_period_end,
+            NULL::numeric AS prev_value
+        FROM quarterly_filings_raw a
+        WHERE a.is_abstract
     ),
     quarterly_filings AS (
         SELECT

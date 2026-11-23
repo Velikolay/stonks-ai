@@ -1,4 +1,4 @@
-"""Add fact overrides table
+"""Add fact overrides and fact dimensions tables
 
 Revision ID: 0003
 Revises: 0002
@@ -39,6 +39,27 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_table(
+        "financial_fact_dimensions",
+        sa.Column("fact_id", sa.BigInteger(), nullable=False),
+        sa.Column("ordinal", sa.Integer(), nullable=False),
+        sa.Column("axis", sa.String(), nullable=False),
+        sa.Column("member", sa.String(), nullable=False),
+        sa.Column("member_label", sa.String(), nullable=False),
+        sa.Column(
+            "is_default",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["fact_id"],
+            ["financial_facts.id"],
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("fact_id", "ordinal"),
+    )
+
     # Create rewrite rules table
     table = op.create_table(
         "financial_facts_overrides",
@@ -189,6 +210,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_table("financial_fact_dimensions")
     op.execute(
         "DROP TRIGGER IF EXISTS update_financial_facts_overrides_updated_at ON financial_facts_overrides"
     )

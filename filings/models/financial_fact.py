@@ -15,6 +15,19 @@ class PeriodType(str, Enum):
     Q = "Q"  # Quarter
 
 
+class FactDimension(BaseModel):
+    """One XBRL axis and member on a fact.
+
+    A fact can carry several. The fact's own axis and member stay the single
+    display coordinate the rest of the pipeline already uses.
+    """
+
+    axis: str
+    member: str
+    member_label: str
+    is_default: bool = False
+
+
 class FinancialFactBase(BaseModel):
     """Base financial fact model."""
 
@@ -54,6 +67,7 @@ class FinancialFactCreate(FinancialFactBase):
     key: str
     parent_key: Optional[str] = None
     abstract_key: Optional[str] = None
+    dimensions: list[FactDimension] = Field(default_factory=list)
 
 
 class FinancialFact(FinancialFactBase):

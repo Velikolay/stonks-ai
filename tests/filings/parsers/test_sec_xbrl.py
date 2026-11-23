@@ -1428,6 +1428,54 @@ class TestSECXBRLParser:
         assert by_member["amd:ClientMember"] == "Client"
         assert by_member["amd:GamingMember"] == "Gaming"
 
+    def test_dimension_metadata_is_kept_beside_the_display_member(self):
+        """Raw coordinates stay on the fact after the display member collapses."""
+        parser = SECXBRLParser()
+        period = "2025-03-29 (Q1)"
+        metadata = [
+            {
+                "dimension": "srt:ConsolidationItemsAxis",
+                "member": "us-gaap_OperatingSegmentsMember",
+                "member_label": "Operating Segments",
+            },
+            {
+                "dimension": "srt:ProductOrServiceAxis",
+                "member": "nvda_DataCenterMember",
+                "member_label": "Data Center",
+            },
+        ]
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax"
+                ]
+                * 2,
+                "label": [
+                    "Operating Segments - Data Center",
+                    "Operating Segments - Embedded",
+                ],
+                "abstract": [False, False],
+                "dimension": [True, True],
+                "dimension_axis": ["srt:ConsolidationItemsAxis"] * 2,
+                "dimension_member": ["us-gaap_OperatingSegmentsMember"] * 2,
+                "dimension_member_label": ["Operating Segments"] * 2,
+                "dimension_metadata": [metadata, metadata[:1]],
+                "unit": ["usd", "usd"],
+                "weight": [1.0, 1.0],
+                "preferred_sign": [1.0, 1.0],
+                "point_in_time": [False, False],
+                period: [3674.0, 823.0],
+            }
+        )
+
+        facts = parser._parse_statement(frame, "Income Statement", True)
+        data_center = next(fact for fact in facts if fact.member == "Data Center")
+
+        assert [(item.axis, item.member) for item in data_center.dimensions] == [
+            ("srt:ConsolidationItemsAxis", "us-gaap:OperatingSegmentsMember"),
+            ("srt:ProductOrServiceAxis", "nvda:DataCenterMember"),
+        ]
+
     def test_dimension_suffix_keeps_parent_when_suffixes_collide(self):
         """Two reused parents that share a child name stay on different members."""
         parser = SECXBRLParser()
