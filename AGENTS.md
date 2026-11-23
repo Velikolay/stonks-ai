@@ -224,8 +224,13 @@ sum past the line means that split does not apply there. Members reprinted
 coarser than the total, such as millions beside an exact dollar total, may
 overshoot by half a rounding unit each, up to 0.1%. That split still applies
 and the bars stay at the filed values. Drill down through a
-member's own `breakdowns`. A member in no breakdown is not additive. Axes wider
-than 16 members and per-share amounts are skipped.
+member's own `breakdowns`. A member in no breakdown is not additive. A flat
+axis wider than 16 members is skipped, and so are per-share amounts. A fact with several stored XBRL dimensions is not part of that flat list,
+unless every extra dimension is the axis default or a member carried by every
+cell of that axis, both of which mean the whole rather than a second cut.
+The fact's breakdown is every sibling that shares the other dimensions and adds
+up to the fact with exactly those dimensions; that set is not searched and is
+not capped. A declared breakdown still matches members the flat list left out.
 
 **Dedup.** Rows are partitioned by company, statement, normalized label, axis,
 member and period, then ranked: amendments first, then the period's own filing,
@@ -245,7 +250,8 @@ before assuming ingestion dropped it.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
 the previous quarter when that quarter ended 80 to 100 days earlier, or that
-quarter's year-to-date total when it was published beside it. A dimension
+quarter's year-to-date total when it was published beside it. A statement
+header on the same label is not that previous quarter. A dimension
 column marked as a quarter is stored as that quarter, and its year-to-date
 total is kept only so Q4 can subtract the nine-month figure. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only

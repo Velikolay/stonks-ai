@@ -213,6 +213,15 @@ BEGIN
             ff.company_id, ff.statement, ff.normalized_label, ff.axis, ff.member,
             ff.period_end, ff.filing_id, ff.concept, ff.id DESC
     ),
+    -- Amounts only. A statement header shares the label and the period, and
+    -- with no tie-break it lands between two quarters, so the year-to-date
+    -- total subtracts nothing and the year-end residual goes negative.
+    amount_rows AS (
+        SELECT * FROM quarterly_filings_raw
+        WHERE NOT is_abstract
+        UNION ALL
+        SELECT * FROM comparative_backfill
+    ),
     quarterly_filings_with_prev AS (
         SELECT
             q.*,
@@ -244,11 +253,7 @@ BEGIN
                 THEN LAG(COALESCE(prev_ytd.value, q.value)) OVER w
                 ELSE NULL
             END AS prev_value
-        FROM (
-            SELECT * FROM quarterly_filings_raw
-            UNION ALL
-            SELECT * FROM comparative_backfill
-        ) q
+        FROM amount_rows q
         LEFT JOIN filings k ON k.id = q.fiscal_tag
         LEFT JOIN ytd_anchor prev_ytd
             ON q.period = 'Q'
@@ -262,8 +267,31 @@ BEGIN
             AND prev_ytd.concept = q.concept
         WINDOW w AS (
             PARTITION BY q.company_id, q.statement, q.normalized_label, q.axis, q.member
-            ORDER BY q.period_end
+            ORDER BY q.period_end, q.id
         )
+
+        UNION ALL
+
+        SELECT
+            a.*,
+            k.fiscal_period_end AS annual_period_end,
+            (
+                a.period IS NULL
+                OR a.concept IN (
+                    'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic',
+                    'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
+                )
+                OR (
+                    COALESCE(a.unit, '') = 'shares'
+                    AND a.concept ILIKE '%SharesOutstanding%'
+                    AND a.concept NOT ILIKE '%WeightedAverage%'
+                )
+            ) AS is_non_additive,
+            NULL::date AS prev_period_end,
+            NULL::numeric AS prev_value
+        FROM quarterly_filings_raw a
+        LEFT JOIN filings k ON k.id = a.fiscal_tag
+        WHERE a.is_abstract
     ),
     quarterly_filings AS (
         SELECT

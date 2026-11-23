@@ -177,3 +177,121 @@ def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
         ("", ("iPad", "iPhone", "Services"), (2023, 2024), "override"),
         ("", ("Products", "Services"), (2023, 2024), "override"),
     ]
+
+
+def _line_revenue() -> Dict[int, Dict[str, int]]:
+    """Revenue whose product lines only add up inside one dimension context.
+
+    Seventeen lines would put the flat axis over the 16-member cap. They are
+    stored as a second dimension of Products, so the flat list stays Domestic,
+    International and Products.
+    """
+    lines_2023 = {
+        f"Line {index:02d}": 48 if index == 1 else 47 for index in range(1, 18)
+    }
+    lines_2024 = {
+        f"Line {index:02d}": 100 if index == 1 else 50 for index in range(1, 18)
+    }
+    return {
+        2023: {
+            "": 1000,
+            "Products": 800,
+            "Domestic": 600,
+            "International": 400,
+            **lines_2023,
+        },
+        2024: {
+            "": 1200,
+            "Products": 900,
+            "Domestic": 700,
+            "International": 500,
+            **lines_2024,
+        },
+    }
+
+
+def _mark_line_context(conn: Connection, lines: List[str]) -> None:
+    """Store Products as one dimension and each line as Products plus itself."""
+    conn.execute(
+        text(
+            "INSERT INTO financial_fact_dimensions (fact_id, ordinal, axis, member, "
+            "member_label) SELECT id, 0, axis, member, member_label "
+            "FROM financial_facts WHERE member_label = 'Products'"
+        )
+    )
+    for line in lines:
+        conn.execute(
+            text(
+                "INSERT INTO financial_fact_dimensions (fact_id, ordinal, axis, "
+                "member, member_label) SELECT id, 0, :axis, 'test:ProductsMember', "
+                "'Products' FROM financial_facts WHERE member_label = :line "
+                "UNION ALL SELECT id, 1, 'test:LineAxis', member, member_label "
+                "FROM financial_facts WHERE member_label = :line"
+            ),
+            {"axis": AXIS, "line": line},
+        )
+
+
+def test_context_breakdown_ignores_the_flat_member_cap(test_engine: Engine) -> None:
+    """A cross-tab sums in full, and the flat regions still infer beside it."""
+    revenue = _line_revenue()
+    lines = [label for label in revenue[2023] if label.startswith("Line ")]
+    with test_engine.begin() as conn:
+        _seed(conn, revenue)
+        _mark_line_context(conn, lines)
+        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+        breakdowns = _breakdowns(conn)
+
+    assert breakdowns == [
+        ("", ("Domestic", "International"), (2023, 2024), "inferred"),
+        ("Products", tuple(sorted(lines)), (2023, 2024), "inferred"),
+    ]
+
+
+def test_axis_default_stays_on_the_flat_list(test_engine: Engine) -> None:
+    """The axis total beside a region does not turn that region into a cell."""
+    with test_engine.begin() as conn:
+        _seed(conn, REVENUE)
+        conn.execute(
+            text(
+                "INSERT INTO financial_fact_dimensions (fact_id, ordinal, axis, "
+                "member, member_label, is_default) "
+                "SELECT id, 0, axis, member, member_label, false "
+                "FROM financial_facts WHERE member_label IN "
+                "('Domestic', 'International') "
+                "UNION ALL SELECT id, 1, 'srt:ConsolidationItemsAxis', "
+                "'us-gaap:OperatingSegmentsMember', 'Operating segments', true "
+                "FROM financial_facts WHERE member_label IN "
+                "('Domestic', 'International')"
+            )
+        )
+        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+        breakdowns = _breakdowns(conn)
+
+    assert breakdowns == [
+        ("", ("Domestic", "International"), (2023, 2024), "inferred"),
+        ("", ("Products", "Services"), (2023, 2024), "inferred"),
+        ("Products", ("iPad", "iPhone"), (2023, 2024), "inferred"),
+    ]
+
+
+def test_companion_on_every_member_stays_on_the_flat_list(test_engine: Engine) -> None:
+    """A total tagged on every region is not a second cut of those regions."""
+    with test_engine.begin() as conn:
+        _seed(conn, REVENUE)
+        conn.execute(
+            text(
+                "INSERT INTO financial_fact_dimensions (fact_id, ordinal, axis, "
+                "member, member_label, is_default) "
+                "SELECT id, 0, 'srt:ProductOrServiceAxis', 'test:StreamingMember', "
+                "'Streaming', false FROM financial_facts WHERE member_label IN "
+                "('Domestic', 'International') "
+                "UNION ALL SELECT id, 1, axis, member, member_label, false "
+                "FROM financial_facts WHERE member_label IN "
+                "('Domestic', 'International')"
+            )
+        )
+        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+        parents = {row[1] for row in _breakdowns(conn) if row[0] == ""}
+
+    assert ("Domestic", "International") in parents
