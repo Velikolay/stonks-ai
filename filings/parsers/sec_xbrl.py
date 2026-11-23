@@ -1210,7 +1210,7 @@ class SECXBRLParser:
         except Exception:
             logger.exception("Could not read dimension metadata")
             return frame
-        if not raw:
+        if not isinstance(raw, list) or not raw:
             return frame
 
         attached: list[object] = []
