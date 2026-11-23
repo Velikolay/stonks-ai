@@ -339,13 +339,13 @@ BEGIN
                 WHEN q.period = 'Q'
                     AND a.value IS NOT NULL
                     AND NOT q.is_non_additive
-                    AND COALESCE(q.unit, '') <> 'usdPerShare'
+                    AND COALESCE(q.unit, '') !~* 'pershare$'
                     AND q.annual_period_end IS NOT NULL
                     AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
                 THEN a.value
                 WHEN q.period = 'YTD'
                     AND NOT q.is_non_additive
-                    AND COALESCE(q.unit, '') <> 'usdPerShare'
+                    AND COALESCE(q.unit, '') !~* 'pershare$'
                     AND q.annual_period_end IS NOT NULL
                     AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
                 THEN q.value
@@ -354,7 +354,7 @@ BEGIN
                 q.period = 'Q'
                 AND a.value IS NOT NULL
                 AND NOT q.is_non_additive
-                AND COALESCE(q.unit, '') <> 'usdPerShare'
+                AND COALESCE(q.unit, '') !~* 'pershare$'
                 AND q.annual_period_end IS NOT NULL
                 AND (q.annual_period_end - q.period_end) BETWEEN 80 AND 100
             ) AS prefer_ytd_anchor
@@ -485,7 +485,7 @@ BEGIN
                 AND NOT drop_ytd
                 AND NOT is_comparative_backfill
                 AND NOT is_non_additive
-                AND COALESCE(unit, '') <> 'usdPerShare'
+                AND COALESCE(unit, '') !~* 'pershare$'
 
             UNION ALL
 
@@ -955,7 +955,7 @@ BEGIN
             -- quarters sit under the 10-K. A mid-year stock split leaves
             -- those quarters on another share basis and overshoots.
             AND (
-                COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+                COALESCE(a.unit, '') !~* 'pershare$'
                 OR ABS(COALESCE(nm.value, q.value))
                     <= ABS(a.value) * 1.05 + 0.05
             )
@@ -1006,7 +1006,7 @@ BEGIN
                 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding'
             )
             AND (
-                COALESCE(a.unit, '') NOT IN ('usdPerShare', 'usdeps')
+                COALESCE(a.unit, '') !~* 'pershare$'
                 OR ABS(q.value) <= ABS(a.value) * 1.05 + 0.05
             )
             AND q.value IS NOT NULL

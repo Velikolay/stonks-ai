@@ -9,6 +9,7 @@ import pandas as pd
 from filings.models import PeriodType
 from filings.parsers.sec_xbrl import (
     SECXBRLParser,
+    _filed_unit,
     fiscal_focus,
     reporting_currency_amounts,
 )
@@ -355,6 +356,15 @@ class TestSECXBRLParser:
         assert reporting_currency_amounts(facts) == {}
         assert reporting_currency_amounts(None) == {}
 
+    def test_filed_unit_is_stored_unchanged(self):
+        """The raw unit ref is what gets stored. A blank ref uses the default."""
+        assert _filed_unit("iso4217_usd") == "iso4217_usd"
+        assert _filed_unit("unit_twd") == "unit_twd"
+        assert _filed_unit("unit12") == "unit12"
+        assert _filed_unit(None, "usd") == "usd"
+        assert _filed_unit("  ", "usd") == "usd"
+        assert _filed_unit(float("nan")) is None
+
     def test_face_fact_uses_reporting_currency_when_the_frame_does_not(self):
         """The current-year convenience translation is replaced on the face row."""
         parser = SECXBRLParser()
@@ -390,6 +400,33 @@ class TestSECXBRLParser:
         assert fact.value == Decimal("1339255000000")
         assert fact.unit == "twd"
         assert fact.comparative_value == Decimal("1069985000000")
+
+    def test_face_fact_keeps_the_filed_unit(self):
+        """A unit ref is stored as written when the amount is not replaced."""
+        parser = SECXBRLParser()
+        row = pd.Series(
+            {
+                "concept": "us-gaap_Revenues",
+                "label": "Revenue",
+                "2024-09-28 (FY)": 100,
+                "unit": "iso4217_usd",
+                "abstract": False,
+                "weight": 1,
+                "parent_concept": float("nan"),
+                "parent_abstract_concept": float("nan"),
+            }
+        )
+
+        fact = parser._create_financial_fact_with_hierarchy(
+            row=row,
+            statement_type="Income Statement",
+            period_col="2024-09-28 (FY)",
+            comparative_period_col=None,
+            position=0,
+        )
+
+        assert fact is not None
+        assert fact.unit == "iso4217_usd"
 
     def test_determine_period_type_treats_20f_as_annual(self):
         """A 20-F is an annual report, so its duration facts are year-to-date."""

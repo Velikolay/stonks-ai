@@ -35,6 +35,27 @@ def _as_date(value: object) -> Optional[date]:
         return None
 
 
+def _filed_unit(unit: object, default: Optional[str] = None) -> Optional[str]:
+    """Return the unit ref as the filing wrote it.
+
+    A missing or blank ref uses ``default``. The text is stored unchanged;
+    currency canonicalization happens when the normalized facts are built.
+
+    Args:
+        unit: Unit ref from a statement frame or fact.
+        default: Value to use when the frame has no unit.
+
+    Returns:
+        The filed unit ref, or ``default``.
+    """
+    if unit is None or (isinstance(unit, float) and pd.isna(unit)):
+        return default
+    text = str(unit).strip()
+    if text == "":
+        return default
+    return text
+
+
 def _reporting_unit(currency: str, unit_ref: object) -> str:
     """Return the unit name for one reporting-currency fact."""
     code = currency.lower()
@@ -254,9 +275,8 @@ class SECXBRLParser:
             self.fiscal_focus = fiscal_focus(getattr(xbrl, "entity_info", None))
             self._remember_axis_defaults(xbrl)
             try:
-                self._reporting_amounts = reporting_currency_amounts(
-                    xbrl.facts.to_dataframe()
-                )
+                facts_frame = xbrl.facts.to_dataframe()
+                self._reporting_amounts = reporting_currency_amounts(facts_frame)
             except Exception:
                 logger.exception(
                     "Could not read reporting-currency facts for %s",
@@ -788,7 +808,7 @@ class SECXBRLParser:
         if fact.concept in cls._TOTAL_REVENUE_CONCEPTS:
             return True
         unit = (fact.unit or "").casefold()
-        if unit in {"usdpershare", "usdeps"}:
+        if unit.endswith("pershare") or unit == "usdeps":
             return True
         local = fact.concept.split(":")[-1]
         return local.endswith("PerShare") or local.startswith("EarningsPerShare")
@@ -1408,7 +1428,7 @@ class SECXBRLParser:
 
             is_abstract = row.get("abstract")
             label = base_label_by_concept.get(concept, row.get("label", concept))
-            unit = row.get("unit", "usd" if not is_abstract else None)
+            unit = _filed_unit(row.get("unit"), "usd" if not is_abstract else None)
 
             value = row.get(period_col)
             comparative_value = (
@@ -1696,7 +1716,7 @@ class SECXBRLParser:
             concept = row.get("concept", metric)
             value = row.get("numeric_value", row.get("value"))
             weight = row.get("weight")
-            unit = row.get("unit", "usd")
+            unit = _filed_unit(row.get("unit"), "usd")
 
             # Get the label from the XBRL data
             label = row.get("label", concept)
@@ -2104,7 +2124,7 @@ class SECXBRLParser:
             )
             label = row.get("label", concept)
             is_abstract = row.get("abstract")
-            unit = row.get("unit", "usd" if not is_abstract else None)
+            unit = _filed_unit(row.get("unit"), "usd" if not is_abstract else None)
             value = row.get(period_col)
             comparative_value = (
                 row.get(comparative_period_col) if comparative_period_col else None

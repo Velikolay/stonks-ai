@@ -20,10 +20,13 @@ logger = logging.getLogger(__name__)
 def validate_override_constraints(
     is_abstract: bool,
     parent_concept: Optional[str],
-    unit: Optional[Decimal],
+    unit: Optional[str],
     weight: Optional[Decimal],
+    company_id: Optional[int] = None,
 ) -> None:
     """Validate override constraints.
+
+    A global override does not name a unit. The fact's currency is kept.
 
     Raises:
         ValueError: If constraints are violated.
@@ -36,7 +39,7 @@ def validate_override_constraints(
         if weight is None:
             raise ValueError("Records with parent_concept must have a weight specified")
 
-    if not is_abstract:
+    if not is_abstract and company_id != 0:
         if unit is None:
             raise ValueError(
                 "Non-abstract records (is_abstract=False) must have a unit specified"
@@ -159,6 +162,7 @@ class ConceptNormalizationOverridesOperationsAsync:
             parent_concept=override.parent_concept,
             unit=override.unit,
             weight=override.weight,
+            company_id=override.company_id,
         )
 
         try:
@@ -257,6 +261,7 @@ class ConceptNormalizationOverridesOperationsAsync:
             parent_concept=final_parent_concept,
             unit=final_unit,
             weight=final_weight,
+            company_id=company_id,
         )
 
         try:

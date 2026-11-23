@@ -10,7 +10,7 @@ BEGIN
     END IF;
 
     CREATE TEMP TABLE tmp_financial_facts_normalized_new ON COMMIT DROP AS
-    WITH RECURSIVE financial_facts_base AS (
+    WITH RECURSIVE financial_facts_raw AS (
         SELECT
             ff.id,
             ff.filing_id,
@@ -23,7 +23,7 @@ BEGIN
             ff.comparative_value,
             COALESCE(ffo.weight, ff.weight) AS weight,
             ff.print_sign,
-            ff.unit,
+            ff.unit AS unit,
             COALESCE(ffo.axis, ff.axis) AS axis,
             COALESCE(ffo.member, ff.member) AS member,
             COALESCE(ffo.member_label, ff.member_label) AS member_label,
@@ -56,7 +56,7 @@ BEGIN
             ff.comparative_value,
             ffo.weight,
             ff.print_sign,
-            ff.unit,
+            ff.unit AS unit,
             ffo.axis,
             ffo.member,
             ffo.member_label,
@@ -74,6 +74,48 @@ BEGIN
             AND ff.company_id = ffo.company_id
         WHERE ffo.company_id = ANY(company_ids)
             AND ffo.source_fact_id IS NOT NULL
+    ),
+    -- A fact's unit ref is often an ISO currency wrapped in a filing-specific
+    -- name. The currency code is the unit. Anything else is left as stored.
+    financial_facts_base AS (
+        SELECT
+            r.id,
+            r.filing_id,
+            r.company_id,
+            r.form_type,
+            r.concept,
+            r.label,
+            r.is_abstract,
+            r.value,
+            r.comparative_value,
+            r.weight,
+            r.print_sign,
+            CASE
+                WHEN r.unit IS NULL OR btrim(r.unit) = '' THEN NULL
+                WHEN lower(btrim(r.unit)) ~ '^[a-z]{3}$' THEN lower(btrim(r.unit))
+                WHEN lower(btrim(r.unit)) ~ '^[a-z]{3}pershare$'
+                    THEN substring(lower(btrim(r.unit)) from '^[a-z]{3}') || 'PerShare'
+                WHEN lower(btrim(r.unit)) = 'usdeps' THEN 'usdPerShare'
+                WHEN lower(btrim(r.unit)) ~ '(iso4217_?|unit_)[a-z]{3}$'
+                    THEN substring(lower(btrim(r.unit)) from '([a-z]{3})$')
+                WHEN lower(btrim(r.unit)) ~ '^u_iso4217[a-z]{3}$'
+                    THEN substring(lower(btrim(r.unit)) from '([a-z]{3})$')
+                WHEN lower(btrim(r.unit)) ~ '^u_[a-z]{3}$'
+                    THEN substring(lower(btrim(r.unit)) from '^u_([a-z]{3})$')
+                ELSE btrim(r.unit)
+            END AS unit,
+            r.axis,
+            r.member,
+            r.member_label,
+            r.statement,
+            r.period_end,
+            r.comparative_period_end,
+            r.period,
+            r.position,
+            r.parent_id,
+            r.abstract_id,
+            r.fact_override_id
+        FROM financial_facts_raw r
     ),
     -- A restatement is the same slot reported again by a later filing. Dedup
     -- keeps that filing; the earlier value stays so a quarter can still be
@@ -108,6 +150,15 @@ BEGIN
         FROM hierarchy_normalization
         WHERE company_id = ANY(company_ids)
     ),
+    -- One currency on the filing. A per-share line tagged shares or perShare
+    -- has no code of its own, so it takes this one.
+    filing_currency AS (
+        SELECT filing_id, MIN(lower(unit)) AS currency
+        FROM financial_facts_overridden_cte
+        WHERE unit ~* '^[a-z]{3}$'
+        GROUP BY filing_id
+        HAVING COUNT(DISTINCT lower(unit)) = 1
+    ),
     normalized_facts AS (
         SELECT
             ff.id,
@@ -130,7 +181,21 @@ BEGIN
             END AS comparative_value,
             COALESCE(cno.weight, cn.weight, ff.weight) AS weight,
             ff.print_sign,
-            COALESCE(cno.unit, cn.unit, ff.unit) AS unit,
+            -- A company override replaces the unit. A global override does not:
+            -- the fact's currency stays, and a per-share concept keeps that shape.
+            CASE
+                WHEN cno.is_global IS NOT TRUE AND cno.unit IS NOT NULL
+                    THEN cno.unit
+                WHEN cn.unit IS NOT NULL THEN cn.unit
+                WHEN split_part(ff.concept, ':', 2) ~* '(^EarningsPerShare|PerShare$)'
+                    AND ff.unit ~* '^[a-z]{3}$'
+                    THEN ff.unit || 'PerShare'
+                WHEN split_part(ff.concept, ':', 2) ~* '(^EarningsPerShare|PerShare$)'
+                    AND lower(ff.unit) IN ('shares', 'pershare')
+                    AND fc.currency IS NOT NULL
+                    THEN fc.currency || 'PerShare'
+                ELSE ff.unit
+            END AS unit,
             COALESCE(dn.normalized_axis_label, ff.axis) AS axis,
             COALESCE(dn.normalized_member_label, ff.member_label) AS member,
             ff.statement,
@@ -176,6 +241,8 @@ BEGIN
             END AS abstract_concept,
             FALSE AS is_synthetic
         FROM financial_facts_overridden_cte ff
+        LEFT JOIN filing_currency fc
+            ON fc.filing_id = ff.filing_id
         LEFT JOIN LATERAL (
             SELECT *
             FROM concept_normalization_overrides o
@@ -227,7 +294,13 @@ BEGIN
             0 AS comparative_value,
             cno.weight,
             NULL::numeric AS print_sign,
-            cno.unit,
+            CASE
+                WHEN cno.is_abstract THEN NULL
+                WHEN cno.is_global IS NOT TRUE AND cno.unit IS NOT NULL
+                    THEN cno.unit
+                WHEN f.unit ~* '^[a-z]{3}(pershare)?$' THEN f.unit
+                ELSE NULL
+            END AS unit,
             '' AS axis,
             '' AS member,
             cno.statement,
@@ -394,7 +467,9 @@ BEGIN
         )
             *
         FROM rolled_up_facts
-        ORDER BY company_id, statement, normalized_label, axis, member, value, period_end, id
+        ORDER BY
+            company_id, statement, normalized_label, axis, member, value, period_end,
+            (unit IS NULL), id
     ),
     chain_walk AS (
         SELECT

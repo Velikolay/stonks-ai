@@ -330,11 +330,11 @@ BEGIN
             co.company_group_weight,
             co.global_group_weight
         ) AS weight,
+        -- A global override does not name a currency. Only a company override,
+        -- including one inherited by its group, replaces the fact's unit.
         COALESCE(
             co.company_unit,
-            co.global_unit,
-            co.company_group_unit,
-            co.global_group_unit
+            co.company_group_unit
         ) AS unit,
         co.group_id,
         co.source,
