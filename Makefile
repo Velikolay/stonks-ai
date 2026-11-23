@@ -1,6 +1,5 @@
 .PHONY: help install format lint test clean db-init db-reset db-status \
-	ingest refresh overrides-load overrides-check psql diagnose \
-	backfill-dimensions
+	ingest refresh overrides-load overrides-check psql diagnose
 
 # Connection string used by the psql-based targets below. Override per-invocation
 # with `make psql DATABASE_URL=...`.
@@ -155,11 +154,6 @@ overrides-load:
 overrides-check:
 	@echo "🔎 Checking override CSVs (dry run)..."
 	python -m filings.scripts.seed_overrides --dry-run
-
-backfill-dimensions:
-	@echo "📎 Attaching XBRL dimensions to stored facts..."
-	python -m filings.scripts.backfill_fact_dimensions \
-		$(if $(COMPANY_IDS),--company-ids $(COMPANY_IDS))
 
 diagnose:
 	@for f in sql/diagnostics/*.sql; do \
