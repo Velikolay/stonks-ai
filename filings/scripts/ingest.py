@@ -16,6 +16,7 @@ import asyncio
 import logging
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from typing import List, Optional, Sequence, Set
 
@@ -23,6 +24,8 @@ from dotenv import load_dotenv
 from edgar import set_identity
 
 from filings.db import AsyncFilingsDatabase
+from filings.exchange_rates import download_rates
+from filings.fx import reporting_currency
 from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 logger = logging.getLogger(__name__)
@@ -138,6 +141,45 @@ async def _load_with_retry(
     return result
 
 
+async def _ensure_foreign_rates(
+    database: AsyncFilingsDatabase, tickers: Sequence[str], company_ids: Set[int]
+) -> None:
+    """Store a USD rate for each period end of a foreign issuer.
+
+    A USD filer is skipped. An existing rate for a date is updated.
+
+    Args:
+        database: Open filings database.
+        tickers: Tickers in this ingest run, including those with nothing new.
+        company_ids: Companies that received filings in this run.
+    """
+    ids = set(company_ids)
+    for ticker in tickers:
+        company = await database.companies.get_company_by_ticker(ticker)
+        if company is not None:
+            ids.add(company.id)
+    if not ids:
+        return
+    counts = await database.exchange_rates.unit_counts(sorted(ids))
+    ends = await database.exchange_rates.period_ends(sorted(ids))
+    dates_by_currency: dict[str, set[date]] = {}
+    for company_id, units in counts.items():
+        code = reporting_currency(units)
+        if code is None:
+            continue
+        dates_by_currency.setdefault(code, set()).update(ends.get(company_id, []))
+    if not dates_by_currency:
+        return
+    rows = []
+    for currency in sorted(dates_by_currency):
+        dates = sorted(dates_by_currency[currency])
+        logger.info("Loading %s rates for %s period ends", currency, len(dates))
+        rows.extend(await asyncio.to_thread(download_rates, currency, dates))
+    if rows:
+        stored = await database.exchange_rates.upsert(rows)
+        logger.info("Stored %s exchange rates", stored)
+
+
 def _summarize(results: Sequence[dict]) -> None:
     """Log a per-ticker/form summary table of the run."""
     header = f"{'TICKER':<14} {'FORM':<8} {'FILINGS':>7} {'FACTS':>9}  STATUS"
@@ -211,6 +253,7 @@ async def ingest(
                 results.append(summary)
                 await asyncio.sleep(delay)
 
+        await _ensure_foreign_rates(database, tickers, company_ids)
         if refresh and company_ids:
             logger.info("Refreshing financials for company_ids=%s", sorted(company_ids))
             await database.refresh_financials_for_companies(sorted(company_ids))

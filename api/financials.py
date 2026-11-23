@@ -1,6 +1,7 @@
 """Financial data endpoints."""
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from filings.db import AsyncFilingsDatabase
+from filings.fx import convert_to_usd, foreign_currency
 from filings.models.quarterly_financials import QuarterlyFinancialsFilter
 from filings.models.yearly_financials import YearlyFinancialsFilter
 
@@ -18,6 +20,47 @@ router = APIRouter(prefix="/financials", tags=["financials"])
 
 # Global database instance (will be set during app initialization)
 filings_db: Optional[AsyncFilingsDatabase] = None
+
+
+async def _convert_groups_to_usd(metric_groups: Dict[tuple, Dict[str, Any]]) -> None:
+    """Replace foreign amounts with USD at each period's stored rate.
+
+    Args:
+        metric_groups: Grouped metric payloads. Converted groups change unit
+        and value in place.
+    """
+    if filings_db is None:
+        return
+    needed: Dict[str, Set[date]] = {}
+    for group in metric_groups.values():
+        parsed = foreign_currency(group["unit"])
+        if parsed is None:
+            continue
+        code, _per_share = parsed
+        for value in group["values"]:
+            if value.period_end:
+                needed.setdefault(code, set()).add(date.fromisoformat(value.period_end))
+    if not needed:
+        return
+    period_ends = [day for days in needed.values() for day in days]
+    rates = await filings_db.exchange_rates.series(
+        list(needed), min(period_ends), max(period_ends)
+    )
+    for group in metric_groups.values():
+        period_values = [
+            (
+                date.fromisoformat(value.period_end) if value.period_end else None,
+                value.value,
+            )
+            for value in group["values"]
+        ]
+        converted = convert_to_usd(group["unit"], period_values, rates)
+        if converted is None:
+            continue
+        unit, amounts = converted
+        group["unit"] = unit
+        for value, amount in zip(group["values"], amounts):
+            value.value = amount
 
 
 def set_filings_db(db: AsyncFilingsDatabase) -> None:
@@ -234,6 +277,10 @@ async def get_financials(
     debug: bool = Query(
         False, description="Include extra debug fields in the response"
     ),
+    currency: Optional[str] = Query(
+        None,
+        description="Translate foreign monetary amounts. Only 'usd' is supported.",
+    ),
 ) -> List[FinancialMetricResponse]:
     """Get quarterly or yearly financial metrics for a company by ticker."""
 
@@ -242,6 +289,8 @@ async def get_financials(
         raise HTTPException(
             status_code=400, detail="granularity must be either 'quarterly' or 'yearly'"
         )
+    if currency is not None and currency.lower() != "usd":
+        raise HTTPException(status_code=400, detail="currency must be usd")
 
     # Validate fiscal quarter parameters
     if fiscal_quarter_start is not None and not (1 <= fiscal_quarter_start <= 4):
@@ -387,6 +436,9 @@ async def get_financials(
                 is_synthetic=getattr(metric, "is_synthetic", None) if debug else None,
             )
             metric_groups[key]["values"].append(value_obj)
+
+        if currency is not None:
+            await _convert_groups_to_usd(metric_groups)
 
         # Convert grouped metrics to response format
         response_metrics = []

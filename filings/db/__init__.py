@@ -16,6 +16,7 @@ from .dimension_breakdowns import DimensionBreakdownsOperationsAsync
 from .dimension_normalization_overrides import (
     DimensionNormalizationOverridesOperationsAsync,
 )
+from .exchange_rates import ExchangeRateOperationsAsync
 from .filings import FilingOperationsAsync
 from .financial_facts import FinancialFactOperationsAsync
 from .financial_facts_overrides import FinancialFactsOverridesOperationsAsync
@@ -76,6 +77,7 @@ class AsyncFilingsDatabase:
         self.financial_facts_overrides = FinancialFactsOverridesOperationsAsync(
             self._engine, self._metadata
         )
+        self.exchange_rates = ExchangeRateOperationsAsync(self._engine, self._metadata)
 
     async def refresh_financials_for_companies(self, company_ids: List[int]) -> None:
         """Recompute normalization + quarterly/yearly financials for companies."""
