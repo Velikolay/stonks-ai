@@ -163,6 +163,68 @@ def test_parent_override_follows_both_concepts_renames() -> None:
     }
 
 
+def _hierarchy(groups: list[tuple[str, str]], children: list[tuple[str, str]]):
+    normalized = [
+        {
+            "concept": c,
+            "statement": "Balance Sheet",
+            "normalized_label": g,
+            "group_id": g,
+            "source": "chaining",
+            "overridden": False,
+        }
+        for c, g in groups
+    ]
+    overrides = [
+        {
+            "company_id": 0,
+            "is_global": True,
+            "statement": "Balance Sheet",
+            "concept": child,
+            "normalized_label": child,
+            "parent_concept": parent,
+            "weight": 1,
+        }
+        for child, parent in children
+    ]
+    data = company(
+        concept_normalization=normalized, concept_normalization_overrides=overrides
+    )
+    return set(
+        hierarchy_normalization.run(data).select("concept", "parent_concept").rows()
+    )
+
+
+def test_every_child_follows_its_parents_rename() -> None:
+    edges = _hierarchy(
+        [
+            ("x:OldCurrentLiabilities", "current"),
+            ("us-gaap:LiabilitiesCurrent", "current"),
+        ],
+        [
+            ("us-gaap:AccountsPayableCurrent", "us-gaap:LiabilitiesCurrent"),
+            ("us-gaap:AccruedLiabilitiesCurrent", "us-gaap:LiabilitiesCurrent"),
+        ],
+    )
+    for child in (
+        "us-gaap:AccountsPayableCurrent",
+        "us-gaap:AccruedLiabilitiesCurrent",
+    ):
+        assert (child, "x:OldCurrentLiabilities") in edges
+
+
+def test_a_line_never_hangs_under_its_own_group() -> None:
+    """A part once chained into its subtotal's group is not its own parent."""
+    edges = _hierarchy(
+        [
+            ("us-gaap:LiabilitiesNoncurrent", "noncurrent"),
+            ("us-gaap:OtherLiabilitiesNoncurrent", "noncurrent"),
+        ],
+        [("us-gaap:OtherLiabilitiesNoncurrent", "us-gaap:LiabilitiesNoncurrent")],
+    )
+    assert edges == set()
+
+
 # --- Breakdowns --------------------------------------------------------------
 
 #: Products is a subtotal; Domestic + International is a second split.

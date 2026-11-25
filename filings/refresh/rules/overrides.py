@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from . import sql
+from . import ordering
 
 FACT_OVERRIDE_FILTERS = ("axis", "member", "label", "form_type")
 
@@ -70,14 +70,14 @@ def most_specific_fact_override(pairs: pl.DataFrame) -> pl.DataFrame:
             "to_filing_period",
         )
     )
-    return sql.distinct_on(
+    return ordering.distinct_on(
         pairs,
         ["id"],
         [
-            sql.desc(pl.col("r_company_id") == pl.col("company_id")),
-            sql.desc(specificity),
-            sql.asc(pl.col("r_to_period") - pl.col("r_from_period")),
-            sql.desc("r_updated_at"),
+            ordering.desc(pl.col("r_company_id") == pl.col("company_id")),
+            ordering.desc(specificity),
+            ordering.asc(pl.col("r_to_period") - pl.col("r_from_period")),
+            ordering.desc("r_updated_at"),
         ],
     )
 

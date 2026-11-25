@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from ...rules import sql
+from ...rules import ordering
 from .rows import BREAKDOWN_KEY, with_members_key, within_tolerance_expr
 
 SEP_PART = "\x1f"
@@ -19,9 +19,9 @@ SEP_DIM = "\x1e"
 
 
 def _signature(dims: pl.DataFrame, by: list[str]) -> pl.DataFrame:
-    """``axis\\x1fmember`` per dimension, joined in collation order, per ``by``."""
-    ordered = sql.sort(
-        dims, [sql.collate("dim_axis"), sql.collate("dim_member"), "ordinal"]
+    """``axis\\x1fmember`` per dimension, joined in text order, per ``by``."""
+    ordered = ordering.sort(
+        dims, [ordering.by_text("dim_axis"), ordering.by_text("dim_member"), "ordinal"]
     )
     return ordered.group_by(by, maintain_order=True).agg(
         pl.concat_str(["dim_axis", "dim_member"], separator=SEP_PART)
@@ -137,7 +137,7 @@ def context_breakdowns(rows: pl.DataFrame, dims: pl.DataFrame) -> pl.DataFrame:
         "varying_axis",
     ]
     grouped = (
-        sql.sort(paired, [sql.collate("member")])
+        ordering.sort(paired, [ordering.by_text("member")])
         .group_by(group, maintain_order=True)
         .agg(
             pl.col("member").alias("members"),

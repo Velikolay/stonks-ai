@@ -8,10 +8,28 @@ and within 0.1%.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Union
 
 import polars as pl
 
-from .sql import is_multiple_of, round_half_away
+
+def decimal(value: Union[int, str, Decimal]) -> pl.Expr:
+    """A Decimal(38, 10) literal that mixes with value columns without float casts."""
+    return pl.lit(Decimal(value), dtype=pl.Decimal(38, 10))
+
+
+def round_half_away(expr: pl.Expr) -> pl.Expr:
+    """Round to a whole number with halves away from zero, as filers round.
+
+    polars rounds halves to even.
+    """
+    return (expr.abs() + Decimal("0.5")).floor() * expr.sign()
+
+
+def is_multiple_of(expr: pl.Expr, unit: int) -> pl.Expr:
+    """``expr`` is a whole multiple of ``unit``; polars has no Decimal remainder."""
+    return (expr / unit).floor() * unit == expr
+
 
 #: A rounded reprint is off by at most this share of the value.
 REPRINT_SHARE = Decimal("0.001")

@@ -13,7 +13,7 @@ import polars as pl
 
 from ..inputs import CompanyData
 from ..io.schemas import YEARLY_FINANCIALS
-from ..rules import sql
+from ..rules import ordering
 from ..rules.periods import ANNUAL_FORMS, FOREIGN_ANNUAL_FORMS, fiscal_year_of
 from ..rules.rewrites import apply_rewrites
 
@@ -27,7 +27,7 @@ def with_latest_tree_position(rows: pl.DataFrame) -> pl.DataFrame:
     otherwise one takes the other's pointer and a header can point at itself.
     """
     series = [*SERIES, "is_abstract"]
-    ordered = sql.sort(rows, [sql.desc("period_end"), sql.asc("id")])
+    ordered = ordering.sort(rows, [ordering.desc("period_end"), ordering.asc("id")])
     return ordered.with_columns(
         pl.col("abstract_id").first().over(series).alias("abstract_id"),
         pl.col("position").first().over(series).alias("position"),

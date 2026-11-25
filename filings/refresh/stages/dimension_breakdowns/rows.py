@@ -12,7 +12,7 @@ import polars as pl
 
 from ...inputs import CompanyData
 from ...rules.periods import ANNUAL_FORMS, FOREIGN_ANNUAL_FORMS, fiscal_year_of
-from ...rules.sql import is_multiple_of
+from ...rules.rounding import is_multiple_of
 
 PERIOD = ["company_id", "statement", "normalized_label", "period_end"]
 AXIS_PERIOD = ["company_id", "statement", "normalized_label", "axis", "period_end"]

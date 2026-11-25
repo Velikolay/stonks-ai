@@ -132,7 +132,8 @@ WHERE cardinality(o.members) >= 2
         AND (o.normalized_label IS NULL OR b.normalized_label = o.normalized_label)
         AND b.parent_member = o.parent_member
         AND b.axis = o.axis
-        AND b.members = o.members
+        -- Same set, in any order.
+        AND b.members @> o.members AND b.members <@ o.members
         AND b.source = 'override'
         AND cardinality(b.fiscal_years) > 0
   )

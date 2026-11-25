@@ -225,6 +225,14 @@ def test_an_amendment_ranks_first() -> None:
     assert rank_annual_filings(10, [own, amended], QUARTERS)[0].filing_id == 11
 
 
+def test_a_year_without_quarters_leaves_the_split_test_out() -> None:
+    """Neither 10-K can be on a split no quarter was filed on; filing date decides."""
+    early = annual_filing(10, date(2024, 2, 1), {"A": 80})
+    late = annual_filing(20, date(2025, 2, 1), {"B": 0})
+    ranked = rank_annual_filings(30, [early, late], {})
+    assert [f.filing_id for f in ranked] == [20, 10]
+
+
 def test_a_10k_pairs_with_the_10q_on_its_members() -> None:
     annual = annual_filing(10, date(2024, 2, 1), {"A": 80, "B": 40})
     same = nine_month_filing(5, date(2023, 11, 1), {"A": 60, "B": 30})

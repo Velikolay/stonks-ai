@@ -30,9 +30,9 @@ stages, each one reads its upstream tables from the database.
 | `records.py` | Frames to slotted dataclasses and back, for steps decided in plain Python |
 | `io/schemas.py` | One polars schema per table, matching the database column order |
 | `io/db.py` | asyncpg load, and `DELETE` plus binary `COPY` per company |
-| `rules/` | Logic shared by several stages: fact overrides and conflicts, override precedence, rounding, units, periods, rewrites, connected components |
-| `rules/sql.py` | Postgres semantics that change results: null ordering, collation, `DISTINCT ON`, `round`, `SUM` and `bool_and` over no rows |
-| `rules/ids.py` | Postgres `hashtextextended` and `md5`, so synthetic ids match the database |
+| `rules/` | Logic shared by several stages: fact overrides and conflicts, override precedence, rounding (including Decimal helpers), units, periods, rewrites, connected components |
+| `rules/ordering.py` | Sorts that pick a winner: null placement, text order (case-insensitive, then lowercase first), first row per key, row numbers |
+| `rules/ids.py` | Stable ids hashed from a row's identity (BLAKE2b), and `md5` group ids |
 | `stages/` | One module (or package) per stage. Each is a pure `run(data) -> DataFrame` |
 | `parity/` | Snapshot and diff tools for checking a change against a baseline |
 

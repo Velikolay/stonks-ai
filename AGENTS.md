@@ -183,10 +183,11 @@ rerun one stage after a code change without recomputing the rest.
 | `yearly_financials` | [yearly.py](filings/refresh/stages/yearly.py) | `yearly_financials` | Annual presentation layer from 10-K facts |
 
 Rules shared by several stages (override precedence, the two conflict rules,
-rounding tolerances, unit canonicalisation, Postgres-compatible ids, sort order
-and rounding) live in [filings/refresh/rules/](filings/refresh/rules/). Ties a
+rounding tolerances, unit canonicalisation, hashed row ids, sort order and
+rounding) live in [filings/refresh/rules/](filings/refresh/rules/). Ties a
 rule cannot break (two labels last reported in the same period) are broken
-deterministically, so a refresh gives the same result every time.
+deterministically: text sorts ignoring case, then lowercase first, the same on
+every machine, so a refresh gives the same result every time.
 
 Four behaviours are worth knowing before you debug anything:
 
