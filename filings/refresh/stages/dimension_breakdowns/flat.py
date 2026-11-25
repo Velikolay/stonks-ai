@@ -21,7 +21,7 @@ from typing import Any, Iterator, Sequence
 import numpy as np
 import polars as pl
 
-from ...rules import sql
+from ...rules import ordering
 from .rows import AXIS_PERIOD, BREAKDOWN, BREAKDOWN_KEY, PERIOD, with_members_key
 
 #: A wider flat axis is skipped: subset search is 2^n.
@@ -107,8 +107,8 @@ def flat_members(reported: pl.DataFrame, dims: pl.DataFrame) -> pl.DataFrame:
 
 
 def axis_groups(members: pl.DataFrame) -> pl.DataFrame:
-    """Members per line, axis and period, in collation order."""
-    ordered = sql.sort(members, [sql.collate("member")])
+    """Members per line, axis and period, in text order."""
+    ordered = ordering.sort(members, [ordering.by_text("member")])
     return ordered.group_by(*AXIS_PERIOD, "fiscal_year", maintain_order=True).agg(
         pl.col("member").alias("names"),
         pl.col("value").alias("amounts"),

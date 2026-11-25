@@ -4,18 +4,18 @@ Rows compete within (company, statement, label, axis, member, period end,
 abstract or not) and rank: amendments first, then the period's own filing,
 then a filing that did not recast the split, then the later filing, then a
 published quarter over a year-to-date total of the same date, then the
-longest comparative chain, then the lowest id. A row that rounds to the
-winner's value, within 0.1%, then takes its place, so a later reprint in
-millions never replaces the original's digits.
+longest comparative chain, then the earliest filing, then the lowest id. A
+row that rounds to the winner's value, within 0.1%, then takes its place, so
+a later reprint in millions never replaces the original's digits.
 """
 
 from __future__ import annotations
 
 import polars as pl
 
-from ...rules import sql
+from ...rules import ordering
 from ...rules.periods import AMENDMENTS, form_family
-from ...rules.rounding import differs_beyond_reprint, rounds_to
+from ...rules.rounding import differs_beyond_reprint, is_multiple_of, rounds_to
 
 SLOT = [
     "company_id",
@@ -34,7 +34,7 @@ def fiscal_filings(filings: pl.DataFrame) -> pl.DataFrame:
     A column for an earlier year is stored on the filing that printed it; its
     fiscal year and quarter come from this filing instead.
     """
-    first = sql.distinct_on(
+    first = ordering.distinct_on(
         filings, ["company_id", "fiscal_period_end", "form_type"], ["id"]
     )
     return first.select(
@@ -123,27 +123,31 @@ def rank(
             pl.coalesce("fiscal_filing_id", "filing_id").alias("fiscal_filing_id")
         )
     )
-    ranked = sql.row_number(
+    ranked = ordering.row_number(
         ranked,
         SLOT,
         [
-            sql.asc(
+            ordering.asc(
                 pl.when(pl.col("form_type").is_in(AMENDMENTS)).then(0).otherwise(1)
             ),
             # The period's own filing beats a later reprint, which may be
             # recast under other members.
-            sql.desc(
+            ordering.desc(
                 pl.col("filed_period_end") == pl.col("period_end"), nulls_last=True
             ),
-            sql.asc("is_recast"),
-            sql.desc("filed_date", nulls_last=True),
+            ordering.asc("is_recast"),
+            ordering.desc("filed_date", nulls_last=True),
             # A published quarter beats the year-to-date total of the same date.
-            sql.asc(pl.when(pl.col("period") == "Q").then(0).otherwise(1)),
-            sql.desc(pl.col("chain_size").fill_null(1)),
-            sql.asc("id"),
+            ordering.asc(pl.when(pl.col("period") == "Q").then(0).otherwise(1)),
+            ordering.desc(pl.col("chain_size").fill_null(1)),
+            # Two filings of one period (a predecessor and its successor filing
+            # the same quarter): every row comes from the same one, so a
+            # statement never mixes them. Synthetic ids are hashes.
+            ordering.asc("filing_id"),
+            ordering.asc("id"),
             # One fact under two expanded parents appears twice; the copy
             # pointing at a real parent beats the one that needs a synthetic.
-            sql.asc(pl.col("parent_concept").is_not_null()),
+            ordering.asc(pl.col("parent_concept").is_not_null()),
         ],
         name="filing_rank",
     )
@@ -152,17 +156,17 @@ def rank(
 
 def mark_duplicates(ranked: pl.DataFrame) -> pl.DataFrame:
     """``is_duplicate`` per row, keeping the winner's digits when a reprint rounds."""
-    final = sql.row_number(
+    final = ordering.row_number(
         ranked,
         SLOT,
         [
-            sql.asc("is_recast"),
-            sql.desc(
+            ordering.asc("is_recast"),
+            ordering.desc(
                 rounds_to(pl.col("value"), pl.col("winner_value")), nulls_last=True
             ),
-            sql.asc(sql.is_multiple_of(pl.col("value"), 1_000)),
-            sql.asc(sql.is_multiple_of(pl.col("value"), 1_000_000)),
-            sql.asc("filing_rank"),
+            ordering.asc(is_multiple_of(pl.col("value"), 1_000)),
+            ordering.asc(is_multiple_of(pl.col("value"), 1_000_000)),
+            ordering.asc("filing_rank"),
         ],
         name="rn",
     )
@@ -170,4 +174,4 @@ def mark_duplicates(ranked: pl.DataFrame) -> pl.DataFrame:
         ((pl.col("rn") > 1) | pl.col("is_recast")).alias("is_duplicate")
     )
     # A row repeated under several parents keeps the copy that won.
-    return sql.distinct_on(marked, ["id"], ["is_duplicate"])
+    return ordering.distinct_on(marked, ["id"], ["is_duplicate"])

@@ -13,7 +13,7 @@ import polars as pl
 
 from ..inputs import CompanyData
 from ..io.schemas import HIERARCHY_NORMALIZATION
-from ..rules import sql
+from ..rules import ordering
 from ..rules.overrides import best_concept_override
 
 GROUP_KEY = ["company_id", "group_id"]
@@ -26,37 +26,58 @@ def child_overrides(normalized: pl.DataFrame, overrides: pl.DataFrame) -> pl.Dat
 
 
 def parent_overrides(normalized: pl.DataFrame, overrides: pl.DataFrame) -> pl.DataFrame:
-    """For each normalized concept, one override that names it as the parent.
+    """Every winning override that names a normalized concept as its parent.
 
-    The company's row beats a global one. Among several children of the same
-    parent, the first in table order is used.
+    Each child concept keeps one row, the company's own over the global one,
+    as everywhere else; every child of a parent is kept.
     """
-    rules = overrides.filter(pl.col("parent_concept").is_not_null()).with_row_index(
-        "order"
+    companies = normalized.select("company_id").unique()
+    own = overrides.join(companies, on="company_id", how="semi")
+    global_ = (
+        overrides.filter(pl.col("is_global"))
+        .drop("company_id")
+        .join(companies, how="cross")
+        .join(own, on=["company_id", "statement", "concept"], how="anti")
     )
-    joined = normalized.join(
-        rules.select(
-            pl.col("company_id").alias("o_company_id"),
-            "is_global",
+    winning = pl.concat([own, global_.select(own.columns)]).filter(
+        pl.col("parent_concept").is_not_null()
+    )
+    return normalized.join(
+        winning.select(
+            "company_id",
             "statement",
-            pl.col("concept").alias("o_concept"),
+            pl.col("concept").alias("child"),
             pl.col("parent_concept").alias("concept"),
-            "order",
         ),
-        on=["statement", "concept"],
-        how="inner",
-    ).filter((pl.col("o_company_id") == pl.col("company_id")) | pl.col("is_global"))
-    best = sql.distinct_on(
-        joined,
-        ["company_id", "statement", "concept"],
-        [sql.desc(pl.col("o_company_id") == pl.col("company_id")), "order"],
-    )
-    return best.select(
+        on=["company_id", "statement", "concept"],
+    ).select(
         "company_id",
         "statement",
         "group_id",
-        pl.col("o_concept").alias("child"),
+        "child",
         pl.col("concept").alias("parent"),
+    )
+
+
+def without_own_group(rows: pl.DataFrame, normalized: pl.DataFrame) -> pl.DataFrame:
+    """Drop an edge whose parent is the same line as the child.
+
+    Chaining can put a subtotal and one of its parts in one group when the
+    part once carried the subtotal's amount; expanding an override across
+    that group would hang the line under itself.
+    """
+    groups = normalized.select("company_id", "statement", "concept", "group_id")
+    same = (
+        rows.join(groups, on=["company_id", "statement", "concept"])
+        .join(
+            groups.rename({"concept": "parent_concept", "group_id": "parent_group"}),
+            on=["company_id", "statement", "parent_concept"],
+        )
+        .filter(pl.col("group_id") == pl.col("parent_group"))
+    )
+    rows = rows.filter(pl.col("concept") != pl.col("parent_concept"))
+    return rows.join(
+        same.select(rows.columns), on=rows.columns, how="anti", nulls_equal=True
     )
 
 
@@ -121,10 +142,13 @@ def run(data: CompanyData) -> pl.DataFrame:
             transitive,
         ]
     )
+    rows = without_own_group(rows, normalized)
     key = ["company_id", "statement", "concept", "parent_concept"]
-    first = sql.sort(rows, [sql.asc(sql.collate("concept_source"))])
+    first = ordering.sort(rows, [ordering.asc(ordering.by_text("concept_source"))])
     concept_source = first.group_by(key).agg(pl.col("concept_source").first())
-    first = sql.sort(rows, [sql.asc(sql.collate("parent_concept_source"))])
+    first = ordering.sort(
+        rows, [ordering.asc(ordering.by_text("parent_concept_source"))]
+    )
     parent_source = first.group_by(key).agg(pl.col("parent_concept_source").first())
     return concept_source.join(parent_source, on=key).cast(
         HIERARCHY_NORMALIZATION.dtypes

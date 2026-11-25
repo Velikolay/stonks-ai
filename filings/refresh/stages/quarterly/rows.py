@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 
 from ...inputs import CompanyData
-from ...rules import sql
+from ...rules import ordering
 from ...rules.periods import ANNUAL_FORMS, QUARTERLY_FORMS, fiscal_year_of
 
 SERIES = ["company_id", "statement", "normalized_label", "axis", "member"]
@@ -45,7 +45,7 @@ def is_non_additive() -> pl.Expr:
 
 def fiscal_tags(filings: pl.DataFrame) -> pl.DataFrame:
     """10-K and 10-Q filings with the 10-K that closes their fiscal year."""
-    ordered = sql.sort(
+    ordered = ordering.sort(
         filings.filter(pl.col("form_type").is_in([*ANNUAL_FORMS, *QUARTERLY_FORMS])),
         ["company_id", "fiscal_period_end", "id"],
     )
@@ -87,7 +87,7 @@ def tagged_rows(data: CompanyData, tags: pl.DataFrame) -> pl.DataFrame:
         on="fiscal_filing_id",
         how="inner",
     )
-    ordered = sql.sort(joined, [sql.desc("period_end"), sql.asc("id")])
+    ordered = ordering.sort(joined, [ordering.desc("period_end"), ordering.asc("id")])
     tree = [*SERIES, "is_abstract"]
     return ordered.with_columns(
         fiscal_year_of(
@@ -127,6 +127,6 @@ def ytd_anchors(data: CompanyData) -> pl.DataFrame:
     ytd = data.table("financial_facts_normalized").filter(
         pl.col("is_duplicate") & (pl.col("period") == "YTD") & ~pl.col("is_abstract")
     )
-    return sql.distinct_on(ytd, keys, [sql.desc("id")]).select(
+    return ordering.distinct_on(ytd, keys, [ordering.desc("id")]).select(
         *keys, pl.col("value").alias("anchor_value")
     )

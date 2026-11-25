@@ -22,7 +22,7 @@ import polars as pl
 
 from ..inputs import CompanyData
 from ..io.schemas import CONCEPT_NORMALIZATION
-from ..rules import sql
+from ..rules import ordering
 from ..rules.facts import ConflictRule, drop_conflicting, with_fact_overrides
 from ..rules.ids import md5_hex
 
@@ -46,7 +46,7 @@ def grouping(facts: pl.DataFrame) -> pl.DataFrame:
     The label of the latest period wins.
     """
     undimensioned = facts.filter(pl.col("axis") == "")
-    latest = sql.sort(undimensioned, [sql.desc("period_end")])
+    latest = ordering.sort(undimensioned, [ordering.desc("period_end")])
     grouped = latest.group_by(*COMPANY_SLOT, "concept", maintain_order=True).agg(
         pl.col("label").first().alias("normalized_label"),
         pl.col("period_end").max().alias("group_max_period_end"),
@@ -143,7 +143,7 @@ def candidate_matches(
     keys = [*COMPANY_SLOT, "concept1", "concept2", "period_end1", "period_end2"]
     # Two facts of one concept and period (a beginning and an ending balance)
     # can bridge the same pair; the later-printed fact's label is kept.
-    return sql.distinct_on(pairs, keys, [sql.desc("id1")]).select(
+    return ordering.distinct_on(pairs, keys, [ordering.desc("id1")]).select(
         *keys, "label1", "label2"
     )
 
@@ -174,7 +174,7 @@ def false_matches(candidates: pl.DataFrame) -> pl.DataFrame:
 
 def own_labels(labelled: pl.DataFrame) -> pl.DataFrame:
     """Each concept's label in its latest period, as filed or grouped."""
-    latest = sql.sort(labelled, [sql.desc("period_end"), sql.desc("id")])
+    latest = ordering.sort(labelled, [ordering.desc("period_end"), ordering.desc("id")])
     return latest.group_by(*COMPANY_SLOT, "concept").agg(
         pl.col("normalized_label").first().alias("own_label")
     )
@@ -250,14 +250,14 @@ def chaining(
     # lines had the same amount that year (net income equal to comprehensive
     # income). The chain whose label is closest to the concept's own label
     # wins.
-    chained = sql.distinct_on(
+    chained = ordering.distinct_on(
         walked,
         [*COMPANY_SLOT, "concept"],
         [
-            sql.desc("root_period"),
-            sql.desc("similarity"),
-            sql.asc(sql.collate("root_concept")),
-            sql.asc(sql.collate("normalized_label")),
+            ordering.desc("root_period"),
+            ordering.desc("similarity"),
+            ordering.asc(ordering.by_text("root_concept")),
+            ordering.asc(ordering.by_text("normalized_label")),
         ],
     )
     return chained.select(
@@ -279,7 +279,7 @@ def inferred(chained: pl.DataFrame, grouped: pl.DataFrame) -> pl.DataFrame:
         ],
         how="vertical_relaxed",
     )
-    return sql.distinct_on(both, [*COMPANY_SLOT, "concept"], ["priority"]).drop(
+    return ordering.distinct_on(both, [*COMPANY_SLOT, "concept"], ["priority"]).drop(
         "priority"
     )
 
@@ -290,7 +290,9 @@ def _group_agreed(column: str, label: str) -> pl.Expr:
     if column == label:
         value = pl.col(column).max()
     elif column.endswith("unit"):
-        value = pl.col(column).sort_by(sql.collate(column), nulls_last=False).last()
+        value = (
+            pl.col(column).sort_by(ordering.by_text(column), nulls_last=False).last()
+        )
     else:
         value = pl.col(column).max()
     return pl.when(agree).then(value)

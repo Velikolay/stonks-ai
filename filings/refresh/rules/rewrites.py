@@ -4,7 +4,8 @@ One row edits one member of one line for one period on the quarterly or
 yearly layer, after everything else is derived. ``delete`` removes it,
 ``set`` replaces its value, and ``add`` inserts it, copied from another
 member of that axis and period, or from the undimensioned line when the axis
-has no row yet.
+has no row yet. The copy takes the first such member in the statement, by
+position, so the new member sits where the axis starts.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 import polars as pl
 
 from ..io.schemas import dtypes_of
-from . import sql
+from . import ordering
 from .ids import abs_hash_expr
 
 KEY = ["company_id", "statement", "normalized_label", "axis", "member", "period_end"]
@@ -73,14 +74,15 @@ def _added_rows(
             (pl.col("source_axis") == pl.col("axis")) | (pl.col("source_axis") == "")
         )
     )
-    best = sql.distinct_on(
+    best = ordering.distinct_on(
         pairs,
         KEY,
         [
-            sql.asc(
+            ordering.asc(
                 pl.when(pl.col("source_axis") == pl.col("axis")).then(0).otherwise(1)
             ),
-            sql.asc(sql.collate("source_member")),
+            ordering.asc("position"),
+            ordering.asc(ordering.by_text("source_member")),
         ],
     )
     return best.with_columns(

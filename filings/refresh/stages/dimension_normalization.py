@@ -22,7 +22,7 @@ import polars as pl
 
 from ..inputs import CompanyData
 from ..io.schemas import DIMENSION_NORMALIZATION
-from ..rules import sql
+from ..rules import ordering
 from ..rules.facts import ConflictRule, drop_conflicting, with_fact_overrides
 from ..rules.graph import component_frame
 from ..rules.ids import md5_hex
@@ -42,17 +42,17 @@ def md5_expr(parts: list[pl.Expr], source: str) -> pl.Expr:
     )
 
 
-def override_rank() -> list[sql.Order]:
+def override_rank() -> list[ordering.Order]:
     """Company before global before none; member before axis override."""
     return [
-        sql.asc(
+        ordering.asc(
             pl.when(pl.col("override_priority") == "company")
             .then(1)
             .when(pl.col("override_priority") == "global")
             .then(2)
             .otherwise(3)
         ),
-        sql.asc(
+        ordering.asc(
             pl.when(pl.col("override_level") == "member")
             .then(1)
             .when(pl.col("override_level") == "axis")
@@ -123,14 +123,14 @@ def member_overrides(members: pl.DataFrame, overrides: pl.DataFrame) -> pl.DataF
             | (pl.col("dno_member_label") == pl.col("member_label"))
         )
     )
-    best = sql.distinct_on(
+    best = ordering.distinct_on(
         pairs,
         keys,
         [
-            sql.desc(pl.col("dno_company_id") == pl.col("company_id")),
-            sql.desc(pl.col("dno_member").is_not_null()),
-            sql.desc(pl.col("dno_member_label").is_not_null()),
-            sql.desc("dno_updated_at"),
+            ordering.desc(pl.col("dno_company_id") == pl.col("company_id")),
+            ordering.desc(pl.col("dno_member").is_not_null()),
+            ordering.desc(pl.col("dno_member_label").is_not_null()),
+            ordering.desc("dno_updated_at"),
         ],
     ).select(*keys, "dno_id", "dno_is_global", *OVERRIDE_COLUMNS)
     return members.join(best, on=keys, how="left")
@@ -138,7 +138,7 @@ def member_overrides(members: pl.DataFrame, overrides: pl.DataFrame) -> pl.DataF
 
 def member_base(facts: pl.DataFrame, overrides: pl.DataFrame) -> pl.DataFrame:
     """One row per member of a line: its override and its latest period."""
-    latest = sql.distinct_on(facts, MEMBER, [sql.desc("period_end")]).select(
+    latest = ordering.distinct_on(facts, MEMBER, [ordering.desc("period_end")]).select(
         *MEMBER, "period_end"
     )
     with_override = member_overrides(latest, overrides)
@@ -208,17 +208,17 @@ def member_groups(base: pl.DataFrame) -> pl.DataFrame:
 def grouping(rows: pl.DataFrame) -> pl.DataFrame:
     """Each group labelled by its best member: override first, then the latest.
 
-    Members last reported in the same period tie; the first by collation
+    Members last reported in the same period tie; the first in text order
     wins.
     """
-    canonical = sql.distinct_on(
+    canonical = ordering.distinct_on(
         rows,
         ["group_id"],
         [
             *override_rank(),
-            sql.desc("period_end"),
-            sql.asc(sql.collate("canonical_axis")),
-            sql.asc(sql.collate("canonical_member")),
+            ordering.desc("period_end"),
+            ordering.asc(ordering.by_text("canonical_axis")),
+            ordering.asc(ordering.by_text("canonical_member")),
         ],
     ).select(
         "group_id",
@@ -434,19 +434,19 @@ def chaining(matched: pl.DataFrame) -> pl.DataFrame:
         frontier = nxt
     chain = pl.concat(reached)
 
-    group_normalized = sql.distinct_on(
-        chain, ["group_id"], [*override_rank(), sql.desc("current_period")]
+    group_normalized = ordering.distinct_on(
+        chain, ["group_id"], [*override_rank(), ordering.desc("current_period")]
     ).select(
         "group_id",
         *(pl.col(c).alias(f"gn_{c}") for c in [*OVERRIDE_COLUMNS, *STATE]),
     )
-    chosen = sql.distinct_on(
+    chosen = ordering.distinct_on(
         chain.rename({"label": "normalized_label"}),
         MEMBER,
         [
-            sql.asc(sql.collate("normalized_axis_label")),
-            sql.asc(sql.collate("normalized_member_label")),
-            sql.desc("root_period"),
+            ordering.asc(ordering.by_text("normalized_axis_label")),
+            ordering.asc(ordering.by_text("normalized_member_label")),
+            ordering.desc("root_period"),
         ],
     )
     return chosen.join(group_normalized, on="group_id").select(
@@ -500,21 +500,21 @@ def merge_groups(components: pl.DataFrame) -> pl.DataFrame:
     """One label per component: override first, then the latest group.
 
     Groups reaching the same period tie: a chain beats a grouping, then the
-    first label by collation.
+    first label in text order.
     """
-    canonical = sql.distinct_on(
+    canonical = ordering.distinct_on(
         components,
         [*LINE, "component_id"],
         [
             *override_rank(),
-            sql.desc("group_max_period_end"),
-            sql.desc(pl.col("source") == "chaining"),
-            sql.asc(sql.collate("normalized_axis_label")),
-            sql.asc(sql.collate("normalized_member_label")),
+            ordering.desc("group_max_period_end"),
+            ordering.desc(pl.col("source") == "chaining"),
+            ordering.asc(ordering.by_text("normalized_axis_label")),
+            ordering.asc(ordering.by_text("normalized_member_label")),
         ],
     ).select(*LINE, "component_id", *OVERRIDE_COLUMNS, "source", *STATE)
     members = components.select(*MEMBER, "component_id").unique()
-    result = sql.distinct_on(
+    result = ordering.distinct_on(
         members.join(canonical, on=[*LINE, "component_id"]), MEMBER, ["component_id"]
     )
     return result.select(

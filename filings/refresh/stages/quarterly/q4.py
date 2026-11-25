@@ -29,9 +29,9 @@ from typing import Iterator, Optional, Sequence
 import polars as pl
 
 from ...records import ROW, frame_of, grouped, numbered, records
-from ...rules import sql
+from ...rules import ordering
 from ...rules.periods import ANNUAL_FORMS, QUARTERLY_FORMS, quarter_apart
-from ...rules.rounding import reprint_tolerance_of
+from ...rules.rounding import decimal, reprint_tolerance_of
 from .rows import SERIES, WEIGHTED_AVERAGE_SHARES, is_per_share
 
 AXIS_YEAR = ["company_id", "statement", "normalized_label", "axis", "fiscal_tag"]
@@ -201,7 +201,7 @@ def nine_months(
         .filter(quarter_apart(pl.col("annual_period_end"), pl.col("period_end")))
     )
     keys = [*SERIES, "filing_id", "fiscal_tag"]
-    return sql.distinct_on(rows, keys, ["is_duplicate", "id"]).select(
+    return ordering.distinct_on(rows, keys, ["is_duplicate", "id"]).select(
         *keys, "filing_date", "value"
     )
 
@@ -263,33 +263,21 @@ def _filings(rows: Sequence[AnnualMember | NineMonthMember]) -> list[Filing]:
     return list(out.values())
 
 
-def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> Optional[bool]:
+def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> bool:
     """Every member has quarters (or is zero), and every member with quarters is in it.
 
-    None when that cannot be told: no member of the year has quarters, or
-    the members without them have no value. Unknown ranks last.
+    A year where no member has quarters gives no split to be on, so every
+    10-K of it passes and the next criterion decides.
     """
     with_quarters = {m for m, q in quarters.items() if q.value is not None}
-
-    def has_quarters(row: AnnualMember) -> Optional[bool]:
-        if row.member in with_quarters:
-            return True
-        return None if row.value is None else row.value == 0
-
-    known = [h for h in map(has_quarters, annual.rows) if h is not None]
-    every_member = all(known) if known else None
-    covers_quarters = None
-    if with_quarters:
-        covers_quarters = with_quarters <= annual.members
-    if every_member is False or covers_quarters is False:
-        return False
-    if every_member is None or covers_quarters is None:
-        return None
-    return True
-
-
-#: Sort order for a yes/no/unknown test: yes first, unknown last.
-_UNKNOWN_LAST = {True: 0, False: 1, None: 2}
+    if not with_quarters:
+        return True
+    every_member = all(
+        r.member in with_quarters or r.value == 0
+        for r in annual.rows
+        if r.value is not None
+    )
+    return every_member and with_quarters <= annual.members
 
 
 def rank_annual_filings(
@@ -309,7 +297,7 @@ def rank_annual_filings(
         return (
             not a.is_amendment,
             a.filing_id != fiscal_tag,
-            _UNKNOWN_LAST[on_quarter_split(a, quarters)],
+            not on_quarter_split(a, quarters),
             # The first 10-K filed after the quarters, else the latest before.
             not after,
             a.filing_date if after else date.max,
@@ -515,7 +503,7 @@ def line_q4(annual_rows: pl.DataFrame, by_year: pl.DataFrame) -> pl.DataFrame:
     factor, slack = PER_SHARE_SLACK
     fits = ~is_per_share(pl.col("unit")) | (
         pl.col("q_value").abs()
-        <= pl.col("value").abs() * sql.decimal(factor) + sql.decimal(slack)
+        <= pl.col("value").abs() * decimal(factor) + decimal(slack)
     )
     eligible = (
         (pl.col("axis").fill_null("") == "")

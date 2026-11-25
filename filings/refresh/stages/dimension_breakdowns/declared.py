@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import polars as pl
 
-from ...rules import sql
+from ...rules import ordering
 from .rows import AXIS_PERIOD, PERIOD, within_tolerance
 
 
 def company_overrides(overrides: pl.DataFrame, company_id: int) -> pl.DataFrame:
-    """The company's rows, members in collation order (``[]`` when blank)."""
+    """The company's rows, members in text order (``[]`` when blank)."""
     rows = overrides.filter(pl.col("company_id") == company_id)
     sorted_members = [
-        sorted(m, key=sql.collation_key) if m is not None else []
+        sorted(m, key=ordering.text_key) if m is not None else []
         for m in rows["members"].to_list()
     ]
     return rows.with_columns(
@@ -49,7 +49,7 @@ def without_overridden_parents(
 
 
 def _reported_groups(reported: pl.DataFrame) -> pl.DataFrame:
-    ordered = sql.sort(reported, [sql.collate("member")])
+    ordered = ordering.sort(reported, [ordering.by_text("member")])
     return ordered.group_by(*AXIS_PERIOD, "fiscal_year", maintain_order=True).agg(
         pl.col("member").alias("names"),
         pl.col("value").alias("amounts"),
