@@ -84,7 +84,8 @@ def with_tree_overrides(
         on=["company_id", "statement", concept_column],
         how="left",
     )
-    by_concept = facts.select(
+    # A parent or header is a line, never one member of it.
+    by_concept = facts.filter(pl.col("axis").fill_null("") == "").select(
         "company_id",
         "filing_id",
         "statement",
@@ -114,8 +115,14 @@ def tree_pointers(own_parent: pl.Expr, own_abstract: pl.Expr) -> list[pl.Expr]:
     """``parent_id``, ``parent_concept``, ``abstract_id``, ``abstract_concept``.
 
     ``own_parent``/``own_abstract`` apply when no override names a parent.
+    A dimension row splits its line and is not a part of the line's parent,
+    so override parents apply to undimensioned rows only; otherwise segment
+    goodwill would be added into the synthetic Non-current Assets subtotal.
     """
-    parent = pl.coalesce("cno_parent_concept", "hn_parent_concept")
+    undimensioned = pl.col("axis").fill_null("") == ""
+    parent = pl.when(undimensioned).then(
+        pl.coalesce("cno_parent_concept", "hn_parent_concept")
+    )
     synthetic_parent = pl.coalesce("cno_parent_concept", "hn_parent_concept_source")
     abstract = pl.col("cno_abstract_concept")
     parent_missing = parent.is_not_null() & pl.col("parent_fact_id").is_null()

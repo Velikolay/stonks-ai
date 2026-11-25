@@ -16,6 +16,7 @@ from typing import Optional
 
 import pandas as pd
 
+from .concepts import UNIT_PREFIXES
 from .values import as_date, sec_member
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,11 @@ logger = logging.getLogger(__name__)
 # Cover-page period focus. A 10-K declares FY; a 10-Q declares Q1, Q2, or Q3.
 _FOCUS_QUARTER = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4, "FY": 4}
 
-#: ``(concept, period_end)`` to ``(amount, unit)`` in the reporting currency.
-ReportingAmounts = dict[tuple[str, date], tuple[Decimal, str]]
+#: A translated amount and the reporting-currency amount and unit it stands for.
+Translation = tuple[Decimal, Decimal, str]
+
+#: ``(concept, period_end)`` to every translation of that concept on that date.
+ReportingAmounts = dict[tuple[str, date], list[Translation]]
 
 
 def fiscal_focus(entity_info: Optional[dict]) -> tuple[Optional[int], Optional[int]]:
@@ -49,7 +53,7 @@ def _reporting_unit(currency: str, unit_ref: object) -> str:
 
 
 def reporting_currency_amounts(facts: object) -> ReportingAmounts:
-    """Each concept and period's amount in the reporting currency.
+    """Each translated amount beside the reporting-currency amount it stands for.
 
     A 20-F often tags the current year twice, once in the reporting currency
     and once as a convenience translation. The statement frame keeps one of
@@ -57,6 +61,12 @@ def reporting_currency_amounts(facts: object) -> ReportingAmounts:
     reporting currency can sit beside a current-year translation. The
     reporting currency is the one most undimensioned facts use. With only one
     currency there is nothing to choose, and the result is empty.
+
+    A translation shares its context with the amount it translates, so the two
+    are matched on start and end. The end alone is not enough: a 10-K's year
+    and its fourth quarter end on one date, and a single fact in another
+    currency (Moody's one rupee amount) would otherwise swap the year for the
+    quarter.
     """
     if facts is None or not isinstance(facts, pd.DataFrame) or facts.empty:
         return {}
@@ -67,30 +77,40 @@ def reporting_currency_amounts(facts: object) -> ReportingAmounts:
     undimensioned = facts.loc[~facts["is_dimensioned"].fillna(False)].copy()
     if undimensioned.empty:
         return {}
-    currencies = undimensioned["currency"].dropna().astype(str).str.strip().str.upper()
-    currencies = currencies[currencies.str.fullmatch(r"[A-Z]{3}")]
-    if currencies.nunique() < 2:
+    currencies = undimensioned["currency"].astype(str).str.strip().str.upper()
+    undimensioned["currency_code"] = currencies
+    undimensioned = undimensioned.loc[currencies.str.fullmatch(r"[A-Z]{3}")]
+    if undimensioned["currency_code"].nunique() < 2:
         return {}
-    reporting = str(currencies.value_counts().index[0])
+    reporting = str(undimensioned["currency_code"].value_counts().index[0])
 
-    chosen = undimensioned.loc[
-        undimensioned["currency"].astype(str).str.strip().str.upper() == reporting
-    ]
-    amounts: ReportingAmounts = {}
-    for row in chosen.itertuples(index=False):
-        period_end = as_date(row.period_end) or as_date(
-            getattr(row, "period_instant", None)
-        )
+    by_period: dict[tuple, tuple[Decimal, str]] = {}
+    translated: list[tuple[tuple, Decimal]] = []
+    for row in undimensioned.itertuples(index=False):
         concept = row.concept
-        if period_end is None or not isinstance(concept, str) or concept == "":
+        if not isinstance(concept, str) or concept == "":
             continue
         if pd.isna(row.numeric_value):
             continue
-        unit_ref = row.unit_ref if hasattr(row, "unit_ref") else ""
-        amounts[(concept, period_end)] = (
-            Decimal(str(row.numeric_value)),
-            _reporting_unit(reporting, unit_ref),
+        period_end = as_date(row.period_end) or as_date(
+            getattr(row, "period_instant", None)
         )
+        if period_end is None:
+            continue
+        period = (concept, as_date(getattr(row, "period_start", None)), period_end)
+        value = Decimal(str(row.numeric_value))
+        if row.currency_code == reporting:
+            unit_ref = getattr(row, "unit_ref", "")
+            by_period.setdefault(period, (value, _reporting_unit(reporting, unit_ref)))
+        else:
+            translated.append((period, value))
+
+    amounts: ReportingAmounts = {}
+    for period, value in translated:
+        original = by_period.get(period)
+        if original is not None:
+            concept, _, period_end = period
+            amounts.setdefault((concept, period_end), []).append((value, *original))
     return amounts
 
 
@@ -143,15 +163,37 @@ class FilingContext:
         value: Optional[Decimal],
         unit: Optional[str],
     ) -> tuple[Optional[Decimal], Optional[str]]:
-        """The reporting-currency amount and unit when the frame kept the other one."""
+        """The reporting-currency amount and unit when the frame kept a translation.
+
+        The frame stamps one unit on the whole row, so beside a translated
+        column the others carry the translation's currency too. An amount
+        that is no translation is in the reporting currency, and so is its
+        unit.
+        """
         if period_end is None or value is None:
             return value, unit
-        chosen = self.reporting_amounts.get((concept, period_end))
-        if chosen is None:
-            return value, unit
-        amount, reporting_unit = chosen
-        if amount == value or (
-            amount != 0 and abs(value - amount) <= abs(amount) * Decimal("1e-9")
+        for translation, amount, reporting_unit in self.reporting_amounts.get(
+            (concept, period_end), []
         ):
-            return value, unit
-        return amount, reporting_unit
+            if _same_amount(value, translation) and not _same_amount(value, amount):
+                return amount, reporting_unit
+        return value, self._reporting_unit_of(unit)
+
+    def _reporting_unit_of(self, unit: Optional[str]) -> Optional[str]:
+        reporting = next(iter(self.reporting_amounts.values()), None)
+        if not reporting:
+            return unit
+        code = reporting[0][2][:3]
+        text = str(unit or "").strip().lower()
+        per_share = text.endswith("pershare") or text.endswith("per_share")
+        for suffix in ("_per_share", "pershare"):
+            text = text.removesuffix(suffix)
+        for prefix in UNIT_PREFIXES:
+            text = text.removeprefix(prefix)
+        if len(text) != 3 or not text.isalpha() or text == code:
+            return unit
+        return f"{code}PerShare" if per_share else code
+
+
+def _same_amount(a: Decimal, b: Decimal) -> bool:
+    return a == b or (b != 0 and abs(a - b) <= abs(b) * Decimal("1e-9"))

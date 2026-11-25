@@ -279,3 +279,16 @@ def dimension_fact(
     except Exception:
         logger.exception("Error creating dimension fact from row %s", row)
         return None
+
+
+def rekey(fact: FinancialFactCreate, statement: str) -> None:
+    """Move a dimension fact to ``statement``, with the key that statement gives it."""
+    suffix = "|ytd" if fact.key.endswith("|ytd") else ""
+    end = fact.period_end.isoformat() if fact.period_end else ""
+    fact.statement = statement
+    fact.key = (
+        fact_key(
+            fact.concept, statement, end, fact.axis, fact.member, fact.member_label
+        )
+        + suffix
+    )
