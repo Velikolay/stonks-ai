@@ -30,6 +30,7 @@ from .stages import (
     facts_normalized,
     facts_overridden,
     hierarchy_normalization,
+    yearly,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,12 @@ STAGES: tuple[Stage, ...] = (
             "dimension_normalization",
         ),
         facts_normalized.run,
+    ),
+    Stage(
+        "yearly_financials",
+        s.YEARLY_FINANCIALS,
+        ("financial_facts_normalized", "filings"),
+        yearly.run,
     ),
 )
 
