@@ -762,12 +762,14 @@ ORDER BY period_end;
 normalized row is wrong in a way no override can express, or when the same
 override behaves differently for two companies. Each stage is a module in
 [filings/refresh/stages/](filings/refresh/stages/), a chain of named steps
-that mirror the rules in this file. To see what a step produced, dump the
+that mirror the rules in this file. The quarterly stage decides one series,
+line or axis-year at a time in plain Python functions, which a unit test can
+call with a handful of records. To see what a step produced, dump the
 intermediate frames a stage exposes and read them with polars:
 
 ```bash
 python -m filings.refresh --companies 7 --stages quarterly_financials --dump-dir /tmp/dump
-python -c "import polars as pl; print(pl.read_parquet('/tmp/dump/7/quarterly_financials.annual_split.parquet'))"
+python -c "import polars as pl; print(pl.read_parquet('/tmp/dump/7/quarterly_financials.q4_sources.parquet'))"
 ```
 
 A code change takes effect on the next `make refresh`; there is nothing to

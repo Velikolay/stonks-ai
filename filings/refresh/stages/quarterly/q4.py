@@ -13,16 +13,22 @@ so every member's Q4 on one axis comes from one 10-K, chosen in order:
 
 A member that 10-K leaves out comes from the next one in that order. The
 nine months subtracted come from a 10-Q on the same split as that 10-K
-(see :func:`nine_month_split`); without one, Q1-Q3 are summed.
+(see :func:`nine_month_source`); without one, Q1-Q3 are summed.
+
+Frames bring the rows together; each member-year and each axis-year is then
+decided in plain Python.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Iterator, Optional, Sequence
 
 import polars as pl
 
+from ...records import ROW, frame_of, grouped, numbered, records
 from ...rules import sql
 from ...rules.periods import ANNUAL_FORMS, QUARTERLY_FORMS, quarter_apart
 from ...rules.rounding import reprint_tolerance_of
@@ -30,39 +36,103 @@ from .rows import SERIES, WEIGHTED_AVERAGE_SHARES, is_per_share
 
 AXIS_YEAR = ["company_id", "statement", "normalized_label", "axis", "fiscal_tag"]
 MEMBER_YEAR = [*SERIES, "fiscal_tag"]
+DECIMAL = pl.Decimal(38, 10)
 #: A per-share Q4 is only derived when Q1-Q3 sit under the 10-K's figure; a
 #: mid-year stock split leaves them on another share basis.
 PER_SHARE_SLACK = (Decimal("1.05"), Decimal("0.05"))
 
 
-def quarters_by_year(restated: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFrame:
-    """Q1-Q3 per member and fiscal year, as one amount to subtract from the 10-K.
+def per_share_fits(nine_months: Decimal, annual: Optional[Decimal]) -> bool:
+    factor, slack = PER_SHARE_SLACK
+    return annual is not None and abs(nine_months) <= abs(annual) * factor + slack
 
-    Three restated quarters sum to the restated basis. Otherwise three
-    discrete quarters sum, unless a published Q3 kept the nine-month total,
-    since the earlier quarters can be on a previous classification; then,
-    or when a quarter is missing, the nine-month total is used.
+
+# --- Q1-Q3 of each member and year -------------------------------------------
+
+
+@dataclass(slots=True)
+class Quarter:
+    """A discrete Q1-Q3 row of one member-year."""
+
+    member_year: tuple
+    filing_date: date
+    is_comparative_backfill: bool
+    fiscal_quarter: Optional[int]
+    value: Optional[Decimal]
+    restated_value: Optional[Decimal]
+    drop_ytd: bool
+    q3_ytd: Optional[Decimal]
+    prefer_ytd_anchor: bool
+
+
+@dataclass(slots=True)
+class FirstThree:
+    """Q1-Q3 of one member-year as one amount to subtract from the 10-K."""
+
+    value: Optional[Decimal]
+    #: When the quarters were filed. A backfilled comparative was printed a
+    #: year later, so it does not count.
+    filed: Optional[date]
+
+
+def first_three_quarters(quarters: Sequence[Quarter]) -> FirstThree:
+    """Three restated quarters sum to the restated basis.
+
+    Otherwise three discrete quarters sum, unless a published Q3 kept the
+    nine-month total, since the earlier quarters can be on a previous
+    classification; then, or when a quarter is missing, the nine-month total
+    is used.
     """
-    dates = filings.select(pl.col("id").alias("filing_id"), "filing_date")
-    rows = restated.join(dates, on="filing_id", how="inner")
-    shown = ~pl.col("drop_ytd")
-    return rows.group_by(MEMBER_YEAR).agg(
-        # A backfilled comparative was printed a year later; it is not when
-        # the quarters were filed.
-        pl.col("filing_date")
-        .filter(~pl.col("is_comparative_backfill"))
-        .max()
-        .alias("filed"),
-        pl.when(pl.col("restated_value").count() == 3)
-        .then(pl.col("restated_value").sum())
-        .when(
-            (pl.col("fiscal_quarter").filter(shown).drop_nulls().n_unique() == 3)
-            & ~pl.col("prefer_ytd_anchor").fill_null(False).any()
-        )
-        .then(sql.sum_or_null(pl.col("value").filter(shown)))
-        .otherwise(pl.col("q3_ytd").max())
-        .alias("value"),
+    filed = max(
+        (q.filing_date for q in quarters if not q.is_comparative_backfill),
+        default=None,
     )
+    restated = [q.restated_value for q in quarters if q.restated_value is not None]
+    if len(restated) == 3:
+        return FirstThree(sum(restated, Decimal(0)), filed)
+
+    shown = [q for q in quarters if not q.drop_ytd]
+    numbers = {q.fiscal_quarter for q in shown if q.fiscal_quarter is not None}
+    if len(numbers) == 3 and not any(q.prefer_ytd_anchor for q in quarters):
+        values = [q.value for q in shown if q.value is not None]
+        return FirstThree(sum(values, Decimal(0)) if values else None, filed)
+
+    nine = max((q.q3_ytd for q in quarters if q.q3_ytd is not None), default=None)
+    return FirstThree(nine, filed)
+
+
+def quarters_by_year(
+    restated: pl.DataFrame, filings: pl.DataFrame
+) -> dict[tuple, FirstThree]:
+    """:class:`FirstThree` per member-year (``MEMBER_YEAR`` tuple)."""
+    dates = filings.select(pl.col("id").alias("filing_id"), "filing_date")
+    rows = restated.filter(
+        ~pl.col("is_abstract") & pl.col("fiscal_tag").is_not_null()
+    ).join(dates, on="filing_id", how="inner")
+    by_member = grouped(
+        records(rows, Quarter, key=MEMBER_YEAR), lambda q: q.member_year
+    )
+    return {key: first_three_quarters(qs) for key, qs in by_member.items()}
+
+
+def by_year_frame(by_year: dict[tuple, FirstThree]) -> pl.DataFrame:
+    """:func:`quarters_by_year` as a frame on ``MEMBER_YEAR``."""
+    return frame_of(
+        ((*key, q.value, q.filed) for key, q in by_year.items()),
+        {
+            "company_id": pl.Int32,
+            "statement": pl.String,
+            "normalized_label": pl.String,
+            "axis": pl.String,
+            "member": pl.String,
+            "fiscal_tag": pl.Int32,
+            "value": DECIMAL,
+            "filed": pl.Date,
+        },
+    )
+
+
+# --- The 10-Ks and nine-month 10-Qs of each axis and year ---------------------
 
 
 def annual_members(data_rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFrame:
@@ -91,6 +161,11 @@ def annual_members(data_rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFra
         .with_columns(
             pl.col("f_fiscal_year").alias("fiscal_year"),
             pl.col("f_fiscal_quarter").alias("fiscal_quarter"),
+            (
+                (pl.col("statement") != "Balance Sheet")
+                & ~pl.col("concept").is_in(WEIGHTED_AVERAGE_SHARES)
+            ).alias("is_flow"),
+            is_per_share(pl.col("unit")).alias("is_per_share"),
         )
         .drop("f_fiscal_year", "f_fiscal_quarter")
     )
@@ -131,42 +206,135 @@ def nine_months(
     )
 
 
-def _member_sets(frame: pl.DataFrame) -> dict[tuple, dict[int, tuple]]:
-    """``(line, axis, year) -> filing -> (filing_date, members)``."""
-    grouped = frame.group_by(*AXIS_YEAR, "filing_id", "filing_date").agg(
-        pl.col("member").unique().alias("members")
-    )
-    out: dict[tuple, dict[int, tuple]] = {}
-    for r in grouped.iter_rows(named=True):
-        key = tuple(r[c] for c in AXIS_YEAR)
-        out.setdefault(key, {})[r["filing_id"]] = (
-            r["filing_date"],
-            frozenset(r["members"]),
+@dataclass(slots=True)
+class AnnualMember:
+    """One member's figure in one 10-K of an axis-year."""
+
+    axis_year: tuple
+    row_nr: int
+    id: int
+    filing_id: int
+    filing_date: date
+    is_amendment: bool
+    is_duplicate: bool
+    member: str
+    value: Optional[Decimal]
+    #: Not a balance or a weighted-average share count, so Q4 is a residual.
+    is_flow: bool
+    is_per_share: bool
+
+
+@dataclass(slots=True)
+class NineMonthMember:
+    """One member's nine-month total in one 10-Q of an axis-year."""
+
+    axis_year: tuple
+    filing_id: int
+    filing_date: date
+    member: str
+    value: Optional[Decimal]
+
+
+@dataclass
+class Filing:
+    """One 10-K or 10-Q of an axis-year, with its members' values."""
+
+    filing_id: int
+    filing_date: date
+    is_amendment: bool = False
+    rows: list[AnnualMember] = field(default_factory=list)
+    values: dict[str, list[Optional[Decimal]]] = field(default_factory=dict)
+
+    @property
+    def members(self) -> frozenset[str]:
+        return frozenset(self.values)
+
+
+def _filings(rows: Sequence[AnnualMember | NineMonthMember]) -> list[Filing]:
+    out: dict[int, Filing] = {}
+    for r in rows:
+        f = out.get(r.filing_id)
+        if f is None:
+            amendment = isinstance(r, AnnualMember) and r.is_amendment
+            f = out[r.filing_id] = Filing(r.filing_id, r.filing_date, amendment)
+        if isinstance(r, AnnualMember):
+            f.rows.append(r)
+        f.values.setdefault(r.member, []).append(r.value)
+    return list(out.values())
+
+
+def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> Optional[bool]:
+    """Every member has quarters (or is zero), and every member with quarters is in it.
+
+    None when that cannot be told: no member of the year has quarters, or
+    the members without them have no value. Unknown ranks last.
+    """
+    with_quarters = {m for m, q in quarters.items() if q.value is not None}
+
+    def has_quarters(row: AnnualMember) -> Optional[bool]:
+        if row.member in with_quarters:
+            return True
+        return None if row.value is None else row.value == 0
+
+    known = [h for h in map(has_quarters, annual.rows) if h is not None]
+    every_member = all(known) if known else None
+    covers_quarters = None
+    if with_quarters:
+        covers_quarters = with_quarters <= annual.members
+    if every_member is False or covers_quarters is False:
+        return False
+    if every_member is None or covers_quarters is None:
+        return None
+    return True
+
+
+#: Sort order for a yes/no/unknown test: yes first, unknown last.
+_UNKNOWN_LAST = {True: 0, False: 1, None: 2}
+
+
+def rank_annual_filings(
+    fiscal_tag: int, annuals: Sequence[Filing], quarters: dict[str, FirstThree]
+) -> list[Filing]:
+    """The 10-Ks of one axis-year, best source of Q4 first (see the module)."""
+    filed = [
+        q.filed
+        for a in annuals
+        for r in a.rows
+        if (q := quarters.get(r.member)) is not None and q.filed is not None
+    ]
+    quarters_filed = max(filed) if filed else None
+
+    def rank(a: Filing) -> tuple:
+        after = quarters_filed is not None and a.filing_date >= quarters_filed
+        return (
+            not a.is_amendment,
+            a.filing_id != fiscal_tag,
+            _UNKNOWN_LAST[on_quarter_split(a, quarters)],
+            # The first 10-K filed after the quarters, else the latest before.
+            not after,
+            a.filing_date if after else date.max,
+            -a.filing_date.toordinal(),
+            -a.filing_id,
         )
-    return out
+
+    return sorted(annuals, key=rank)
 
 
-def _values(frame: pl.DataFrame) -> dict[tuple, dict[str, list]]:
-    """``(line, axis, year, filing) -> member -> [values]``."""
-    out: dict[tuple, dict[str, list]] = {}
-    for r in frame.select(*AXIS_YEAR, "filing_id", "member", "value").iter_rows():
-        out.setdefault(r[:6], {}).setdefault(r[6], []).append(r[7])
-    return out
-
-
-def _prints_year_as(own: dict[str, list], later: dict[str, list]) -> bool:
+def _prints_year_as(own: Filing, later: Filing) -> bool:
     """No member shared by both filings changed beyond the later one's rounding."""
     return not any(
         abs(o - v) > reprint_tolerance_of(v)
-        for member, own_values in own.items()
+        for member, own_values in own.values.items()
         for o in own_values
-        for v in later.get(member, ())
+        for v in later.values.get(member, ())
         if o is not None and v is not None
     )
 
 
-def nine_month_split(annual: pl.DataFrame, nines: pl.DataFrame) -> pl.DataFrame:
-    """For each 10-K of a year, the 10-Q whose nine months it subtracts.
+def nine_month_source(
+    annual: Filing, annuals: Sequence[Filing], nines: Sequence[Filing]
+) -> Optional[Filing]:
+    """The 10-Q whose nine months this 10-K subtracts.
 
     A 10-Q a year later is on the 10-K's split when the first 10-K after
     that 10-Q prints the year as this 10-K did: no shared member at another
@@ -177,161 +345,165 @@ def nine_month_split(annual: pl.DataFrame, nines: pl.DataFrame) -> pl.DataFrame:
     a 10-K that recast its year pairs with the 10-Q that reprinted the nine
     months that way and not with quarters filed on the earlier members.
     """
-    annual_sets = _member_sets(annual)
-    nine_sets = _member_sets(nines)
-    annual_values = _values(annual)
+    best: Optional[tuple[tuple, Filing]] = None
+    for nine in nines:
+        if not nine.members <= annual.members:
+            continue
+        on_split = False
+        if nine.filing_date > annual.filing_date:
+            later = [a for a in annuals if a.filing_date > nine.filing_date]
+            if later:
+                following = min(later, key=lambda a: (a.filing_date, a.filing_id))
+                on_split = _prints_year_as(annual, following)
+        if not (on_split or nine.members == annual.members):
+            continue
+        rank = (
+            not on_split,
+            not nine.filing_date < annual.filing_date,
+            abs((nine.filing_date - annual.filing_date).days),
+            nine.filing_id,
+        )
+        if best is None or rank < best[0]:
+            best = (rank, nine)
+    return None if best is None else best[1]
 
-    out = []
-    for key, filings in annual_sets.items():
-        for a_id, (a_date, a_members) in filings.items():
-            best: Optional[tuple[tuple[bool, bool, int, int], int]] = None
-            for n_id, (n_date, n_members) in nine_sets.get(key, {}).items():
-                if not n_members <= a_members:
-                    continue
-                later = [
-                    (b_date, b_id)
-                    for b_id, (b_date, _) in filings.items()
-                    if b_date > n_date and n_date > a_date
-                ]
-                on_split = False
-                if later:
-                    _, next_id = min(later)
-                    on_split = _prints_year_as(
-                        annual_values.get((*key, a_id), {}),
-                        annual_values.get((*key, next_id), {}),
-                    )
-                if not (on_split or n_members == a_members):
-                    continue
-                rank = (
-                    not on_split,
-                    not (n_date < a_date),
-                    abs((n_date - a_date).days),
-                    n_id,
-                )
-                if best is None or rank < best[0]:
-                    best = (rank, n_id)
-            if best is not None:
-                out.append((*key, a_id, best[1]))
-    return pl.DataFrame(
-        out,
-        schema={
+
+@dataclass(slots=True)
+class Q4Source:
+    """Where one 10-K of an axis-year stands as the source of Q4."""
+
+    annual: Filing
+    rank: int
+    nine_months: Optional[Filing]
+
+
+def member_q4(
+    sources: Sequence[Q4Source], quarters: dict[str, FirstThree]
+) -> Iterator[tuple[int, Decimal]]:
+    """``(annual row, amount to subtract)`` for every member that gets a Q4.
+
+    Each member comes from the best-ranked 10-K that has it and something to
+    subtract. A member of the first-ranked 10-K gets Q4 from its nine months
+    even when its Q1-Q3 are hidden as a recast (Amazon's 2016 10-K introduced
+    new categories, and only the 2017 10-Qs printed 2016's quarters on them).
+    """
+    chosen: dict[str, tuple[tuple, int, Decimal]] = {}
+    for source in sources:
+        for row in source.annual.rows:
+            q = quarters.get(row.member)
+            first_three = q.value if q is not None else None
+            nine = None
+            if source.nine_months is not None:
+                nine = source.nine_months.values.get(row.member, [None])[0]
+            subtract = nine if nine is not None else first_three
+            if subtract is None or not row.is_flow:
+                continue
+            if first_three is None and source.rank != 1:
+                continue
+            if row.is_per_share and not per_share_fits(subtract, row.value):
+                continue
+            order = (source.rank, row.is_duplicate, row.id)
+            best = chosen.get(row.member)
+            if best is None or order < best[0]:
+                chosen[row.member] = (order, row.row_nr, subtract)
+    for _, row_nr, subtract in chosen.values():
+        yield row_nr, subtract
+
+
+def q4_sources(
+    annual: pl.DataFrame,
+    nines: pl.DataFrame,
+    quarters: dict[tuple, dict[str, FirstThree]],
+) -> dict[tuple, list[Q4Source]]:
+    """Per axis-year, its 10-Ks ranked with the nine months each subtracts."""
+    annual_rows = grouped(
+        records(annual, AnnualMember, key=AXIS_YEAR), lambda r: r.axis_year
+    )
+    nine_rows = grouped(
+        records(nines, NineMonthMember, key=AXIS_YEAR), lambda r: r.axis_year
+    )
+    out = {}
+    for axis_year, rows in annual_rows.items():
+        annuals = _filings(rows)
+        nine_filings = _filings(nine_rows.get(axis_year, []))
+        ranked = rank_annual_filings(
+            axis_year[-1], annuals, quarters.get(axis_year, {})
+        )
+        out[axis_year] = [
+            Q4Source(a, rank, nine_month_source(a, annuals, nine_filings))
+            for rank, a in enumerate(ranked, start=1)
+        ]
+    return out
+
+
+def by_axis_year(
+    by_year: dict[tuple, FirstThree],
+) -> dict[tuple, dict[str, FirstThree]]:
+    """Member-years regrouped: axis-year to member to its Q1-Q3."""
+    out: dict[tuple, dict[str, FirstThree]] = {}
+    for (*line, axis, member, fiscal_tag), q in by_year.items():
+        out.setdefault((*line, axis, fiscal_tag), {})[member] = q
+    return out
+
+
+def sources_frame(sources: dict[tuple, list[Q4Source]]) -> pl.DataFrame:
+    """The ranking and nine-month pairing per axis-year, for ``--dump-dir``."""
+    return frame_of(
+        (
+            (
+                *axis_year,
+                s.annual.filing_id,
+                s.rank,
+                s.nine_months.filing_id if s.nine_months else None,
+            )
+            for axis_year, ranked in sources.items()
+            for s in ranked
+        ),
+        {
             "company_id": pl.Int32,
             "statement": pl.String,
             "normalized_label": pl.String,
             "axis": pl.String,
             "fiscal_tag": pl.Int32,
             "filing_id": pl.Int32,
+            "split_rank": pl.Int64,
             "nine_month_filing_id": pl.Int32,
         },
-        orient="row",
     )
 
 
-def annual_split(annual: pl.DataFrame, quarters: pl.DataFrame) -> pl.DataFrame:
-    """Rank the 10-Ks of each line, axis and year as the source of Q4."""
-    with_quarters = quarters.filter(pl.col("value").is_not_null())
-    members_with_quarters = with_quarters.group_by(AXIS_YEAR).agg(
-        pl.len().alias("quarter_members")
-    )
-    joined = annual.join(
-        quarters.select(*MEMBER_YEAR, pl.col("value").alias("q_value"), "filed"),
-        on=MEMBER_YEAR,
-        how="left",
-    ).join(members_with_quarters, on=AXIS_YEAR, how="left")
-    has_quarters = pl.col("q_value").is_not_null() | (pl.col("value") == 0)
-    candidates = joined.group_by(
-        *AXIS_YEAR, "filing_id", "filing_date", "is_amendment"
-    ).agg(
+def dimension_q4(
+    annual: pl.DataFrame, nines: pl.DataFrame, by_year: dict[tuple, FirstThree]
+) -> tuple[pl.DataFrame, dict[tuple, list[Q4Source]]]:
+    """Q4 of every dimensioned member, and the sources it was chosen from."""
+    annual = numbered(annual)
+    quarters = by_axis_year(by_year)
+    sources = q4_sources(annual, nines, quarters)
+    subtract = frame_of(
         (
-            sql.bool_and(has_quarters)
-            & (
-                pl.col("member").filter(pl.col("q_value").is_not_null()).n_unique()
-                == pl.col("quarter_members").max()
-            )
-        ).alias("matches_quarters"),
-        pl.col("filed").max().alias("filed"),
+            pick
+            for axis_year, ranked in sources.items()
+            for pick in member_q4(ranked, quarters.get(axis_year, {}))
+        ),
+        {ROW: pl.UInt32, "subtract": DECIMAL},
     )
-    candidates = candidates.with_columns(
-        pl.col("filed").max().over(AXIS_YEAR).alias("quarters_filed")
-    )
-    after = pl.col("filing_date") >= pl.col("quarters_filed")
-    return sql.row_number(
-        candidates,
-        AXIS_YEAR,
-        [
-            sql.desc("is_amendment"),
-            sql.desc(pl.col("filing_id") == pl.col("fiscal_tag")),
-            sql.desc("matches_quarters", nulls_last=True),
-            sql.desc(after),
-            sql.asc(pl.when(after).then(pl.col("filing_date"))),
-            sql.desc("filing_date"),
-            sql.desc("filing_id"),
-        ],
-        name="split_rank",
-    ).select(*AXIS_YEAR, "filing_id", "split_rank")
-
-
-def _per_share_fits(nine: pl.Expr, annual: pl.Expr) -> pl.Expr:
-    factor, slack = PER_SHARE_SLACK
-    return ~is_per_share(pl.col("unit")) | (
-        nine.abs() <= annual.abs() * sql.decimal(factor) + sql.decimal(slack)
-    )
-
-
-def member_q4(
-    annual: pl.DataFrame,
-    quarters: pl.DataFrame,
-    splits: pl.DataFrame,
-    nine_split: pl.DataFrame,
-    nines: pl.DataFrame,
-) -> pl.DataFrame:
-    """Q4 of every dimensioned member, from its year's best-ranked 10-K.
-
-    A member of the first-ranked 10-K gets Q4 from those nine months even
-    when its Q1-Q3 are hidden as a recast (Amazon's 2016 10-K introduced new
-    categories, and only the 2017 10-Qs printed 2016's quarters on them).
-    """
-    rows = (
-        splits.join(annual, on=[*AXIS_YEAR, "filing_id"])
-        .join(
-            quarters.select(*MEMBER_YEAR, pl.col("value").alias("q_value")),
-            on=MEMBER_YEAR,
-            how="left",
-        )
-        .join(nine_split, on=[*AXIS_YEAR, "filing_id"], how="left")
-        .join(
-            nines.select(
-                *MEMBER_YEAR,
-                pl.col("filing_id").alias("nine_month_filing_id"),
-                pl.col("value").alias("nm_value"),
-            ),
-            on=[*MEMBER_YEAR, "nine_month_filing_id"],
-            how="left",
-        )
-    )
-    subtract = pl.coalesce("nm_value", "q_value")
-    eligible = (
-        (
-            pl.col("q_value").is_not_null()
-            | ((pl.col("split_rank") == 1) & pl.col("nm_value").is_not_null())
-        )
-        & (pl.col("statement") != "Balance Sheet")
-        & ~pl.col("concept").is_in(WEIGHTED_AVERAGE_SHARES)
-        & _per_share_fits(subtract, pl.col("value"))
-    )
-    chosen = sql.distinct_on(
-        rows.filter(eligible), MEMBER_YEAR, ["split_rank", "is_duplicate", "id"]
-    )
-    return chosen.with_columns(
-        (pl.col("value") - subtract).alias("value"),
+    q4 = annual.join(subtract, on=ROW).with_columns(
+        (pl.col("value") - pl.col("subtract")).alias("value"),
         pl.lit("calculated").alias("source_type"),
     )
+    return q4, sources
 
 
-def line_q4(annual_rows: pl.DataFrame, quarters: pl.DataFrame) -> pl.DataFrame:
+def line_q4(annual_rows: pl.DataFrame, by_year: pl.DataFrame) -> pl.DataFrame:
     """Q4 of every undimensioned flow line: its 10-K minus Q1-Q3."""
     rows = annual_rows.join(
-        quarters.select(*MEMBER_YEAR, pl.col("value").alias("q_value")), on=MEMBER_YEAR
+        by_year.select(*MEMBER_YEAR, pl.col("value").alias("q_value")),
+        on=MEMBER_YEAR,
+    )
+    factor, slack = PER_SHARE_SLACK
+    fits = ~is_per_share(pl.col("unit")) | (
+        pl.col("q_value").abs()
+        <= pl.col("value").abs() * sql.decimal(factor) + sql.decimal(slack)
     )
     eligible = (
         (pl.col("axis").fill_null("") == "")
@@ -339,7 +511,7 @@ def line_q4(annual_rows: pl.DataFrame, quarters: pl.DataFrame) -> pl.DataFrame:
         # Instant stocks are not annual minus quarters.
         & pl.col("period").is_not_null()
         & ~pl.col("concept").is_in(WEIGHTED_AVERAGE_SHARES)
-        & _per_share_fits(pl.col("q_value"), pl.col("value"))
+        & fits
         & pl.col("q_value").is_not_null()
         & ~pl.col("is_abstract")
     )
