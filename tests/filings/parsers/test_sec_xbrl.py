@@ -134,18 +134,62 @@ class TestSECXBRLParser:
 
         amounts = reporting_currency_amounts(facts)
 
-        assert amounts[("ifrs-full:Revenue", date(2020, 12, 31))] == (
-            Decimal("1339255000000"),
-            "twd",
-        )
-        assert amounts[("ifrs-full:Equity", date(2019, 12, 31))][0] == Decimal(
-            "1614387000000"
-        )
+        assert amounts[("ifrs-full:Revenue", date(2020, 12, 31))] == [
+            (Decimal("47694300000"), Decimal("1339255000000"), "twd")
+        ]
+        assert amounts[("ifrs-full:Equity", date(2019, 12, 31))] == [
+            (Decimal("53974800000"), Decimal("1614387000000"), "twd")
+        ]
+        # Reported in one currency only: nothing to translate back.
         assert (
-            amounts[("ifrs-full:BasicEarningsLossPerShare", date(2019, 12, 31))][1]
-            == "twdPerShare"
+            "ifrs-full:BasicEarningsLossPerShare",
+            date(2019, 12, 31),
+        ) not in amounts
+
+    def test_a_translation_is_matched_on_its_whole_period(self):
+        """A 10-K's year and fourth quarter end on one date; neither replaces the other.
+
+        Moody's FY2013 10-K tags one amount in rupees, which turns the
+        currency check on, and its quarterly note reports revenue for the
+        three months ending on the year's last day.
+        """
+        rows = [
+            ("2013-01-01", 2_972_500_000, "USD"),
+            ("2013-10-01", 779_200_000, "USD"),
+        ]
+        facts = pd.DataFrame(
+            [
+                {
+                    "concept": "us-gaap:Revenues",
+                    "numeric_value": value,
+                    "currency": currency,
+                    "unit_ref": "USD",
+                    "period_start": start,
+                    "period_end": "2013-12-31",
+                    "is_dimensioned": False,
+                }
+                for start, value, currency in rows
+            ]
+            + [
+                {
+                    "concept": "us-gaap:PaymentsToAcquireBusinessesGross",
+                    "numeric_value": 5_000_000_000,
+                    "currency": "INR",
+                    "unit_ref": "INR",
+                    "period_start": "2013-01-01",
+                    "period_end": "2013-12-31",
+                    "is_dimensioned": False,
+                }
+            ]
         )
-        assert ("ifrs-full:Revenue", date(2020, 12, 31)) in amounts
+        context = FilingContext(reporting_amounts=reporting_currency_amounts(facts))
+
+        value, unit = context.reporting_amount(
+            "us-gaap:Revenues", date(2013, 12, 31), Decimal("2972500000"), "usd"
+        )
+
+        assert context.reporting_amounts == {}
+        assert (value, unit) == (Decimal("2972500000"), "usd")
 
     def test_reporting_currency_is_unused_for_one_currency(self):
         """A filing that reports one currency needs no replacement."""
@@ -177,10 +221,9 @@ class TestSECXBRLParser:
         """The current-year convenience translation is replaced on the face row."""
         context = FilingContext(
             reporting_amounts={
-                ("ifrs-full:Revenue", date(2020, 12, 31)): (
-                    Decimal("1339255000000"),
-                    "twd",
-                )
+                ("ifrs-full:Revenue", date(2020, 12, 31)): [
+                    (Decimal("47694300000"), Decimal("1339255000000"), "twd")
+                ]
             }
         )
         row = pd.Series(
@@ -210,6 +253,47 @@ class TestSECXBRLParser:
         assert fact.value == Decimal("1339255000000")
         assert fact.unit == "twd"
         assert fact.comparative_value == Decimal("1069985000000")
+
+    def test_face_fact_beside_a_translation_takes_the_reporting_unit(self):
+        """An opening balance on a translated row is no translation.
+
+        TSMC's cash flow statement translates the closing cash into dollars
+        and stamps that unit on the row, so the opening balance in New Taiwan
+        dollars arrives marked as dollars. It keeps its value and is stored
+        in the reporting currency.
+        """
+        context = FilingContext(
+            reporting_amounts={
+                ("ifrs-full:CashAndCashEquivalents", date(2020, 12, 31)): [
+                    (Decimal("23575100000"), Decimal("660170600000"), "twd")
+                ]
+            }
+        )
+        row = pd.Series(
+            {
+                "concept": "ifrs-full_CashAndCashEquivalents",
+                "label": "CASH AND CASH EQUIVALENTS, BEGINNING OF YEAR",
+                "2020-12-31 (FY)": 455399300000,
+                "2019-12-31 (FY)": 577814600000,
+                "unit": "unit_usd",
+                "abstract": False,
+                "weight": 1,
+                "parent_concept": float("nan"),
+                "parent_abstract_concept": float("nan"),
+            }
+        )
+
+        fact = face_fact(
+            row=row,
+            statement="Cash Flow Statement",
+            period_col="2020-12-31 (FY)",
+            comparative_col="2019-12-31 (FY)",
+            position=0,
+            context=context,
+        )
+
+        assert fact is not None
+        assert (fact.value, fact.unit) == (Decimal("455399300000"), "twd")
 
     def test_face_fact_keeps_thefiled_unit(self):
         """A unit ref is stored as written when the amount is not replaced."""

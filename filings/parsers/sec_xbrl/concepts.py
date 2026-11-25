@@ -82,13 +82,13 @@ def is_revenue_concept(concept: str) -> bool:
 
 
 #: Prefixes filers put before an ISO currency code in a unit ref.
-_UNIT_PREFIXES = ("iso4217_", "iso4217:", "unit_", "u_")
+UNIT_PREFIXES = ("iso4217_", "iso4217:", "unit_", "u_")
 
 
 def is_monetary(unit: object) -> bool:
     """A currency amount: the unit is an ISO code, not pure, shares or per share."""
     text = str(unit or "").strip().casefold()
-    for prefix in _UNIT_PREFIXES:
+    for prefix in UNIT_PREFIXES:
         if text.startswith(prefix):
             text = text[len(prefix) :]
     return len(text) == 3 and text.isalpha()
