@@ -27,6 +27,7 @@ from .io.schemas import OVERRIDE_TABLES, TABLES, Table
 from .stages import (
     concept_normalization,
     dimension_normalization,
+    facts_normalized,
     facts_overridden,
     hierarchy_normalization,
 )
@@ -69,6 +70,19 @@ STAGES: tuple[Stage, ...] = (
         s.DIMENSION_NORMALIZATION,
         ("financial_facts", "financial_facts_overridden", "concept_normalization"),
         dimension_normalization.run,
+    ),
+    Stage(
+        "facts_normalized",
+        s.FINANCIAL_FACTS_NORMALIZED,
+        (
+            "financial_facts",
+            "filings",
+            "financial_facts_overridden",
+            "concept_normalization",
+            "hierarchy_normalization",
+            "dimension_normalization",
+        ),
+        facts_normalized.run,
     ),
 )
 
