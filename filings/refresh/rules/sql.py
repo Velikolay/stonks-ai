@@ -115,6 +115,16 @@ def first_value(expr: IntoExpr, partition: Sequence[str]) -> pl.Expr:
     return e.first().over(list(partition)) if partition else e.first()
 
 
+def sum_or_null(expr: pl.Expr) -> pl.Expr:
+    """``SUM(expr)``: NULL over no rows or only NULLs, where polars gives 0."""
+    return pl.when(expr.count() > 0).then(expr.sum())
+
+
+def bool_and(expr: pl.Expr) -> pl.Expr:
+    """``bool_and(expr)``: NULLs skipped, NULL when every input is NULL."""
+    return pl.when(expr.count() > 0).then(expr.all())
+
+
 def round_half_away(expr: pl.Expr) -> pl.Expr:
     """Postgres ``round(numeric)``: half away from zero."""
     return (expr.abs() + Decimal("0.5")).floor() * expr.sign()

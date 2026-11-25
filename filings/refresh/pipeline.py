@@ -31,6 +31,7 @@ from .stages import (
     facts_normalized,
     facts_overridden,
     hierarchy_normalization,
+    quarterly,
     yearly,
 )
 
@@ -91,6 +92,12 @@ STAGES: tuple[Stage, ...] = (
         s.DIMENSION_BREAKDOWNS,
         ("financial_facts_normalized", "filings", "financial_fact_dimensions"),
         dimension_breakdowns.run,
+    ),
+    Stage(
+        "quarterly_financials",
+        s.QUARTERLY_FINANCIALS,
+        ("financial_facts_normalized", "filings"),
+        quarterly.run,
     ),
     Stage(
         "yearly_financials",

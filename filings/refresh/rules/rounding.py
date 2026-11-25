@@ -17,6 +17,15 @@ from .sql import is_multiple_of, round_half_away
 REPRINT_SHARE = Decimal("0.001")
 
 
+def reprint_tolerance_of(value: Decimal) -> Decimal:
+    """:func:`reprint_tolerance` for one value."""
+    if value != 0 and value % 1_000_000 == 0:
+        return Decimal(500_000)
+    if value != 0 and value % 1_000 == 0:
+        return Decimal(500)
+    return Decimal(0)
+
+
 def reprint_tolerance(value: pl.Expr) -> pl.Expr:
     """Half the unit ``value`` looks rounded to: 500000, 500, or exactly 0."""
     nonzero = value != 0
