@@ -2,7 +2,7 @@
 -- members on one axis that add up exactly to a parent (another member or the
 -- undimensioned line) in fiscal_years. Members coarser than the parent, such
 -- as millions reprinted by a later filing, may miss it by half a unit each,
--- up to 0.1%. refresh_dimension_breakdowns keeps a
+-- up to 0.1%. The dimension_breakdowns stage keeps a
 -- set when it adds up in at least two 10-Ks (a year where one of its members
 -- could be swapped for another member of equal value does not count). A year
 -- where that set falls short is not stored; the query below finds it by
