@@ -245,6 +245,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--tables", help="Comma-separated table names (default all)")
     parser.add_argument("--allowlist", type=Path, default=DEFAULT_ALLOWLIST)
+    parser.add_argument(
+        "--no-allowlist", action="store_true", help="Report every difference"
+    )
     parser.add_argument("--out", type=Path, help="Write unexplained differences here")
     parser.add_argument("--examples", type=int, default=5)
     args = parser.parse_args(argv)
@@ -252,7 +255,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         args.baseline,
         args.candidate,
         tables=args.tables.split(",") if args.tables else None,
-        allowlist=args.allowlist,
+        allowlist=None if args.no_allowlist else args.allowlist,
         out=args.out,
     )
     print_report(report, examples=args.examples)
