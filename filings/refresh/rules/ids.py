@@ -2,8 +2,8 @@
 
 Synthetic, clone and derived rows get ids hashed from their identity, so a
 refresh is reproducible and a parent can be referenced before it exists. The
-hash is Postgres' ``hashtextextended(text, 0)``, ported bit for bit, so ids are
-the same whether a row was written by this package or read back from SQL.
+hash is Postgres' ``hashtextextended(text, 0)``, which the SQL refresh used;
+keeping it leaves every stored id unchanged. Any stable 64-bit hash would do.
 """
 
 from __future__ import annotations

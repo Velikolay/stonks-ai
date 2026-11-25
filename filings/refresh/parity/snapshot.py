@@ -2,7 +2,7 @@
 
 A snapshot taken before and after a change is what ``compare`` diffs::
 
-    python -m filings.refresh.parity.snapshot --out backups/parity/sql
+    python -m filings.refresh.parity.snapshot --out backups/before
 """
 
 from __future__ import annotations

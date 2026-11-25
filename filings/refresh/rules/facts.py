@@ -1,9 +1,8 @@
 """The fact layer every normalization stage starts from.
 
 Raw facts with their ``rewrite`` overrides applied, optionally with the
-``clone`` copies beside them, and with conflicting facts removed. The SQL
-procedures each carried their own copy of this prelude; the two conflict
-rules they used are kept here side by side, named.
+``clone`` copies beside them, and with conflicting facts removed. Stages
+differ in which conflicts they drop, so the two rules are named side by side.
 """
 
 from __future__ import annotations

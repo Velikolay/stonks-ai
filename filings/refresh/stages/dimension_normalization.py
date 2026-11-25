@@ -208,8 +208,8 @@ def member_groups(base: pl.DataFrame) -> pl.DataFrame:
 def grouping(rows: pl.DataFrame) -> pl.DataFrame:
     """Each group labelled by its best member: override first, then the latest.
 
-    Members last reported in the same period tie; the SQL picked one
-    arbitrarily, here the first by collation wins.
+    Members last reported in the same period tie; the first by collation
+    wins.
     """
     canonical = sql.distinct_on(
         rows,

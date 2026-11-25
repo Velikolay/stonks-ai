@@ -825,7 +825,7 @@ class SECXBRLParser:
         """Keep a filing's published quarter beside the year-to-date total.
 
         The face statement otherwise stores only the year-to-date column, and
-        the quarterly procedure reconstructs the quarter by subtraction. A
+        the quarterly stage reconstructs the quarter by subtraction. A
         restated comparative makes that residual miss the quarter the filing
         printed, which drops a dimension split that matches the printed total.
         Per-share amounts are not additive, so their printed quarter is kept
@@ -904,7 +904,7 @@ class SECXBRLParser:
 
             # Face rows keep the latest column. A year-to-date column sorts
             # after the quarter column of the same date, and the quarterly
-            # procedure reduces that total. Dimension rows keep every column
+            # stage reduces that total. Dimension rows keep every column
             # of that shape, including prior years.
             latest_period_col = sorted(period_columns)[-1]
             comparative_period_col = self._extract_comparative_period_column(

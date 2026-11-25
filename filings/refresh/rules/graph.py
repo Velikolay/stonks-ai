@@ -1,7 +1,7 @@
 """Connected components, the one graph algorithm the normalization needs.
 
-The SQL walked edges with a recursive CTE and took ``MIN(group_id)`` per
-node; union-find gives the same partition with the same representative.
+Union-find over the edges; each component is represented by its smallest
+id, so a group keeps the same id however its edges are ordered.
 """
 
 from __future__ import annotations

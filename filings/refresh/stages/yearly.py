@@ -23,9 +23,8 @@ SERIES = ["company_id", "statement", "normalized_label", "axis", "member"]
 def with_latest_tree_position(rows: pl.DataFrame) -> pl.DataFrame:
     """Each row's header and position as of its series' latest period.
 
-    A section header and a total can share a label. They are separate series
-    here; the SQL mixed them, so one took the other's pointer, and a header
-    could end up pointing at itself.
+    A section header and a total can share a label. They are separate series,
+    otherwise one takes the other's pointer and a header can point at itself.
     """
     series = [*SERIES, "is_abstract"]
     ordered = sql.sort(rows, [sql.desc("period_end"), sql.asc("id")])

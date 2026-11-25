@@ -29,7 +29,7 @@ def parent_overrides(normalized: pl.DataFrame, overrides: pl.DataFrame) -> pl.Da
     """For each normalized concept, one override that names it as the parent.
 
     The company's row beats a global one. Among several children of the same
-    parent, the first in table order is used, as the SQL's ``LIMIT 1`` did.
+    parent, the first in table order is used.
     """
     rules = overrides.filter(pl.col("parent_concept").is_not_null()).with_row_index(
         "order"

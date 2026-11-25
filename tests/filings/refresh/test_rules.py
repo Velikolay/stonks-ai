@@ -1,4 +1,4 @@
-"""The SQL-compatibility rules every stage relies on."""
+"""Shared rules every stage relies on: Postgres ordering, rounding and ids."""
 
 from __future__ import annotations
 

@@ -69,8 +69,7 @@ def with_tree_overrides(
     """Attach the override, hierarchy row and the parent/abstract facts.
 
     ``rows`` keep one row per (row, hierarchy parent, parent fact, abstract
-    fact), as the SQL joins did; a concept with several expanded parents is
-    repeated. Added columns: ``cno_*``, ``hn_parent_concept``,
+    fact); a concept with several expanded parents is repeated. Added columns: ``cno_*``, ``hn_parent_concept``,
     ``hn_parent_concept_source``, ``parent_fact_id``, ``abstract_fact_id``.
     """
     joined = best_concept_override(rows, concept_overrides, concept_column)

@@ -248,8 +248,8 @@ def chaining(
         data.keep("chain_walk", walked)
     # Two chains whose roots share the latest period tie, usually because two
     # lines had the same amount that year (net income equal to comprehensive
-    # income). The SQL picked one arbitrarily; here the chain whose label is
-    # closest to the concept's own label wins.
+    # income). The chain whose label is closest to the concept's own label
+    # wins.
     chained = sql.distinct_on(
         walked,
         [*COMPANY_SLOT, "concept"],
