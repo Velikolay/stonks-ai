@@ -26,6 +26,7 @@ from .io import schemas as s
 from .io.schemas import OVERRIDE_TABLES, TABLES, Table
 from .stages import (
     concept_normalization,
+    dimension_breakdowns,
     dimension_normalization,
     facts_normalized,
     facts_overridden,
@@ -84,6 +85,12 @@ STAGES: tuple[Stage, ...] = (
             "dimension_normalization",
         ),
         facts_normalized.run,
+    ),
+    Stage(
+        "dimension_breakdowns",
+        s.DIMENSION_BREAKDOWNS,
+        ("financial_facts_normalized", "filings", "financial_fact_dimensions"),
+        dimension_breakdowns.run,
     ),
     Stage(
         "yearly_financials",

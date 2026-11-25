@@ -23,11 +23,16 @@ TIMESTAMP = pl.Datetime("us")
 
 @dataclass(frozen=True)
 class Table:
-    """A table's schema and the column that scopes it to one company."""
+    """A table's schema and how to scope it to one company.
+
+    ``company_column`` filters directly; ``company_filter`` is a SQL
+    condition on ``$1`` for a table without one.
+    """
 
     name: str
     schema: pl.Schema
     company_column: Optional[str] = "company_id"
+    company_filter: Optional[str] = None
 
     @property
     def columns(self) -> list[str]:
@@ -89,6 +94,22 @@ FINANCIAL_FACTS = _table(
     position=INT,
     parent_id=BIGINT,
     abstract_id=BIGINT,
+)
+
+FINANCIAL_FACT_DIMENSIONS = Table(
+    "financial_fact_dimensions",
+    pl.Schema(
+        {
+            "fact_id": BIGINT,
+            "ordinal": INT,
+            "axis": STR,
+            "member": STR,
+            "member_label": STR,
+            "is_default": BOOL,
+        }
+    ),
+    company_column=None,
+    company_filter="fact_id IN (SELECT id FROM financial_facts WHERE company_id = $1)",
 )
 
 # --- Overrides (global and company rows; loaded once per run) ---------------
@@ -378,5 +399,12 @@ PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
 
 TABLES: dict[str, Table] = {
     t.name: t
-    for t in (COMPANIES, FILINGS, FINANCIAL_FACTS, *OVERRIDE_TABLES, *DERIVED_TABLES)
+    for t in (
+        COMPANIES,
+        FILINGS,
+        FINANCIAL_FACTS,
+        FINANCIAL_FACT_DIMENSIONS,
+        *OVERRIDE_TABLES,
+        *DERIVED_TABLES,
+    )
 }

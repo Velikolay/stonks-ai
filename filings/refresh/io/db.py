@@ -63,6 +63,9 @@ async def load(
     if company_id is not None and table.company_column:
         clauses.append(f"{table.company_column} = $1")
         args.append(company_id)
+    elif company_id is not None and table.company_filter:
+        clauses.append(table.company_filter)
+        args.append(company_id)
     if where:
         clauses.append(where)
     if clauses:
