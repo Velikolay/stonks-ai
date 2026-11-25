@@ -81,6 +81,19 @@ def is_revenue_concept(concept: str) -> bool:
     return is_total_revenue_concept(concept) or concept in COMPONENT_REVENUE_CONCEPTS
 
 
+#: Prefixes filers put before an ISO currency code in a unit ref.
+_UNIT_PREFIXES = ("iso4217_", "iso4217:", "unit_", "u_")
+
+
+def is_monetary(unit: object) -> bool:
+    """A currency amount: the unit is an ISO code, not pure, shares or per share."""
+    text = str(unit or "").strip().casefold()
+    for prefix in _UNIT_PREFIXES:
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+    return len(text) == 3 and text.isalpha()
+
+
 def is_per_share(concept: str, unit: object) -> bool:
     """A per-share amount, by unit or by concept name."""
     text = str(unit or "").casefold()

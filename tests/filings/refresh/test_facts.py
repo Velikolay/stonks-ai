@@ -184,6 +184,77 @@ def test_missing_parent_becomes_a_synthetic_rollup() -> None:
     assert set(rows.filter(~pl.col("is_synthetic"))["parent_id"]) == {subtotal["id"]}
 
 
+def test_segment_rows_split_their_line_and_stay_out_of_the_tree() -> None:
+    """Goodwill and assets by segment do not roll into the subtotals.
+
+    The parent of a line is the parent's undimensioned fact, never one of its
+    segment members.
+    """
+    overrides = [
+        {
+            "company_id": 1,
+            "concept": c,
+            "statement": "Balance Sheet",
+            "normalized_label": label,
+            "parent_concept": parent,
+            "weight": 1,
+            "is_abstract": False,
+        }
+        for c, label, parent in [
+            ("us-gaap:Goodwill", "Goodwill", "us-gaap:AssetsNoncurrent"),
+            ("us-gaap:AssetsNoncurrent", "Non-current Assets", "us-gaap:Assets"),
+            ("us-gaap:Assets", "Total Assets", None),
+        ]
+    ]
+    bs = {"statement": "Balance Sheet", "period": None}
+    segment = "us-gaap:StatementBusinessSegmentsAxis"
+    data = company(
+        financial_facts=[
+            fact(1, 1, "2023-12-31", 30, concept="us-gaap:Goodwill", **bs),
+            fact(
+                2,
+                1,
+                "2023-12-31",
+                20,
+                concept="us-gaap:Goodwill",
+                axis=segment,
+                member="x:A",
+                **bs,
+            ),
+            fact(
+                3,
+                1,
+                "2023-12-31",
+                10,
+                concept="us-gaap:Goodwill",
+                axis=segment,
+                member="x:B",
+                **bs,
+            ),
+            fact(4, 1, "2023-12-31", 100, concept="us-gaap:Assets", **bs),
+            fact(
+                5,
+                1,
+                "2023-12-31",
+                60,
+                concept="us-gaap:Assets",
+                axis=segment,
+                member="x:A",
+                **bs,
+            ),
+        ],
+        filings=[filing(1, "10-K", "2023-12-31", "2024-02-01", 2023)],
+        concept_normalization_overrides=overrides,
+    )
+    rows = normalized(data)
+    subtotal = rows.filter(pl.col("is_synthetic"))
+    assert subtotal.height == 1
+    assert subtotal["value"].to_list() == [D(30)]
+    assert subtotal["parent_id"].to_list() == [4]
+    members = rows.filter(pl.col("axis") != "")
+    assert members["parent_id"].null_count() == members.height
+
+
 # --- Dedup -------------------------------------------------------------------
 
 

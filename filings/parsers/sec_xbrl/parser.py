@@ -10,7 +10,8 @@ from edgar import Filing
 
 from ...models import FinancialFactCreate
 from .context import FilingContext, fiscal_focus
-from .segments import segment_disclosure_facts
+from .measures import segment_measures
+from .segments import disclosure_notes, segment_disclosure_facts
 from .statement import parse_statement, statement_frame
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,9 @@ class SECXBRLParser:
     def parse_filing(self, filing: Filing) -> ParsedFiling:
         """Every fact of the filing's financial statements and segment notes.
 
+        Segment revenue a note adds sits right after the income statement;
+        other segment measures (:mod:`.measures`) come last.
+
         A statement that fails to load or parse is logged and skipped, so one
         bad statement does not lose the others. A filing with no financial
         statements (a Part III 10-K/A) has no facts.
@@ -69,6 +73,7 @@ class SECXBRLParser:
             fiscal_focus=fiscal_focus(getattr(xbrl, "entity_info", None))
         )
         context = FilingContext.of(xbrl, accession)
+        notes = disclosure_notes(xbrl)
         found = 0
         for spec in STATEMENTS:
             statement = self._statement(xbrl, spec, accession)
@@ -78,7 +83,9 @@ class SECXBRLParser:
             facts = self._parse(statement, spec, context, accession)
             parsed.facts.extend(facts)
             if spec.with_dimensions:
-                parsed.facts.extend(segment_disclosure_facts(xbrl, facts, context))
+                parsed.facts.extend(segment_disclosure_facts(notes, facts, context))
+        if found:
+            parsed.facts.extend(segment_measures(notes, parsed.facts, context))
 
         if found == 0:
             logger.info("Filing %s has no financial statements", accession)

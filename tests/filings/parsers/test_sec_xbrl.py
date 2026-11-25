@@ -15,7 +15,10 @@ from filings.parsers.sec_xbrl import (
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
 from filings.parsers.sec_xbrl.facts import face_fact
-from filings.parsers.sec_xbrl.segments import segment_disclosure_facts
+from filings.parsers.sec_xbrl.segments import (
+    disclosure_notes,
+    segment_disclosure_facts,
+)
 from filings.parsers.sec_xbrl.statement import parse_statement
 
 
@@ -477,14 +480,15 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face, already], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face, already], FilingContext()
+        )
 
         assert [fact.member for fact in added] == ["nvda:DataCenterMember"]
         assert added[0].axis == "srt:ProductOrServiceAxis"
         assert added[0].concept == "us-gaap:Revenues"
         assert added[0].label == "Revenue"
         assert added[0].value == Decimal("60.0")
-        xbrl.statements.get.assert_called_once_with("SegmentRevenue")
 
     def test_supplement_accepts_revenue_concept_with_different_capitalization(self):
         """A company extension of the revenue concept joins the face line."""
@@ -543,7 +547,9 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face], FilingContext()
+        )
         by_member = {fact.member: fact for fact in added}
 
         assert set(by_member) == {
@@ -621,7 +627,9 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face, segment_total], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face, segment_total], FilingContext()
+        )
         by_member = {fact.member: fact for fact in added}
 
         assert set(by_member) == {"goog:GooglePropertiesMember", "Other sales"}
@@ -709,7 +717,9 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face], FilingContext()
+        )
         undimensioned = [fact for fact in added if not fact.axis]
 
         assert len(undimensioned) == 1
@@ -779,7 +789,9 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face], FilingContext()
+        )
         by_member = {fact.member_label: fact for fact in added}
 
         assert set(by_member) == {
@@ -836,7 +848,10 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        assert segment_disclosure_facts(xbrl, [face], FilingContext()) == []
+        assert (
+            segment_disclosure_facts(disclosure_notes(xbrl), [face], FilingContext())
+            == []
+        )
 
     def test_supplement_keeps_undimensioned_revenue_components(self):
         """Advertising and other fees that sum to revenue are kept as filed."""
@@ -906,7 +921,9 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = segment_disclosure_facts(xbrl, [face], FilingContext())
+        added = segment_disclosure_facts(
+            disclosure_notes(xbrl), [face], FilingContext()
+        )
         components = {fact.concept: fact for fact in added if not fact.axis}
 
         assert set(components) == {
@@ -991,7 +1008,7 @@ class TestSECXBRLParser:
         xbrl.statements.get.return_value = statement
 
         added = segment_disclosure_facts(
-            xbrl, [face, advertising, other], FilingContext()
+            disclosure_notes(xbrl), [face, advertising, other], FilingContext()
         )
 
         assert added == []

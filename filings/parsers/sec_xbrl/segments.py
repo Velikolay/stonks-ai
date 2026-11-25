@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import logging
 import math
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
+
+import pandas as pd
 
 from ...models import FinancialFactCreate
 from .concepts import (
@@ -46,6 +49,50 @@ logger = logging.getLogger(__name__)
 
 #: ``(concept, axis, member, period_end)``: one member of one line and period.
 MemberKey = tuple
+
+
+@dataclass
+class Note:
+    """One disclosure of the filing and its statement frame."""
+
+    name: str
+    frame: pd.DataFrame
+
+    def facts(self, context: FilingContext) -> list[FinancialFactCreate]:
+        """The note's facts, parsed afresh: the rules rewrite the facts they keep."""
+        return parse_statement(self.frame, "Income Statement", True, context)
+
+    @property
+    def has_segment_axis(self) -> bool:
+        frame = self.frame
+        if frame is None or frame.empty or "dimension_axis" not in frame.columns:
+            return False
+        dims = frame.loc[frame["dimension"] == True, "dimension_axis"]  # noqa: E712
+        return bool(dims.isin(SEGMENT_AXES).any())
+
+
+def disclosure_notes(xbrl: object) -> list[Note]:
+    """Every disclosure of the filing with its frame, in filing order."""
+    try:
+        available = xbrl.statements.list_available()  # type: ignore[attr-defined]
+    except Exception:
+        logger.exception("Could not list statements for segment disclosures")
+        return []
+    notes = []
+    for _, row in available.iterrows():
+        if str(row.get("category", "")) != "disclosure":
+            continue
+        role = row.get("role_name")
+        if not role or (isinstance(role, float) and math.isnan(role)):
+            continue
+        try:
+            statement = xbrl.statements.get(role)  # type: ignore[attr-defined]
+            if statement is None:
+                continue
+            notes.append(Note(str(row.get("name", "")), statement_frame(statement)))
+        except Exception:
+            logger.exception("Could not read segment disclosure %s", role)
+    return notes
 
 
 def is_segment_disclosure(name: str) -> bool:
@@ -109,34 +156,13 @@ class SegmentSupplement:
 
     # --- Reading the notes ----------------------------------------------------
 
-    def collect(self, xbrl: object) -> list[FinancialFactCreate]:
-        """Read every segment note of the filing; return the facts to add."""
+    def collect(self, notes: list[Note]) -> list[FinancialFactCreate]:
+        """Apply the rules to the filing's revenue and segment notes, by name."""
         if not self.face_concepts and not self.face_labels:
             return []
-        try:
-            available = xbrl.statements.list_available()  # type: ignore[attr-defined]
-        except Exception:
-            logger.exception("Could not list statements for segment disclosures")
-            return []
-        for _, row in available.iterrows():
-            if str(row.get("category", "")) != "disclosure":
-                continue
-            if not is_segment_disclosure(str(row.get("name", ""))):
-                continue
-            role = row.get("role_name")
-            if not role or (isinstance(role, float) and math.isnan(role)):
-                continue
-            try:
-                statement = xbrl.statements.get(role)  # type: ignore[attr-defined]
-                if statement is None:
-                    continue
-                frame = statement_frame(statement)
-            except Exception:
-                logger.exception("Could not read segment disclosure %s", role)
-                continue
-            self.read_note(
-                parse_statement(frame, "Income Statement", True, self.context)
-            )
+        for note in notes:
+            if is_segment_disclosure(note.name):
+                self.read_note(note.facts(self.context))
         if self.added:
             logger.info(
                 "Added %s segment-disclosure facts missing from the income statement",
@@ -312,7 +338,7 @@ def is_revenue_concept_strict(concept: str) -> bool:
 
 
 def segment_disclosure_facts(
-    xbrl: object, income_facts: list[FinancialFactCreate], context: FilingContext
+    notes: list[Note], income_facts: list[FinancialFactCreate], context: FilingContext
 ) -> list[FinancialFactCreate]:
     """Facts from the filing's segment notes to add beside its income statement."""
-    return SegmentSupplement(income_facts, context).collect(xbrl)
+    return SegmentSupplement(income_facts, context).collect(notes)
