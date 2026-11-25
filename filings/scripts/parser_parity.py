@@ -62,7 +62,7 @@ def _sample_numbers() -> list[str]:
 
 
 def _fact_row(fact: Any) -> dict:
-    data = fact.model_dump(mode="json")
+    data: dict = fact.model_dump(mode="json")
     data["dimensions"] = sorted(
         (d["axis"], d["member"], d["member_label"], d["is_default"])
         for d in data.get("dimensions") or []
