@@ -8,6 +8,7 @@ import pytest
 from filings.db import AsyncFilingsDatabase
 from filings.models.filing import Filing
 from filings.models.financial_fact import FinancialFactCreate
+from filings.parsers.sec_xbrl import ParsedFiling
 from filings.sec_xbrl_filings_loader import SECXBRLFilingsLoader
 
 
@@ -223,7 +224,7 @@ class TestXBRLFilingsLoader:
         mock_fact2 = Mock(spec=FinancialFactCreate)
         mock_fact2.period_end = date(2024, 3, 31)
         mock_facts = [mock_fact1, mock_fact2]
-        loader.parser.parse_filing = Mock(return_value=mock_facts)
+        loader.parser.parse_filing = Mock(return_value=ParsedFiling(facts=mock_facts))
 
         # Mock database insertions - use AsyncMock for async methods
         mock_db_filing = Mock(spec=Filing)
@@ -252,7 +253,6 @@ class TestXBRLFilingsLoader:
         mock_database.filings = Mock()
         mock_database.financial_facts = Mock()
         loader = SECXBRLFilingsLoader(mock_database)
-        loader.parser.fiscal_focus = (2025, 1)
 
         mock_database.filings.get_filing_by_number = AsyncMock(return_value=None)
         mock_database.filings.insert_filing = AsyncMock(return_value=1)
@@ -269,7 +269,9 @@ class TestXBRLFilingsLoader:
         fact = Mock(spec=FinancialFactCreate)
         fact.period_end = date(2024, 4, 30)
         fact.axis = None
-        loader.parser.parse_filing = Mock(return_value=[fact])
+        loader.parser.parse_filing = Mock(
+            return_value=ParsedFiling(facts=[fact], fiscal_focus=(2025, 1))
+        )
 
         await loader._load_single_filing(mock_filing, 15, 1, override=False)
 
@@ -312,7 +314,7 @@ class TestXBRLFilingsLoader:
         face_comparative.period_end = date(2012, 3, 31)
         face_comparative.axis = None
         loader.parser.parse_filing = Mock(
-            return_value=[current, comparative, face_comparative]
+            return_value=ParsedFiling(facts=[current, comparative, face_comparative])
         )
 
         result, was_updated = await loader._load_single_filing(
@@ -353,7 +355,7 @@ class TestXBRLFilingsLoader:
 
         mock_fact1 = Mock(spec=FinancialFactCreate)
         mock_fact1.period_end = date(2024, 3, 31)
-        loader.parser.parse_filing = Mock(return_value=[mock_fact1])
+        loader.parser.parse_filing = Mock(return_value=ParsedFiling(facts=[mock_fact1]))
 
         await loader._load_single_filing(mock_filing, 1, 1, override=False)
 
@@ -383,7 +385,7 @@ class TestXBRLFilingsLoader:
         mock_fact = Mock(spec=FinancialFactCreate)
         mock_fact.period_end = date(2024, 6, 30)
         mock_facts = [mock_fact]
-        loader.parser.parse_filing = Mock(return_value=mock_facts)
+        loader.parser.parse_filing = Mock(return_value=ParsedFiling(facts=mock_facts))
         mock_db_filing = Mock(spec=Filing)
         mock_db_filing.id = 1
         mock_database.filings.insert_filing = AsyncMock(return_value=1)
@@ -410,7 +412,9 @@ class TestXBRLFilingsLoader:
         mock_fact_q4 = Mock(spec=FinancialFactCreate)
         mock_fact_q4.period_end = date(2024, 12, 31)
         mock_facts_q4 = [mock_fact_q4]
-        loader.parser.parse_filing = Mock(return_value=mock_facts_q4)
+        loader.parser.parse_filing = Mock(
+            return_value=ParsedFiling(facts=mock_facts_q4)
+        )
         mock_database.filings.insert_filing = AsyncMock(return_value=1)
         mock_database.financial_facts.insert_financial_facts_batch = AsyncMock(
             return_value=[1]
@@ -476,7 +480,7 @@ class TestXBRLFilingsLoader:
         mock_fact2 = Mock(spec=FinancialFactCreate)
         mock_fact2.period_end = date(2024, 3, 31)
         mock_facts = [mock_fact1, mock_fact2]
-        loader.parser.parse_filing = Mock(return_value=mock_facts)
+        loader.parser.parse_filing = Mock(return_value=ParsedFiling(facts=mock_facts))
 
         # Mock database operations - use AsyncMock for async methods
         mock_db_filing = Mock(spec=Filing)

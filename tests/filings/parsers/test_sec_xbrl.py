@@ -1,18 +1,22 @@
-"""Tests for SEC 10-Q parser."""
+"""Tests for the SEC XBRL parser."""
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pandas as pd
 
 from filings.models import PeriodType
 from filings.parsers.sec_xbrl import (
-    SECXBRLParser,
-    _filed_unit,
+    FilingContext,
+    filed_unit,
     fiscal_focus,
     reporting_currency_amounts,
 )
+from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
+from filings.parsers.sec_xbrl.facts import face_fact
+from filings.parsers.sec_xbrl.segments import segment_disclosure_facts
+from filings.parsers.sec_xbrl.statement import parse_statement
 
 
 class TestSECXBRLParser:
@@ -31,207 +35,8 @@ class TestSECXBRLParser:
         assert fiscal_focus({"fiscal_year": "2025"}) == (2025, None)
         assert fiscal_focus({"fiscal_period": "H1"}) == (None, None)
 
-    def test_parse_disaggregated_revenues_product(self):
-        """Test parsing disaggregated revenues by product."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL query result for product revenue
-        mock_revenue_df = pd.DataFrame(
-            {
-                "concept": ["Revenue", "Revenue", "Revenue"],
-                "label": ["Contract Revenue", "Contract Revenue", "Contract Revenue"],
-                "value": [1000000, 2000000, 3000000],
-                "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
-                "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
-                "dim_srt_ProductOrServiceAxis": ["iPhone", "Mac", "iPad"],
-            }
-        )
-
-        # Mock XBRL object with simpler setup
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = mock_revenue_df
-        mock_xbrl.query.return_value = mock_query
-
-        # Mock the _create_disaggregated_metric_fact method to return expected facts
-        with patch.object(parser, "_create_disaggregated_metric_fact") as mock_create:
-            mock_facts = []
-            for i, product in enumerate(
-                [
-                    ("aapl:IPhoneMember", "iPhone"),
-                    ("aapl:MacMember", "Mac"),
-                    ("aapl:IPadMember", "iPad"),
-                ]
-            ):
-                mock_fact = Mock()
-                mock_fact.concept = "Revenue"
-                mock_fact.member = product[0]
-                mock_fact.member_label = product[1]
-                mock_fact.value = Decimal(str(1000000 + i * 1000000))
-                mock_fact.axis = "srt:ProductOrServiceAxis"
-                mock_fact.statement = "Income Statement"
-                mock_fact.label = "Contract Revenue"
-                mock_facts.append(mock_fact)
-
-            mock_create.side_effect = mock_facts
-
-            facts = parser._parse_disaggregated_revenues(mock_xbrl)
-
-            assert len(facts) == 3
-            assert facts[0].concept == "Revenue"
-            assert facts[0].member == "aapl:IPhoneMember"
-            assert facts[0].value == Decimal("1000000")
-            assert facts[0].axis == "srt:ProductOrServiceAxis"
-            assert facts[0].member_label == "iPhone"
-            assert facts[0].statement == "Income Statement"
-            assert facts[0].label == "Contract Revenue"
-
-    def test_parse_disaggregated_revenues_geographic(self):
-        """Test parsing disaggregated revenues by geographic region."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL query result for geographic revenue
-        mock_revenue_df = pd.DataFrame(
-            {
-                "concept": ["Revenue", "Revenue"],
-                "label": ["Contract Revenue", "Contract Revenue"],
-                "numeric_value": [5000000, 3000000],
-                "period_start": ["2024-01-01", "2024-01-01"],
-                "period_end": ["2024-03-31", "2024-03-31"],
-                "dim_srt_StatementGeographicalAxis": [
-                    "aapl:AmericasMember",
-                    "aapl:EuropeMember",
-                ],
-                "dimension_member_label": ["Americas", "Europe"],
-            }
-        )
-
-        # Mock XBRL object
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = mock_revenue_df
-        mock_xbrl.query.return_value = mock_query
-
-        # Mock empty results for other dimensions
-        empty_df = pd.DataFrame()
-        mock_query.by_concept.side_effect = lambda concept: mock_query
-        mock_query.by_dimension.side_effect = lambda dimension: mock_query
-        mock_query.to_dataframe.side_effect = lambda: (
-            empty_df
-            if "StatementGeographicalAxis" not in str(mock_query.by_dimension.call_args)
-            else mock_revenue_df
-        )
-
-        facts = parser._parse_disaggregated_revenues(mock_xbrl)
-
-        assert len(facts) == 2
-        assert facts[0].concept == "Revenue"
-        assert facts[0].member == "aapl:AmericasMember"
-        assert facts[0].member_label == "Americas"
-        assert facts[0].value == Decimal("5000000")
-        assert facts[0].axis == "srt:StatementGeographicalAxis"
-        assert facts[0].statement == "Income Statement"
-
-    def test_create_disaggregated_revenue_fact(self):
-        """Test creating disaggregated revenue fact."""
-        parser = SECXBRLParser()
-
-        # Mock row data
-        row = {
-            "concept": "Revenue",
-            "label": "Contract Revenue",
-            "numeric_value": 1000000,
-            "period_start": "2024-01-01",
-            "period_end": "2024-03-31",
-            "dim_srt_ProductOrServiceAxis": "aapl:IPhoneMember",
-            "dimension_member_label": "iPhone",
-        }
-
-        fact = parser._create_disaggregated_metric_fact(
-            row,
-            comparative_row=None,
-            metric="Revenue",
-            dimension="srt:ProductOrServiceAxis",
-            form_type="10-Q",
-            position=0,
-        )
-
-        assert fact.concept == "Revenue"
-        assert fact.value == Decimal("1000000")
-        assert fact.member == "aapl:IPhoneMember"
-        assert fact.axis == "srt:ProductOrServiceAxis"
-        assert fact.member_label == "iPhone"
-        assert fact.statement == "Income Statement"
-        assert fact.label == "Contract Revenue"
-        # Regression test: ensure period field is set
-        assert fact.period is not None
-        assert fact.period in ["YTD", "Q"]  # PeriodType values
-
-    def test_create_disaggregated_revenue_fact_invalid_value(self):
-        """Test creating disaggregated revenue fact with invalid value."""
-        parser = SECXBRLParser()
-
-        # Mock row data with invalid value
-        row = {
-            "concept": "Revenue",
-            "label": "Contract Revenue",
-            "value": "invalid",
-            "period_start": "2024-01-01",
-            "period_end": "2024-03-31",
-            "dim_srt_ProductOrServiceAxis": "iPhone",
-        }
-
-        fact = parser._create_disaggregated_metric_fact(
-            row,
-            comparative_row=None,
-            metric="Revenue",
-            dimension="srt:ProductOrServiceAxis",
-            form_type="10-Q",
-            position=0,
-        )
-
-        assert fact is None
-
-    def test_parser_requires_period_field_regression(self):
-        """Regression test: ensure parser creates FinancialFact with period field."""
-        parser = SECXBRLParser()
-
-        # Mock row data
-        row = {
-            "concept": "Revenue",
-            "label": "Contract Revenue",
-            "numeric_value": 1000000,
-            "period_start": "2024-01-01",
-            "period_end": "2024-03-31",
-            "dim_srt_ProductOrServiceAxis": "iPhone",
-        }
-
-        fact = parser._create_disaggregated_metric_fact(
-            row,
-            comparative_row=None,
-            metric="Revenue",
-            dimension="srt:ProductOrServiceAxis",
-            form_type="10-Q",
-            position=0,
-        )
-
-        # This test ensures that if someone accidentally removes the period field
-        # from the parser's FinancialFact creation, this test will fail
-        assert fact is not None, "Parser should create a valid FinancialFact"
-        assert hasattr(fact, "period"), "FinancialFact should have period field"
-        assert fact.period is not None, "Period field should not be None"
-        assert fact.period in [
-            "YTD",
-            "Q",
-        ], f"Period should be YTD or Q, got {fact.period}"
-
     def test_create_financial_fact_with_hierarchy_requires_period(self):
         """Test that _create_financial_fact_with_hierarchy includes period field."""
-        parser = SECXBRLParser()
 
         # Mock row data
         row = {
@@ -242,11 +47,11 @@ class TestSECXBRLParser:
             "abstract": False,
         }
 
-        fact = parser._create_financial_fact_with_hierarchy(
+        fact = face_fact(
             row=row,
-            statement_type="Income Statement",
+            statement="Income Statement",
             period_col="2024-03-31 (Q1)",
-            comparative_period_col="2023-03-31 (Q1)",
+            comparative_col="2023-03-31 (Q1)",
             position=0,
         )
 
@@ -358,22 +163,23 @@ class TestSECXBRLParser:
 
     def test_filed_unit_is_stored_unchanged(self):
         """The raw unit ref is what gets stored. A blank ref uses the default."""
-        assert _filed_unit("iso4217_usd") == "iso4217_usd"
-        assert _filed_unit("unit_twd") == "unit_twd"
-        assert _filed_unit("unit12") == "unit12"
-        assert _filed_unit(None, "usd") == "usd"
-        assert _filed_unit("  ", "usd") == "usd"
-        assert _filed_unit(float("nan")) is None
+        assert filed_unit("iso4217_usd") == "iso4217_usd"
+        assert filed_unit("unit_twd") == "unit_twd"
+        assert filed_unit("unit12") == "unit12"
+        assert filed_unit(None, "usd") == "usd"
+        assert filed_unit("  ", "usd") == "usd"
+        assert filed_unit(float("nan")) is None
 
     def test_face_fact_uses_reporting_currency_when_the_frame_does_not(self):
         """The current-year convenience translation is replaced on the face row."""
-        parser = SECXBRLParser()
-        parser._reporting_amounts = {
-            ("ifrs-full:Revenue", date(2020, 12, 31)): (
-                Decimal("1339255000000"),
-                "twd",
-            )
-        }
+        context = FilingContext(
+            reporting_amounts={
+                ("ifrs-full:Revenue", date(2020, 12, 31)): (
+                    Decimal("1339255000000"),
+                    "twd",
+                )
+            }
+        )
         row = pd.Series(
             {
                 "concept": "ifrs-full_Revenue",
@@ -388,12 +194,13 @@ class TestSECXBRLParser:
             }
         )
 
-        fact = parser._create_financial_fact_with_hierarchy(
+        fact = face_fact(
             row=row,
-            statement_type="Income Statement",
+            statement="Income Statement",
             period_col="2020-12-31 (FY)",
-            comparative_period_col="2019-12-31 (FY)",
+            comparative_col="2019-12-31 (FY)",
             position=0,
+            context=context,
         )
 
         assert fact is not None
@@ -401,9 +208,8 @@ class TestSECXBRLParser:
         assert fact.unit == "twd"
         assert fact.comparative_value == Decimal("1069985000000")
 
-    def test_face_fact_keeps_the_filed_unit(self):
+    def test_face_fact_keeps_thefiled_unit(self):
         """A unit ref is stored as written when the amount is not replaced."""
-        parser = SECXBRLParser()
         row = pd.Series(
             {
                 "concept": "us-gaap_Revenues",
@@ -417,122 +223,83 @@ class TestSECXBRLParser:
             }
         )
 
-        fact = parser._create_financial_fact_with_hierarchy(
+        fact = face_fact(
             row=row,
-            statement_type="Income Statement",
+            statement="Income Statement",
             period_col="2024-09-28 (FY)",
-            comparative_period_col=None,
+            comparative_col=None,
             position=0,
         )
 
         assert fact is not None
         assert fact.unit == "iso4217_usd"
 
-    def test_determine_period_type_treats_20f_as_annual(self):
-        """A 20-F is an annual report, so its duration facts are year-to-date."""
-        parser = SECXBRLParser()
-        period_end = date(2024, 12, 31)
-        period_start = date(2024, 1, 1)
-        assert (
-            parser._determine_period_type(period_start, period_end, "20-F")
-            == PeriodType.YTD
-        )
-        assert (
-            parser._determine_period_type(period_start, period_end, "20-F/A")
-            == PeriodType.YTD
-        )
-
     def test_determine_period_type_from_column_validation(self):
         """Test that _determine_period_type_from_column handles various inputs correctly."""
-        parser = SECXBRLParser()
 
         # Test with empty period column (should return None for balance sheet items)
-        result = parser._determine_period_type_from_column("", "Income Statement")
+        result = period_type("", "Income Statement")
         assert result is None
 
         # Test with period column missing ISO date (should return None for balance sheet items)
-        result = parser._determine_period_type_from_column(
-            "Some Random Text", "Income Statement"
-        )
+        result = period_type("Some Random Text", "Income Statement")
         assert result is None
 
         # Test with period column missing ISO date (only quarter indicator)
-        result = parser._determine_period_type_from_column("Q1", "Income Statement")
+        result = period_type("Q1", "Income Statement")
         assert result is None
 
         # Test with invalid date format (should return None for balance sheet items)
-        result = parser._determine_period_type_from_column(
-            "2024/03/31 (Q1)", "Income Statement"
-        )
+        result = period_type("2024/03/31 (Q1)", "Income Statement")
         assert result is None
 
         # Test with invalid date format (MM-DD-YYYY)
-        result = parser._determine_period_type_from_column(
-            "03-31-2024 (Q1)", "Income Statement"
-        )
+        result = period_type("03-31-2024 (Q1)", "Income Statement")
         assert result is None
 
     def test_determine_period_type_from_column_valid_inputs(self):
         """Test that _determine_period_type_from_column works with valid inputs."""
-        parser = SECXBRLParser()
 
         # Test with valid quarter period column
-        result = parser._determine_period_type_from_column(
-            "2024-03-31 (Q1)", "Income Statement"
-        )
+        result = period_type("2024-03-31 (Q1)", "Income Statement")
         assert result == "Q"
 
         # Test with valid quarter period column (different format)
-        result = parser._determine_period_type_from_column(
-            "2024-06-30 Q2", "Income Statement"
-        )
+        result = period_type("2024-06-30 Q2", "Income Statement")
         assert result == "Q"
 
         # Duration CFS / IS facts use the column heuristic
-        result = parser._determine_period_type_from_column(
-            "2024-12-31", "Cash Flow Statement", point_in_time=False
-        )
+        result = period_type("2024-12-31", "Cash Flow Statement", point_in_time=False)
         assert result == "YTD"
 
-        result = parser._determine_period_type_from_column(
+        result = period_type(
             "2024-12-31 (YTD)", "Cash Flow Statement", point_in_time=False
         )
         assert result == "YTD"
 
-        result = parser._determine_period_type_from_column(
+        result = period_type(
             "Q3 2024-09-30", "Cash Flow Statement", point_in_time=False
         )
         assert result == "Q"
 
-        result = parser._determine_period_type_from_column(
-            "2024-03-31 (Q1)", "Balance Sheet"
-        )
+        result = period_type("2024-03-31 (Q1)", "Balance Sheet")
         assert result is None
 
-        result = parser._determine_period_type_from_column(
-            "2024-03-31", "Balance Sheet"
-        )
+        result = period_type("2024-03-31", "Balance Sheet")
         assert result is None
 
         # Instant facts from edgartools point_in_time must not inherit CFS YTD/Q
-        result = parser._determine_period_type_from_column(
-            "2024-06-30", "Cash Flow Statement", point_in_time=True
-        )
+        result = period_type("2024-06-30", "Cash Flow Statement", point_in_time=True)
         assert result is None
 
-        result = parser._determine_period_type_from_column(
-            "2024-06-30", "Statement of Equity", point_in_time=True
-        )
+        result = period_type("2024-06-30", "Statement of Equity", point_in_time=True)
         assert result is None
 
-        result = parser._determine_period_type_from_column(
-            "2024-06-30", "Cash Flow Statement", point_in_time=False
-        )
+        result = period_type("2024-06-30", "Cash Flow Statement", point_in_time=False)
         assert result == "YTD"
 
     def test_is_column_mostly_empty(self):
         """Test that _is_column_mostly_empty correctly identifies empty columns."""
-        parser = SECXBRLParser()
 
         # Create a test DataFrame
         test_data = {
@@ -551,166 +318,43 @@ class TestSECXBRLParser:
         df = pd.DataFrame(test_data)
 
         # Test good column (should not be mostly empty)
-        assert not parser._is_column_mostly_empty(df, "good_column", threshold=20.0)
-        assert not parser._is_column_mostly_empty(df, "good_column", threshold=50.0)
+        assert not is_mostly_empty(df, "good_column", threshold=20.0)
+        assert not is_mostly_empty(df, "good_column", threshold=50.0)
 
         # Test mostly empty column (33% non-null)
-        assert not parser._is_column_mostly_empty(
+        assert not is_mostly_empty(
             df, "mostly_empty", threshold=20.0
         )  # 33% > 20%, so not mostly empty
-        assert parser._is_column_mostly_empty(
+        assert is_mostly_empty(
             df, "mostly_empty", threshold=40.0
         )  # 33% < 40%, so mostly empty
 
         # Test completely empty column
-        assert parser._is_column_mostly_empty(df, "completely_empty", threshold=20.0)
-        assert not parser._is_column_mostly_empty(
+        assert is_mostly_empty(df, "completely_empty", threshold=20.0)
+        assert not is_mostly_empty(
             df, "completely_empty", threshold=0.0
         )  # 0% is not < 0%
 
         # Test column with empty strings (should be treated same as None)
-        assert not parser._is_column_mostly_empty(
+        assert not is_mostly_empty(
             df, "empty_strings", threshold=20.0
         )  # 33% > 20%, so not mostly empty
-        assert parser._is_column_mostly_empty(
+        assert is_mostly_empty(
             df, "empty_strings", threshold=40.0
         )  # 33% < 40%, so mostly empty
 
         # Test non-existent column
-        assert parser._is_column_mostly_empty(df, "non_existent_column", threshold=20.0)
+        assert is_mostly_empty(df, "non_existent_column", threshold=20.0)
 
         # Test with empty DataFrame
         empty_df = pd.DataFrame()
-        assert parser._is_column_mostly_empty(empty_df, "any_column", threshold=20.0)
+        assert is_mostly_empty(empty_df, "any_column", threshold=20.0)
 
         # Test with None DataFrame
-        assert parser._is_column_mostly_empty(None, "any_column", threshold=20.0)
-
-    def test_parse_disaggregated_revenues_empty_data(self):
-        """Test parsing disaggregated revenues with empty data."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL object with empty results
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = pd.DataFrame()
-        mock_xbrl.query.return_value = mock_query
-
-        facts = parser._parse_disaggregated_revenues(mock_xbrl)
-
-        assert len(facts) == 0
-
-    def test_parse_disaggregated_revenues_business_segment(self):
-        """Test parsing disaggregated revenues by business segments (geographic regions)."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL query result for business segment revenue
-        mock_revenue_df = pd.DataFrame(
-            {
-                "concept": ["Revenue", "Revenue", "Revenue"],
-                "label": ["Contract Revenue", "Contract Revenue", "Contract Revenue"],
-                "numeric_value": [4000000, 2000000, 1000000],
-                "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
-                "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
-                "dim_us-gaap_StatementBusinessSegmentsAxis": [
-                    "Americas",
-                    "Europe",
-                    "AsiaPacific",
-                ],
-            }
-        )
-
-        # Mock XBRL object
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = mock_revenue_df
-        mock_xbrl.query.return_value = mock_query
-
-        # Mock empty results for other dimensions
-        empty_df = pd.DataFrame()
-        mock_query.by_concept.side_effect = lambda concept: mock_query
-        mock_query.by_dimension.side_effect = lambda dimension: mock_query
-        mock_query.to_dataframe.side_effect = lambda: (
-            empty_df
-            if "StatementBusinessSegmentsAxis"
-            not in str(mock_query.by_dimension.call_args)
-            else mock_revenue_df
-        )
-
-        facts = parser._parse_disaggregated_revenues(mock_xbrl)
-
-        assert len(facts) == 3
-
-        # Check that all expected regions are present (order doesn't matter)
-        members = [fact.member for fact in facts]
-        assert "Americas" in members
-        assert "Europe" in members
-        assert "AsiaPacific" in members
-
-        # Check that all facts have the correct structure
-        for fact in facts:
-            assert fact.concept == "Revenue"
-            assert fact.axis == "us-gaap:StatementBusinessSegmentsAxis"
-            assert fact.statement == "Income Statement"
-            assert isinstance(fact.value, Decimal)
-            assert fact.value > 0
-
-    def test_parse_disaggregated_metrics_operating_income(self):
-        """Test parsing disaggregated operating income by product."""
-        parser = SECXBRLParser()
-
-        # Mock XBRL query result for operating income by product
-        mock_operating_income_df = pd.DataFrame(
-            {
-                "concept": ["OperatingIncome", "OperatingIncome", "OperatingIncome"],
-                "label": ["Operating Income", "Operating Income", "Operating Income"],
-                "value": [500000, 300000, 200000],
-                "period_start": ["2024-01-01", "2024-01-01", "2024-01-01"],
-                "period_end": ["2024-03-31", "2024-03-31", "2024-03-31"],
-                "dim_srt_ProductOrServiceAxis": ["iPhone", "Mac", "iPad"],
-            }
-        )
-
-        # Mock XBRL object
-        mock_xbrl = Mock()
-        mock_query = Mock()
-        mock_query.by_concept.return_value = mock_query
-        mock_query.by_dimension.return_value = mock_query
-        mock_query.to_dataframe.return_value = mock_operating_income_df
-        mock_xbrl.query.return_value = mock_query
-
-        # Mock the _create_disaggregated_metric_fact method to return expected facts
-        with patch.object(parser, "_create_disaggregated_metric_fact") as mock_create:
-            mock_facts = []
-            for i, product in enumerate(["iPhone", "Mac", "iPad"]):
-                mock_fact = Mock()
-                mock_fact.concept = "OperatingIncome"
-                mock_fact.member = product
-                mock_fact.value = Decimal(str(500000 - i * 100000))
-                mock_fact.axis = "srt:ProductOrServiceAxis"
-                mock_fact.statement = "Disaggregated OperatingIncome (Product)"
-                mock_fact.label = f"Operating Income - {product}"
-                mock_facts.append(mock_fact)
-
-            mock_create.side_effect = mock_facts
-
-            facts = parser._parse_disaggregated_metrics(mock_xbrl, "OperatingIncome")
-
-            assert len(facts) == 3
-            assert facts[0].concept == "OperatingIncome"
-            assert facts[0].member == "iPhone"
-            assert facts[0].value == Decimal("500000")
-            assert facts[0].axis == "srt:ProductOrServiceAxis"
-            assert facts[0].statement == "Disaggregated OperatingIncome (Product)"
-            assert facts[0].label == "Operating Income - iPhone"
+        assert is_mostly_empty(None, "any_column", threshold=20.0)
 
     def test_statement_fact_keeps_instance_value_and_print_sign(self):
         """Instance amount stays in value; preferred_sign is print_sign."""
-        parser = SECXBRLParser()
         row = pd.Series(
             {
                 "concept": "us-gaap_InterestExpenseNonoperating",
@@ -725,7 +369,7 @@ class TestSECXBRLParser:
             }
         )
 
-        fact = parser._create_financial_fact_with_hierarchy(
+        fact = face_fact(
             row,
             "Income Statement",
             "2026-09-30 (YTD)",
@@ -741,7 +385,6 @@ class TestSECXBRLParser:
 
     def test_statement_fact_rounds_binary_float_noise(self):
         """Float artifacts longer than five decimals still become a fact."""
-        parser = SECXBRLParser()
         row = pd.Series(
             {
                 "concept": "us-gaap_EarningsPerShareDiluted",
@@ -756,7 +399,7 @@ class TestSECXBRLParser:
             }
         )
 
-        fact = parser._create_financial_fact_with_hierarchy(
+        fact = face_fact(
             row,
             "Income Statement",
             "2023-09-30 (FY)",
@@ -770,7 +413,6 @@ class TestSECXBRLParser:
 
     def test_supplement_segment_dimensions_fills_note_only_members(self):
         """Segment-note members are added when the face statement lacks them."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -835,7 +477,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face, already])
+        added = segment_disclosure_facts(xbrl, [face, already], FilingContext())
 
         assert [fact.member for fact in added] == ["nvda:DataCenterMember"]
         assert added[0].axis == "srt:ProductOrServiceAxis"
@@ -846,7 +488,6 @@ class TestSECXBRLParser:
 
     def test_supplement_accepts_revenue_concept_with_different_capitalization(self):
         """A company extension of the revenue concept joins the face line."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -902,7 +543,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face])
+        added = segment_disclosure_facts(xbrl, [face], FilingContext())
         by_member = {fact.member: fact for fact in added}
 
         assert set(by_member) == {
@@ -916,7 +557,6 @@ class TestSECXBRLParser:
 
     def test_supplement_keeps_revenue_components_as_their_own_members(self):
         """Advertising lines are kept; other sales on the segment total is split out."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -981,7 +621,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face, segment_total])
+        added = segment_disclosure_facts(xbrl, [face, segment_total], FilingContext())
         by_member = {fact.member: fact for fact in added}
 
         assert set(by_member) == {"goog:GooglePropertiesMember", "Other sales"}
@@ -993,7 +633,6 @@ class TestSECXBRLParser:
 
     def test_supplement_keeps_only_the_undimensioned_plug(self):
         """The row that closes the members to revenue is kept; other note lines are not."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -1070,7 +709,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face])
+        added = segment_disclosure_facts(xbrl, [face], FilingContext())
         undimensioned = [fact for fact in added if not fact.axis]
 
         assert len(undimensioned) == 1
@@ -1083,7 +722,6 @@ class TestSECXBRLParser:
 
     def test_supplement_keeps_extension_axis_that_sums_to_revenue(self):
         """A company axis is kept when its revenue members equal face revenue."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -1141,7 +779,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face])
+        added = segment_disclosure_facts(xbrl, [face], FilingContext())
         by_member = {fact.member_label: fact for fact in added}
 
         assert set(by_member) == {
@@ -1157,7 +795,6 @@ class TestSECXBRLParser:
 
     def test_supplement_drops_extension_axis_that_misses_revenue(self):
         """An extension axis that does not add up to face revenue is left out."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -1199,11 +836,10 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        assert parser._supplement_segment_dimensions(xbrl, [face]) == []
+        assert segment_disclosure_facts(xbrl, [face], FilingContext()) == []
 
     def test_supplement_keeps_undimensioned_revenue_components(self):
         """Advertising and other fees that sum to revenue are kept as filed."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -1270,7 +906,7 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face])
+        added = segment_disclosure_facts(xbrl, [face], FilingContext())
         components = {fact.concept: fact for fact in added if not fact.axis}
 
         assert set(components) == {
@@ -1288,7 +924,6 @@ class TestSECXBRLParser:
 
     def test_supplement_leaves_components_when_product_split_exists(self):
         """A product split already on the face is not repeated from the note."""
-        parser = SECXBRLParser()
         face = Mock()
         face.concept = "us-gaap:Revenues"
         face.axis = ""
@@ -1355,13 +990,14 @@ class TestSECXBRLParser:
         xbrl.statements.list_available.return_value = available
         xbrl.statements.get.return_value = statement
 
-        added = parser._supplement_segment_dimensions(xbrl, [face, advertising, other])
+        added = segment_disclosure_facts(
+            xbrl, [face, advertising, other], FilingContext()
+        )
 
         assert added == []
 
     def test_face_revenue_keeps_the_published_quarter(self):
         """A printed quarter is stored beside the year-to-date revenue total."""
-        parser = SECXBRLParser()
         frame = pd.DataFrame(
             {
                 "concept": ["us-gaap_Revenues"],
@@ -1379,7 +1015,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", False)
+        facts = parse_statement(frame, "Income Statement", False)
         by_period = {fact.period: fact for fact in facts}
 
         assert by_period[PeriodType.Q].value == Decimal("102346.0")
@@ -1388,7 +1024,6 @@ class TestSECXBRLParser:
 
     def test_face_eps_keeps_the_published_quarter(self):
         """A printed per-share quarter is stored beside the year-to-date total."""
-        parser = SECXBRLParser()
         frame = pd.DataFrame(
             {
                 "concept": ["us-gaap_EarningsPerShareDiluted"],
@@ -1406,7 +1041,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", False)
+        facts = parse_statement(frame, "Income Statement", False)
         by_period = {fact.period: fact for fact in facts}
 
         assert by_period[PeriodType.Q].value == Decimal("-0.40")
@@ -1415,7 +1050,6 @@ class TestSECXBRLParser:
 
     def test_dimension_suffix_rewrites_only_reused_members(self):
         """A shared parent member takes the label suffix; a distinct member does not."""
-        parser = SECXBRLParser()
         period = "2025-03-29 (Q1)"
         frame = pd.DataFrame(
             {
@@ -1457,7 +1091,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         by_member = {fact.member: fact.member_label for fact in facts}
 
         assert by_member["Data Center"] == "Data Center"
@@ -1467,7 +1101,6 @@ class TestSECXBRLParser:
 
     def test_dimension_metadata_is_kept_beside_the_display_member(self):
         """Raw coordinates stay on the fact after the display member collapses."""
-        parser = SECXBRLParser()
         period = "2025-03-29 (Q1)"
         metadata = [
             {
@@ -1505,7 +1138,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         data_center = next(fact for fact in facts if fact.member == "Data Center")
 
         assert [(item.axis, item.member) for item in data_center.dimensions] == [
@@ -1515,7 +1148,6 @@ class TestSECXBRLParser:
 
     def test_dimension_suffix_keeps_parent_when_suffixes_collide(self):
         """Two reused parents that share a child name stay on different members."""
-        parser = SECXBRLParser()
         period = "2025-12-31 (FY)"
         frame = pd.DataFrame(
             {
@@ -1552,7 +1184,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         by_member = {fact.member: fact.value for fact in facts}
 
         assert by_member["Operating segments - Ratings"] == Decimal("4549.0")
@@ -1562,7 +1194,6 @@ class TestSECXBRLParser:
 
     def test_dimension_suffix_keeps_parent_when_suffix_is_its_own_member(self):
         """An elimination of a named member does not replace that member."""
-        parser = SECXBRLParser()
         period = "2018-03-31 (Q1)"
         frame = pd.DataFrame(
             {
@@ -1609,7 +1240,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         by_member = {fact.member: fact.value for fact in facts}
 
         assert by_member["spgi:SubscriptionMember"] == Decimal("638.0")
@@ -1623,7 +1254,6 @@ class TestSECXBRLParser:
 
     def test_dimension_uses_quarter_column_and_keeps_ytd(self):
         """A same-date year-to-date column does not replace the published quarter."""
-        parser = SECXBRLParser()
         frame = pd.DataFrame(
             {
                 "concept": ["us-gaap_Revenues", "us-gaap_Revenues"],
@@ -1644,7 +1274,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         face = {fact.period: fact for fact in facts if not fact.axis}
         geo = {
             (fact.period, fact.period_end): fact
@@ -1668,7 +1298,6 @@ class TestSECXBRLParser:
 
     def test_dimension_keeps_prior_quarter_numbered_differently(self):
         """A fiscal Q1 labeled Q2 still pairs with the prior-year Q1 column."""
-        parser = SECXBRLParser()
         frame = pd.DataFrame(
             {
                 "concept": ["us-gaap_Revenues", "us-gaap_Revenues"],
@@ -1687,7 +1316,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         face = [fact for fact in facts if not fact.axis]
         gaming = {fact.period_end: fact for fact in facts if fact.axis}
 
@@ -1697,7 +1326,6 @@ class TestSECXBRLParser:
 
     def test_dimension_keeps_every_annual_column(self):
         """A three-year 10-K column is a fact for each year, not only the latest."""
-        parser = SECXBRLParser()
         frame = pd.DataFrame(
             {
                 "concept": ["us-gaap_SalesRevenueNet", "us-gaap_SalesRevenueNet"],
@@ -1717,7 +1345,7 @@ class TestSECXBRLParser:
             }
         )
 
-        facts = parser._parse_statement(frame, "Income Statement", True)
+        facts = parse_statement(frame, "Income Statement", True)
         face = [fact for fact in facts if not fact.axis]
         geo = {fact.period_end: fact for fact in facts if fact.member == "country:US"}
 

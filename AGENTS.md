@@ -797,12 +797,16 @@ counts the diagnostics queries that grew per company.
 **edgartools bug.** Suspect this when the fact is wrong or missing in
 `financial_facts` but present in the filing's XBRL, which the `public_url` column
 on `filings` links to. Fix the parser and re-ingest so the fact is stored
-with the rest of the filing. There is precedent in
-[filings/parsers/sec_xbrl.py](filings/parsers/sec_xbrl.py): `_is_column_mostly_empty`
-works around edgartools issue 408, where a period column comes back nearly empty,
-and `_create_dimension_fact` strips a duplicated member-label prefix. Parser
-fixes belong there. Re-ingest with `--override` afterwards, since existing rows
-were written by the old parser.
+with the rest of the filing. The parser is the package
+[filings/parsers/sec_xbrl/](filings/parsers/sec_xbrl/), and there is precedent
+in it: `columns.is_mostly_empty` works around edgartools issue 408, where a
+period column comes back nearly empty, and `facts._display_member` strips a
+duplicated member-label prefix. Segment members tagged only in a note are
+added by `segments.py`. Parser fixes belong there. To check a parser change,
+parse a fixed set of cached filings before and after and diff the facts; a
+change to the comparative-column rules in `columns.py` shows up on 10-Q
+balance sheets and statements of equity first. Re-ingest with `--override`
+afterwards, since existing rows were written by the old parser.
 
 **Bad SEC data.** Companies do restate, mistag and occasionally invert signs.
 Confirm against the filing HTML before concluding this. The fix is a narrowly

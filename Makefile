@@ -1,5 +1,5 @@
 .PHONY: help install format lint test clean db-init db-reset db-status \
-	ingest refresh refresh-snapshot refresh-compare overrides-load overrides-check psql diagnose
+	ingest refresh refresh-snapshot refresh-compare parser-snapshot parser-compare overrides-load overrides-check psql diagnose
 
 # Connection string used by the psql-based targets below. Override per-invocation
 # with `make psql DATABASE_URL=...`.
@@ -36,6 +36,8 @@ help:
 	@echo "  refresh         - Recompute normalized/quarterly/yearly financials (COMPANY_IDS=1,2 STAGES=...)"
 	@echo "  refresh-snapshot - Save derived tables and diagnostics counts (OUT=dir)"
 	@echo "  refresh-compare - Diff two snapshots (BASE=dir NEW=dir)"
+	@echo "  parser-snapshot - Parse a fixed sample of filings (OUT=dir, SAMPLE=file optional)"
+	@echo "  parser-compare  - Diff two parser snapshots (BASE=dir NEW=dir)"
 	@echo "  overrides-load  - Sync migrations/data/*.csv overrides into the database"
 	@echo "  overrides-check - Show what overrides-load would change (dry run)"
 	@echo "  diagnose        - Run the data-quality queries in sql/diagnostics"
@@ -152,6 +154,14 @@ refresh-snapshot:
 refresh-compare:
 	@echo "🔍 Comparing $(BASE) with $(NEW)..."
 	python -m filings.refresh.parity.compare $(BASE) $(NEW)
+
+parser-snapshot:
+	@echo "📸 Parsing the filing sample to $(OUT)..."
+	python -m filings.scripts.parser_parity snapshot $(OUT) $(if $(SAMPLE),--sample $(SAMPLE))
+
+parser-compare:
+	@echo "🔍 Comparing parser snapshots $(BASE) and $(NEW)..."
+	python -m filings.scripts.parser_parity compare $(BASE) $(NEW)
 
 overrides-load:
 	@echo "📤 Syncing override CSVs..."
