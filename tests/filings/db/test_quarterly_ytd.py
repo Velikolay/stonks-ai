@@ -1,10 +1,14 @@
 """Quarterly derivation when a statement header shares the revenue series."""
 
+from typing import Callable
+
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 
-def test_revenue_header_does_not_block_ytd_subtraction(test_engine: Engine) -> None:
+def test_revenue_header_does_not_block_ytd_subtraction(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """A header on the same date is not the previous quarter.
 
     The header's id is lower than the total, which is the order that used to
@@ -81,7 +85,8 @@ def test_revenue_header_does_not_block_ytd_subtraction(test_engine: Engine) -> N
                     "period_end": period_end,
                 },
             )
-        conn.execute(text("CALL refresh_quarterly_financials(ARRAY[1]::int[])"))
+    refresh(["quarterly_financials"])
+    with test_engine.connect() as conn:
         rows = conn.execute(
             text(
                 "SELECT period_end, value, source_type FROM quarterly_financials "

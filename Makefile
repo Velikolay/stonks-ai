@@ -1,5 +1,5 @@
 .PHONY: help install format lint test clean db-init db-reset db-status \
-	ingest refresh overrides-load overrides-check psql diagnose
+	ingest refresh refresh-snapshot refresh-compare overrides-load overrides-check psql diagnose
 
 # Connection string used by the psql-based targets below. Override per-invocation
 # with `make psql DATABASE_URL=...`.
@@ -139,13 +139,17 @@ ingest:
 
 refresh:
 	@echo "🔄 Refreshing financials..."
-	@if [ -n "$(COMPANY_IDS)" ]; then \
-		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 \
-			-c "CALL refresh_financials(ARRAY[$(COMPANY_IDS)]::int[]);"; \
-	else \
-		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 \
-			-c "DO 'DECLARE ids int[]; BEGIN SELECT array_agg(id) INTO ids FROM companies; CALL refresh_financials(ids); END';"; \
-	fi
+	python -m filings.refresh \
+		$(if $(COMPANY_IDS),--companies $(COMPANY_IDS)) \
+		$(if $(STAGES),--stages $(STAGES))
+
+refresh-snapshot:
+	@echo "📸 Snapshotting derived tables to $(OUT)..."
+	python -m filings.refresh.parity.snapshot --out $(OUT)
+
+refresh-compare:
+	@echo "🔍 Comparing $(BASE) with $(NEW)..."
+	python -m filings.refresh.parity.compare $(BASE) $(NEW)
 
 overrides-load:
 	@echo "📤 Syncing override CSVs..."
