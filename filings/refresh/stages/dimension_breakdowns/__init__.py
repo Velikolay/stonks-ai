@@ -73,5 +73,5 @@ def run(data: CompanyData) -> pl.DataFrame:
     return (
         collect_years(exact)
         .select(DIMENSION_BREAKDOWNS.columns)
-        .cast(DIMENSION_BREAKDOWNS.schema)
+        .cast(DIMENSION_BREAKDOWNS.dtypes)
     )

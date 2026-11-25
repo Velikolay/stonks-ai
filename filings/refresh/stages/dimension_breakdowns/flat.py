@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Iterator, Sequence
+from typing import Any, Iterator, Sequence
 
 import numpy as np
 import polars as pl
@@ -153,7 +153,9 @@ def _scale(values: Sequence[Decimal]) -> int:
     return k
 
 
-def _subset_tables(values: Sequence[int], roundings: Sequence[int], dtype: object):
+def _subset_tables(
+    values: Sequence[int], roundings: Sequence[int], dtype: Any
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sum, coarsest rounding and size of every subset, indexed by bit mask."""
     sums = np.zeros(1, dtype=dtype)
     widest = np.zeros(1, dtype=np.int64)
@@ -174,7 +176,7 @@ def matching_subsets(
     values = [int(a * factor) for a in group.amounts]
     target = int(parent_value * factor)
     bound = (len(values) + 1) * (max(map(abs, values), default=0) + abs(target)) * 1000
-    dtype: object = np.int64 if bound < _INT64_SAFE else object
+    dtype: Any = np.int64 if bound < _INT64_SAFE else object
     sums, widest, sizes = _subset_tables(values, group.roundings, dtype)
 
     gap = np.abs(np.asarray(sums, dtype=dtype) - target)

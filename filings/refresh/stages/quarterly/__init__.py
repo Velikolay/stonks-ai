@@ -113,9 +113,7 @@ def run(data: CompanyData) -> pl.DataFrame:
         member_q4(members, by_year, splits, nine_split, nines),
         line_q4(annual, by_year),
     ]
-    result = pl.concat(
-        [f.select(COLUMNS).cast(QUARTERLY_FINANCIALS.schema) for f in frames]
-    )
+    result = pl.concat([QUARTERLY_FINANCIALS.conform(f) for f in frames])
     return apply_rewrites(
         result, data.table("financial_rewrites"), "quarterly", data.company_id
     )

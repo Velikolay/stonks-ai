@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import polars as pl
 
+from ..io.schemas import dtypes_of
 from . import sql
 from .ids import abs_hash_expr
 
@@ -49,7 +50,7 @@ def apply_rewrites(
         .drop("new_value")
     )
     added = _added_rows(frame, by_action["add"], granularity)
-    return pl.concat([frame, added.select(frame.columns).cast(frame.schema)])
+    return pl.concat([frame, added.select(frame.columns).cast(dtypes_of(frame.schema))])
 
 
 def _added_rows(

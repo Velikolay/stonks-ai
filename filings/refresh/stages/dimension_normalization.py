@@ -537,4 +537,4 @@ def run(data: CompanyData) -> pl.DataFrame:
     matched = data.keep("matches", matches(chainable))
     chained = data.keep("chaining", chaining(matched))
     components = data.keep("components", group_components(grouped, chained))
-    return merge_groups(components).cast(DIMENSION_NORMALIZATION.schema)
+    return merge_groups(components).cast(DIMENSION_NORMALIZATION.dtypes)

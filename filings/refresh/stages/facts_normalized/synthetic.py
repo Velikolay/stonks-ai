@@ -13,6 +13,7 @@ from decimal import Decimal
 
 import polars as pl
 
+from ...io.schemas import dtypes_of
 from .resolve import RESOLVED, company_override_unit, tree_pointers, with_tree_overrides
 
 ZERO = pl.lit(Decimal(0), dtype=pl.Decimal(38, 10))
@@ -84,7 +85,7 @@ def synthetic_parents(
         *tree_pointers(pl.lit(None, pl.Int64), pl.lit(None, pl.Int64)),
         pl.lit(True).alias("is_synthetic"),
     )
-    return built.select(RESOLVED).cast(rows.schema)
+    return built.select(RESOLVED).cast(dtypes_of(rows.schema))
 
 
 def with_synthetic_rows(

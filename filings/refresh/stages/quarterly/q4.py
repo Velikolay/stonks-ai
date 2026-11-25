@@ -19,6 +19,7 @@ nine months subtracted come from a 10-Q on the same split as that 10-K
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Optional
 
 import polars as pl
 
@@ -183,7 +184,7 @@ def nine_month_split(annual: pl.DataFrame, nines: pl.DataFrame) -> pl.DataFrame:
     out = []
     for key, filings in annual_sets.items():
         for a_id, (a_date, a_members) in filings.items():
-            best = None
+            best: Optional[tuple[tuple[bool, bool, int, int], int]] = None
             for n_id, (n_date, n_members) in nine_sets.get(key, {}).items():
                 if not n_members <= a_members:
                     continue

@@ -55,5 +55,5 @@ def run(data: CompanyData) -> pl.DataFrame:
     return (
         mark_duplicates(ranked)
         .select(FINANCIAL_FACTS_NORMALIZED.columns)
-        .cast(FINANCIAL_FACTS_NORMALIZED.schema)
+        .cast(FINANCIAL_FACTS_NORMALIZED.dtypes)
     )

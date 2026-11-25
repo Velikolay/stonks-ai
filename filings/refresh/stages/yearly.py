@@ -63,7 +63,7 @@ def run(data: CompanyData) -> pl.DataFrame:
     rows = (
         annual_rows(data)
         .select(YEARLY_FINANCIALS.columns)
-        .cast(YEARLY_FINANCIALS.schema)
+        .cast(YEARLY_FINANCIALS.dtypes)
     )
     return apply_rewrites(
         rows, data.table("financial_rewrites"), "yearly", data.company_id

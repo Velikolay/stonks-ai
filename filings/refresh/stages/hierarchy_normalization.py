@@ -127,5 +127,5 @@ def run(data: CompanyData) -> pl.DataFrame:
     first = sql.sort(rows, [sql.asc(sql.collate("parent_concept_source"))])
     parent_source = first.group_by(key).agg(pl.col("parent_concept_source").first())
     return concept_source.join(parent_source, on=key).cast(
-        HIERARCHY_NORMALIZATION.schema
+        HIERARCHY_NORMALIZATION.dtypes
     )

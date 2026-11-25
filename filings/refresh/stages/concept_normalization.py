@@ -362,5 +362,5 @@ def run(data: CompanyData) -> pl.DataFrame:
     rows = inferred(chained, grouped)
     result = apply_overrides(rows, data.table("concept_normalization_overrides"))
     return result.filter(pl.col("company_id") == data.company_id).cast(
-        CONCEPT_NORMALIZATION.schema
+        CONCEPT_NORMALIZATION.dtypes
     )

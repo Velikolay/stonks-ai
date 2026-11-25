@@ -8,16 +8,16 @@ most five decimals and stay below 10^13, and the arithmetic must be exact.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 import polars as pl
 
 DECIMAL = pl.Decimal(38, 10)
-STR = pl.String
-INT = pl.Int32
-BIGINT = pl.Int64
-BOOL = pl.Boolean
-DATE = pl.Date
+STR = pl.String()
+INT = pl.Int32()
+BIGINT = pl.Int64()
+BOOL = pl.Boolean()
+DATE = pl.Date()
 TIMESTAMP = pl.Datetime("us")
 
 
@@ -38,8 +38,21 @@ class Table:
     def columns(self) -> list[str]:
         return list(self.schema.names())
 
+    @property
+    def dtypes(self) -> Mapping[Any, pl.DataType]:
+        return dtypes_of(self.schema)
+
     def empty(self) -> pl.DataFrame:
         return pl.DataFrame(schema=self.schema)
+
+    def conform(self, frame: pl.DataFrame) -> pl.DataFrame:
+        """``frame`` with exactly this table's columns, in order, and types."""
+        return frame.select(self.columns).cast(self.dtypes)
+
+
+def dtypes_of(schema: pl.Schema) -> Mapping[Any, pl.DataType]:
+    """A schema as the column-to-type mapping ``DataFrame.cast`` accepts."""
+    return dict(schema)
 
 
 def _table(

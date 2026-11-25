@@ -70,5 +70,5 @@ def run(data: CompanyData) -> pl.DataFrame:
         cloned(overrides.matching_fact_overrides(facts, rules, "clone")),
     ]
     return pl.concat(
-        [f.cast(FINANCIAL_FACTS_OVERRIDDEN.schema) for f in frames], how="vertical"
-    ).select(FINANCIAL_FACTS_OVERRIDDEN.columns)
+        [FINANCIAL_FACTS_OVERRIDDEN.conform(f) for f in frames], how="vertical"
+    )
