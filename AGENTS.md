@@ -13,14 +13,14 @@ For app setup, the RAG API and query endpoints, see [README.md](README.md).
 flowchart TD
     edgar[EDGAR via edgartools] --> loader[SECXBRLFilingsLoader]
     loader --> raw["financial_facts + filings + companies"]
-    raw --> p1[refresh_financial_facts_overridden]
-    p1 --> p2[refresh_concept_normalization]
-    p2 --> p3[refresh_hierarchy_normalization]
-    p3 --> p4[refresh_dimension_normalization]
-    p4 --> p5[refresh_financial_facts_normalized]
-    p5 --> p5b[refresh_dimension_breakdowns]
-    p5 --> p6[refresh_quarterly_financials]
-    p5 --> p7[refresh_yearly_financials]
+    raw --> p1[facts_overridden]
+    p1 --> p2[concept_normalization]
+    p2 --> p3[hierarchy_normalization]
+    p3 --> p4[dimension_normalization]
+    p4 --> p5[facts_normalized]
+    p5 --> p5b[dimension_breakdowns]
+    p5 --> p6[quarterly_financials]
+    p5 --> p7[yearly_financials]
     csv["migrations/data/*.csv"] --> overrides[override tables]
     overrides --> p1
     overrides --> p2
@@ -33,8 +33,9 @@ flowchart TD
 ```
 
 Raw facts are never modified. Every correction is expressed as an override row
-and applied by re-running the procedures, so the whole derived state is
-reproducible from EDGAR plus five CSVs.
+and applied by re-running the refresh, so the whole derived state is
+reproducible from EDGAR plus five CSVs. The refresh is the Python package
+[filings/refresh/](filings/refresh/); each stage above is one module.
 
 ## Setup
 
@@ -52,8 +53,10 @@ and at hundreds of companies you will be throttled or blocked without it:
 EDGAR_IDENTITY="Jane Doe jane@example.com"
 ```
 
-The `psql`-based targets read `DATABASE_URL` from the environment and otherwise
-default to `postgresql://rag_user:rag_password@localhost:5432/rag_db`.
+`make refresh` and the other Python targets read `DATABASE_URL` from the
+environment or `.env`. The `psql`-based targets (`make diagnose`, `make psql`)
+read it from the environment and otherwise default to
+`postgresql://rag_user:rag_password@localhost:5432/rag_db`.
 
 ## The loop
 
@@ -154,20 +157,36 @@ is what you need after fixing a parser bug.
 
 ## Stage reference
 
-Run in this order; each stage reads the previous one. `refresh_financials(int[])`
-in [sql/procedures/refresh_financials.sql](sql/procedures/refresh_financials.sql)
-chains all eight, one company at a time.
+Run in this order; each stage reads the previous one.
+[pipeline.py](filings/refresh/pipeline.py) chains all eight per company, keeps
+each stage's output in memory for the next, and writes the company's rows in
+one transaction. Several companies run at once (`--jobs`, default 4).
 
-| Procedure | Writes | What it does |
-| --- | --- | --- |
-| `refresh_financial_facts_overridden` | `financial_facts_overridden` | Applies `financial_facts_overrides` rules, rewriting a fact's concept, dimensions and weight |
-| `refresh_concept_normalization` | `concept_normalization` | Infers a canonical label per concept, then applies concept overrides |
-| `refresh_hierarchy_normalization` | `hierarchy_normalization` | Expands `parent_concept` edges from overrides across every concept in the same group |
-| `refresh_dimension_normalization` | `dimension_normalization` | Infers canonical axis and member labels, then applies dimension overrides |
-| `refresh_financial_facts_normalized` | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates |
-| `refresh_dimension_breakdowns` | `dimension_breakdowns` | Infers which sets of members add up to another member or to the undimensioned line, then applies breakdown overrides |
-| `refresh_quarterly_financials` | `quarterly_financials` | Converts YTD to discrete quarters and derives missing quarters |
-| `refresh_yearly_financials` | `yearly_financials` | Annual presentation layer from 10-K facts |
+```bash
+make refresh COMPANY_IDS=1,2                     # every stage
+make refresh COMPANY_IDS=1 STAGES=quarterly_financials
+python -m filings.refresh --companies 1 -v       # per-stage rows and timings
+```
+
+A stage run on its own reads its upstream tables from the database, so you can
+rerun one stage after a code change without recomputing the rest.
+
+| Stage | Module | Writes | What it does |
+| --- | --- | --- | --- |
+| `facts_overridden` | [facts_overridden.py](filings/refresh/stages/facts_overridden.py) | `financial_facts_overridden` | Applies `financial_facts_overrides` rules, rewriting a fact's concept, dimensions and weight |
+| `concept_normalization` | [concept_normalization.py](filings/refresh/stages/concept_normalization.py) | `concept_normalization` | Infers a canonical label per concept, then applies concept overrides |
+| `hierarchy_normalization` | [hierarchy_normalization.py](filings/refresh/stages/hierarchy_normalization.py) | `hierarchy_normalization` | Expands `parent_concept` edges from overrides across every concept in the same group |
+| `dimension_normalization` | [dimension_normalization.py](filings/refresh/stages/dimension_normalization.py) | `dimension_normalization` | Infers canonical axis and member labels, then applies dimension overrides |
+| `facts_normalized` | [facts_normalized/](filings/refresh/stages/facts_normalized/) | `financial_facts_normalized` | Joins all layers, resolves hierarchy, creates synthetic rows, rolls up, deduplicates |
+| `dimension_breakdowns` | [dimension_breakdowns/](filings/refresh/stages/dimension_breakdowns/) | `dimension_breakdowns` | Infers which sets of members add up to another member or to the undimensioned line, then applies breakdown overrides |
+| `quarterly_financials` | [quarterly/](filings/refresh/stages/quarterly/) | `quarterly_financials` | Converts YTD to discrete quarters and derives missing quarters |
+| `yearly_financials` | [yearly.py](filings/refresh/stages/yearly.py) | `yearly_financials` | Annual presentation layer from 10-K facts |
+
+Rules shared by several stages (override precedence, the two conflict rules,
+rounding tolerances, unit canonicalisation, Postgres-compatible ids, sort order
+and rounding) live in [filings/refresh/rules/](filings/refresh/rules/). Ties a
+rule cannot break (two labels last reported in the same period) are broken
+deterministically, so a refresh gives the same result every time.
 
 Four behaviours are worth knowing before you debug anything:
 
@@ -184,12 +203,12 @@ filings and the most recent label wins; and *chaining*, where one period's
 comparative value matches another period's value, which detects a renamed
 concept. The table only receives concepts that one of those signals selected. A
 line with a single stable label has no row there, which is not a defect: a
-global override is applied later, directly, in
-`refresh_financial_facts_normalized`. You need an override when both signals
+global override is applied later, directly, in the `facts_normalized`
+stage. You need an override when both signals
 fail and the presentation label is still the raw filing label.
 
 **Synthetic rows.** When an override names a `parent_concept` or
-`abstract_concept` that is not a real fact in that filing, the procedure invents
+`abstract_concept` that is not a real fact in that filing, the refresh invents
 a row whose id is a hash of statement, concept, filing and company. Its value is
 the weighted rollup of its children. This is how subtotals that a company never
 tagged get created.
@@ -201,7 +220,7 @@ iPad, Mac and Wearables), and it can hold two splits of the same amount
 beside countries). A breakdown is a set of members on one axis that adds up
 exactly to a parent, which is another member or the undimensioned line
 (`parent_member = ''`), with the fiscal years where that held in the 10-K.
-After dedup, `refresh_dimension_breakdowns` keeps a set that adds up in at
+After dedup, the `dimension_breakdowns` stage keeps a set that adds up in at
 least two 10-Ks (a year where one of its members could be swapped for another
 member of equal value does not count, so a region and a country that coincide
 never mix) and writes it into `dimension_breakdowns`; a set that only expands
@@ -565,7 +584,7 @@ Remap the ConsolidationItems members to `Product` in
 
 `14` checks the breakdowns. Its first query must stay empty: a row there means
 an exact `fiscal_years` entry no longer adds up in `yearly_financials`, which
-is a procedure bug. The second lists axes with 10-K years that no exact
+is a refresh bug. The second lists axes with 10-K years that no exact
 breakdown of the line covers. The shortfall query compares each breakdown's
 members to the 10-K years outside `fiscal_years` and shows the unallocated
 share; it is often a member left off the axis or two members colliding on one
@@ -669,8 +688,8 @@ series to every other file.
 
 ### Why the link was missed
 
-All rename detection rests on one join in
-[refresh_concept_normalization.sql](sql/procedures/refresh_concept_normalization.sql),
+All rename detection rests on one join, `candidate_matches` in
+[concept_normalization.py](filings/refresh/stages/concept_normalization.py),
 which matches a filing's comparative value against the prior period's value.
 Every condition on it is a way to miss a real rename: exact value equality fails
 on a restatement, both sides are multiplied by `weight` so a weight override on
@@ -679,10 +698,11 @@ appears first in a 10-Q is invisible, and a missing `comparative_value` means
 there is no bridge at all. A zero never bridges, since every line that did not
 occur that year shares it, so a rename that first prints as zero is not linked. The same multiplication works in reverse: a weight
 you just corrected can create a new match against an unrelated line that now
-shares the amount. The `false_matches` CTEs then drop a pair entirely for
-the whole company and statement if any period triple chains or any mirrored pair
-appears. `refresh_dimension_normalization.sql` repeats the same join and
-additionally requires the same `normalized_label`.
+shares the amount. `false_matches` then drops a pair entirely for the whole
+company and statement if any period triple chains or any mirrored pair
+appears. `matches` in
+[dimension_normalization.py](filings/refresh/stages/dimension_normalization.py)
+repeats the same join and additionally requires the same `normalized_label`.
 
 The grouping signal has its own bail-out: if a single filing uses two labels for
 one concept, grouping is disabled for that concept everywhere. That is the most
@@ -693,7 +713,7 @@ common finding in the first query.
 | Query | Signal |
 | --- | --- |
 | Series that stop early | The loose gate: two series in the same slot that never coexist, one ending where the other begins. `shares_concept` and `similar_concept_name` rank them; `successor_candidates = 1` means the seam is unambiguous |
-| Value bridges not used | Re-runs the procedure's own join with one condition relaxed at a time. `why_unlinked` names the condition that had to give |
+| Value bridges not used | Re-runs the refresh's own join with one condition relaxed at a time. `why_unlinked` names the condition that had to give |
 | Statement slots | A parent that lost exactly one child and gained exactly one at the next annual boundary |
 | Axis members | An axis where exactly one member retired and exactly one took its place, siblings otherwise unchanged |
 
@@ -708,7 +728,7 @@ conclusive and a guard threw it away, which is the safest class to act on.
 The queries are deterministic and never merge anything. Judgement happens
 between the diagnostic and the CSV, and then stops being judgement: the override
 row is reviewable in git and reapplied identically on every refresh. Do not push
-scoring or thresholds into the procedures, and never let a tolerance match merge
+scoring or thresholds into the refresh code, and never let a tolerance match merge
 series automatically.
 
 - **Act directly** on a clean one-out-one-in swap and on an exact bridge that only `false_matches` rejected. These are mechanical.
@@ -738,17 +758,38 @@ WHERE company_id = 1 AND concept = 'us-gaap:Revenues'
 ORDER BY period_end;
 ```
 
-**Normalization SQL bug.** Suspect this when the raw fact is correct but the
+**Normalization code bug.** Suspect this when the raw fact is correct but the
 normalized row is wrong in a way no override can express, or when the same
-override behaves differently for two companies. Procedures live in
-[sql/procedures/](sql/procedures/) and are installed by migration
-[0008](migrations/versions/0008_add_financials_procedures.py). Editing a `.sql`
-file does nothing until it is reinstalled: apply it with
-`psql "$DATABASE_URL" -f sql/procedures/<name>.sql`, then `make refresh`. Add a
-new migration to make the change permanent. A procedure change affects every
-company, so refresh them all and re-run `08` and `14` unfiltered, not only for
-the company that prompted it. A dedup rule written for one filer's recast
-dropped another filer's only copy of a member, and only `14` showed it.
+override behaves differently for two companies. Each stage is a module in
+[filings/refresh/stages/](filings/refresh/stages/), a chain of named steps
+that mirror the rules in this file. To see what a step produced, dump the
+intermediate frames a stage exposes and read them with polars:
+
+```bash
+python -m filings.refresh --companies 7 --stages quarterly_financials --dump-dir /tmp/dump
+python -c "import polars as pl; print(pl.read_parquet('/tmp/dump/7/quarterly_financials.annual_split.parquet'))"
+```
+
+A code change takes effect on the next `make refresh`; there is nothing to
+install. Write the failing case as a unit test in
+[tests/filings/refresh/](tests/filings/refresh/) first: those run without
+Postgres in about two seconds (`pytest tests/filings/refresh`). A logic
+change affects every company, so refresh them all and re-run `08` and `14`
+unfiltered, not only for the company that prompted it. A dedup rule written for
+one filer's recast dropped another filer's only copy of a member, and only `14`
+showed it. To see every row the change moved, snapshot before and after and
+diff them:
+
+```bash
+make refresh-snapshot OUT=backups/before
+# ... change the code, then make refresh ...
+make refresh-snapshot OUT=backups/after
+make refresh-compare BASE=backups/before NEW=backups/after
+```
+
+The compare joins each derived table on its primary key, classifies every
+difference (missing, extra, within rounding, value or column changed) and
+counts the diagnostics queries that grew per company.
 
 **edgartools bug.** Suspect this when the fact is wrong or missing in
 `financial_facts` but present in the filing's XBRL, which the `public_url` column

@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Callable, Optional, Sequence
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -9,6 +10,7 @@ from sqlalchemy.engine import Engine
 
 from filings import CompanyCreate, FilingCreate, FinancialFact, PeriodType
 from filings.db import AsyncFilingsDatabase
+from filings.refresh import refresh_companies_sync
 
 
 def recreate_test_database() -> None:
@@ -159,6 +161,20 @@ def clean_tables(test_engine: Engine):
     except Exception:
         # Tables might not exist yet, which is fine for the first test
         pass
+
+
+@pytest.fixture
+def refresh(test_db_url: str) -> Callable[..., None]:
+    """Run the refresh for company 1 against the test database.
+
+    It writes through its own connection, so seed rows must be committed
+    first: seed in one ``test_engine.begin()`` block, read in another.
+    """
+
+    def run(stages: Optional[Sequence[str]] = None) -> None:
+        refresh_companies_sync([1], database_url=test_db_url, stages=stages, jobs=1)
+
+    return run
 
 
 @pytest.fixture

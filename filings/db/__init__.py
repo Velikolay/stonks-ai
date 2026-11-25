@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from sqlalchemy import MetaData, text
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from ..refresh import refresh_companies
 from .companies import CompanyOperationsAsync
 from .concept_normalization_overrides import (
     ConceptNormalizationOverridesOperationsAsync,
@@ -83,11 +84,10 @@ class AsyncFilingsDatabase:
         """Recompute normalization + quarterly/yearly financials for companies."""
         if not company_ids:
             return
-        async with self._engine.begin() as conn:
-            await conn.execute(
-                text("CALL refresh_financials(:company_ids)"),
-                {"company_ids": company_ids},
-            )
+        await refresh_companies(
+            company_ids,
+            database_url=self._engine.url.render_as_string(hide_password=False),
+        )
 
     async def aclose(self) -> None:
         """Dispose of the async engine."""

@@ -1,6 +1,6 @@
 """Integration tests for refresh_dimension_breakdowns."""
 
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
@@ -95,11 +95,13 @@ def _breakdowns(conn: Connection) -> List[Breakdown]:
 
 def test_refresh_infers_subtotal_and_alternative_breakdowns(
     test_engine: Engine,
+    refresh: Callable[..., None],
 ) -> None:
     """Sets that add up to a member or to the line in two 10-Ks are kept."""
     with test_engine.begin() as conn:
         _seed(conn, REVENUE)
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         breakdowns = _breakdowns(conn)
 
     assert breakdowns == [
@@ -109,16 +111,20 @@ def test_refresh_infers_subtotal_and_alternative_breakdowns(
     ]
 
 
-def test_refresh_skips_breakdown_seen_in_one_year(test_engine: Engine) -> None:
+def test_refresh_skips_breakdown_seen_in_one_year(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """A single matching year is not enough evidence."""
     with test_engine.begin() as conn:
         _seed(conn, {2023: REVENUE[2023]})
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         assert _breakdowns(conn) == []
 
 
 def test_refresh_omits_a_year_where_a_known_set_falls_short(
     test_engine: Engine,
+    refresh: Callable[..., None],
 ) -> None:
     """A year that falls short stays out of fiscal_years; the set is kept."""
     short_year = {
@@ -132,7 +138,8 @@ def test_refresh_omits_a_year_where_a_known_set_falls_short(
     }
     with test_engine.begin() as conn:
         _seed(conn, {**REVENUE, 2025: short_year})
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         by_members = {row[1]: row for row in _breakdowns(conn)}
 
     assert by_members[("Domestic", "International")][2:] == (
@@ -144,18 +151,22 @@ def test_refresh_omits_a_year_where_a_known_set_falls_short(
 
 def test_refresh_ignores_years_where_a_tied_member_could_swap_in(
     test_engine: Engine,
+    refresh: Callable[..., None],
 ) -> None:
     """A set that only adds up because two members share a value is not kept."""
     tied = {**REVENUE[2024], "Region": REVENUE[2024]["Domestic"]}
     with test_engine.begin() as conn:
         _seed(conn, {**REVENUE, 2025: tied, 2026: tied})
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         members = {row[1] for row in _breakdowns(conn) if row[0] == ""}
 
     assert members == {("Domestic", "International"), ("Products", "Services")}
 
 
-def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
+def test_overrides_replace_inferred_breakdowns(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """A parent's override rows are its only breakdowns, where they add up."""
     with test_engine.begin() as conn:
         _seed(conn, REVENUE)
@@ -170,7 +181,8 @@ def test_overrides_replace_inferred_breakdowns(test_engine: Engine) -> None:
             ),
             {"axis": AXIS},
         )
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         breakdowns = _breakdowns(conn)
 
     assert breakdowns == [
@@ -232,14 +244,17 @@ def _mark_line_context(conn: Connection, lines: List[str]) -> None:
         )
 
 
-def test_context_breakdown_ignores_the_flat_member_cap(test_engine: Engine) -> None:
+def test_context_breakdown_ignores_the_flat_member_cap(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """A cross-tab sums in full, and the flat regions still infer beside it."""
     revenue = _line_revenue()
     lines = [label for label in revenue[2023] if label.startswith("Line ")]
     with test_engine.begin() as conn:
         _seed(conn, revenue)
         _mark_line_context(conn, lines)
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         breakdowns = _breakdowns(conn)
 
     assert breakdowns == [
@@ -248,7 +263,9 @@ def test_context_breakdown_ignores_the_flat_member_cap(test_engine: Engine) -> N
     ]
 
 
-def test_axis_default_stays_on_the_flat_list(test_engine: Engine) -> None:
+def test_axis_default_stays_on_the_flat_list(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """The axis total beside a region does not turn that region into a cell."""
     with test_engine.begin() as conn:
         _seed(conn, REVENUE)
@@ -265,7 +282,8 @@ def test_axis_default_stays_on_the_flat_list(test_engine: Engine) -> None:
                 "('Domestic', 'International')"
             )
         )
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         breakdowns = _breakdowns(conn)
 
     assert breakdowns == [
@@ -275,7 +293,9 @@ def test_axis_default_stays_on_the_flat_list(test_engine: Engine) -> None:
     ]
 
 
-def test_companion_on_every_member_stays_on_the_flat_list(test_engine: Engine) -> None:
+def test_companion_on_every_member_stays_on_the_flat_list(
+    test_engine: Engine, refresh: Callable[..., None]
+) -> None:
     """A total tagged on every region is not a second cut of those regions."""
     with test_engine.begin() as conn:
         _seed(conn, REVENUE)
@@ -291,7 +311,8 @@ def test_companion_on_every_member_stays_on_the_flat_list(test_engine: Engine) -
                 "('Domestic', 'International')"
             )
         )
-        conn.execute(text("CALL refresh_financials(ARRAY[1]::int[])"))
+    refresh()
+    with test_engine.connect() as conn:
         parents = {row[1] for row in _breakdowns(conn) if row[0] == ""}
 
     assert ("Domestic", "International") in parents

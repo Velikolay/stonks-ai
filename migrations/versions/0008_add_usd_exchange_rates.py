@@ -1,7 +1,7 @@
 """Store daily foreign-currency rates for USD translation.
 
-Revision ID: 0009
-Revises: 0008
+Revision ID: 0008
+Revises: 0007
 Create Date: 2026-11-23 00:00:00.000000
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0009"
-down_revision = "0008"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 

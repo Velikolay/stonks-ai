@@ -2,6 +2,12 @@
 
 This directory contains comprehensive tests for the database module.
 
+The refresh pipeline's rules and stages are unit-tested without a database in
+[tests/filings/refresh/](../refresh/) (`pytest tests/filings/refresh`). The
+integration tests here that recompute derived tables (breakdowns, quarterly
+YTD) use the `refresh` fixture, which runs the pipeline for company 1 against
+the test database.
+
 ## Test Structure
 
 ```
@@ -113,6 +119,8 @@ The tests use several fixtures defined in `conftest.py`:
 
 - `test_db_url`: Test database connection string
 - `test_engine`: SQLAlchemy engine for test database
+- `refresh`: runs the refresh pipeline for company 1; seed rows in one
+  committed `test_engine.begin()` block, call it, then read in another
 - `db`: Database instance with all operations
 - `sample_company`: Sample company data
 - `sample_filing`: Sample filing data

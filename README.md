@@ -219,10 +219,15 @@ The system includes comprehensive financial data management with support for SEC
 ### Database Views
 
 #### Quarterly Financials
-A materialized view that provides quarterly financial metrics from 10-Q and 10-K filings, with calculated missing quarters based on annual data.
+A table of quarterly financial metrics from 10-Q and 10-K filings, with calculated missing quarters based on annual data.
 
 #### Yearly Financials
-A materialized view that provides yearly financial metrics from 10-K filings only, offering a clean annual view of financial data.
+A table of yearly financial metrics from 10-K filings only, offering a clean annual view of financial data.
+
+Both tables, and the normalization tables they are built from, are derived by
+the refresh pipeline in [filings/refresh/](filings/refresh/README.md):
+`make refresh COMPANY_IDS=1,2` recomputes them after new filings or override
+changes. [AGENTS.md](AGENTS.md) describes every stage.
 
 ### Usage Examples
 
@@ -252,8 +257,8 @@ filter_params = YearlyFinancialsFilter(
 )
 range_metrics = db.yearly_financials.get_yearly_financials(filter_params)
 
-# Recompute derived financials after new data is loaded
-db.refresh_financials_for_companies([1])
+# Recompute derived financials after new data is loaded (runs filings.refresh)
+await db.refresh_financials_for_companies([1])
 ```
 
 ### API Endpoints
@@ -368,11 +373,11 @@ GET /financials/normalized-labels?granularity=quarterly
 
 ### Key Features
 
-- **Materialized Views**: Pre-computed views for fast querying of financial metrics
+- **Derived Tables**: Pre-computed quarterly and yearly tables for fast querying of financial metrics
 - **Concept Normalization**: Standardized financial concept names across different filings
 - **Flexible Filtering**: Query by company, year, statement type, concept, or label
 - **Latest Metrics**: Easy access to the most recent financial data
-- **Automatic Refresh**: Views can be refreshed to include new data
+- **Refresh Pipeline**: `make refresh` rebuilds the derived tables from raw facts and override CSVs
 - **REST API**: Easy access to financial data via HTTP endpoints
 
 ## Example Usage
