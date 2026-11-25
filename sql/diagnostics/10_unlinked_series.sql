@@ -80,18 +80,41 @@ ORDER BY
 LIMIT 50;
 
 \echo '--- Value bridges the chaining step did not use, and why ---'
+-- Facts without an override and overridden facts are read separately. On
+-- one LEFT JOIN, COALESCE(ffo.axis, ff.axis) = '' has no statistics: the
+-- planner guessed 1% of the rows and chose nested loops over this CTE,
+-- which did not finish in 15 minutes; split, it takes seconds.
 WITH base AS (
     SELECT
         ff.company_id,
         ff.statement,
         ff.form_type,
-        COALESCE(ffo.concept, ff.concept) AS concept,
+        ff.concept,
         ff.value,
         ff.comparative_value,
         ff.period_end,
         ff.comparative_period_end
     FROM financial_facts ff
-    LEFT JOIN financial_facts_overridden ffo
+    WHERE ff.axis = ''
+      AND NOT ff.is_abstract
+      AND NOT EXISTS (
+          SELECT 1
+          FROM financial_facts_overridden ffo
+          WHERE ffo.id = ff.id
+            AND ffo.company_id = ff.company_id
+      )
+    UNION ALL
+    SELECT
+        ff.company_id,
+        ff.statement,
+        ff.form_type,
+        COALESCE(ffo.concept, ff.concept),
+        ff.value,
+        ff.comparative_value,
+        ff.period_end,
+        ff.comparative_period_end
+    FROM financial_facts ff
+    JOIN financial_facts_overridden ffo
         ON ffo.id = ff.id
         AND ffo.company_id = ff.company_id
     WHERE COALESCE(ffo.axis, ff.axis) = ''
