@@ -13,6 +13,7 @@ from filings.db import AsyncFilingsDatabase
 from filings.models.company import CompanyCreate, CompanyUpdate
 from filings.models.filing import FilingCreate
 from filings.parsers.sec_xbrl import SECXBRLParser
+from filings.parsers.sec_xbrl.values import as_date
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,9 @@ def _earliest_handoff(filings: Sequence[Any]) -> Any:
 class SECXBRLFilingsLoader:
     """Loader for downloading and persisting SEC XBRL filings."""
 
-    def __init__(self, database: AsyncFilingsDatabase, parser: SECXBRLParser = None):
+    def __init__(
+        self, database: AsyncFilingsDatabase, parser: Optional[SECXBRLParser] = None
+    ):
         """Initialize the XBRL filings loader.
 
         Args:
@@ -516,7 +519,9 @@ class SECXBRLFilingsLoader:
         return counts.most_common(1)[0][0]
 
     def _fiscal_period(
-        self, period_end: Optional[date]
+        self,
+        period_end: Optional[date],
+        focus: tuple[Optional[int], Optional[int]] = (None, None),
     ) -> tuple[Optional[int], Optional[int]]:
         """Return the filing's fiscal year and quarter.
 
@@ -526,19 +531,15 @@ class SECXBRLFilingsLoader:
 
         Args:
             period_end: Statement period end stored on the filing.
+            focus: Fiscal year and quarter the cover declares.
 
         Returns:
             Fiscal year and quarter, or None when the period end is missing
             and the cover did not declare them.
         """
-        focus = getattr(self.parser, "fiscal_focus", None)
-        if (
-            isinstance(focus, tuple)
-            and len(focus) == 2
-            and isinstance(focus[0], int)
-            and isinstance(focus[1], int)
-        ):
-            return focus
+        year, quarter = focus
+        if isinstance(year, int) and isinstance(quarter, int):
+            return year, quarter
         if period_end is None:
             return None, None
         return period_end.year, self._calculate_fiscal_quarter(period_end.isoformat())
@@ -615,7 +616,8 @@ class SECXBRLFilingsLoader:
 
             # Parse before insert so the filing period follows the statements
             # when the cover date and the XBRL date disagree by a few days.
-            facts = self.parser.parse_filing(filing)
+            parsed = self.parser.parse_filing(filing)
+            facts = parsed.facts
             cover_period_end = self._parse_date(filing.period_of_report)
             reporting_period_end = self._reporting_period_end(facts, cover_period_end)
             if (
@@ -629,7 +631,9 @@ class SECXBRLFilingsLoader:
                     reporting_period_end,
                 )
 
-            fiscal_year, fiscal_quarter = self._fiscal_period(reporting_period_end)
+            fiscal_year, fiscal_quarter = self._fiscal_period(
+                reporting_period_end, parsed.fiscal_focus
+            )
 
             # Create filing record
             filing_data = FilingCreate(
@@ -709,25 +713,6 @@ class SECXBRLFilingsLoader:
             logger.error(f"Error loading filing {filing.accession_number}: {e}")
             return 0, False
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
-        """Parse date string to date object.
-
-        Args:
-            date_str: Date string to parse
-
-        Returns:
-            Date object or None if parsing fails
-        """
-        if not date_str:
-            return None
-
-        try:
-            from datetime import datetime
-
-            # Try parsing ISO format first
-            if isinstance(date_str, str):
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            return date_str
-        except (ValueError, TypeError):
-            logger.warning(f"Could not parse date: {date_str}")
-            return None
+    def _parse_date(self, value: object) -> Optional[date]:
+        """A filing date field as a date, or None when missing or malformed."""
+        return as_date(value)
