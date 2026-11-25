@@ -155,6 +155,19 @@ process exits non-zero if anything failed. Pass `--override` (via
 `python -m filings.scripts.ingest`) to re-download filings already stored, which
 is what you need after fixing a parser bug.
 
+A filing's fiscal year and quarter come from its cover, and after every load
+[fiscal_periods.py](filings/fiscal_periods.py) checks them against the
+company's year ends. The year ends are the period ends of its annual reports.
+A quarter follows from how far the period end sits before the next year end.
+The year follows from that year end and the company's convention, which is the
+offset most of its covers use: the year a fiscal year ends in, or for some
+retailers the year it starts in. A cover that disagrees is corrected and
+logged, and the company is refreshed. Netflix's FY2012 10-K declares 2011,
+NVIDIA's fiscal 2021 10-Qs declare 2020, and early covers that declare no
+period fell back to calendar quarters. A period end that is no whole number of
+quarters before a year end keeps its cover. A plain `make ingest` applies the
+check to filings already stored.
+
 ### What a filing yields
 
 The parser ([filings/parsers/sec_xbrl/](filings/parsers/sec_xbrl/)) stores the
