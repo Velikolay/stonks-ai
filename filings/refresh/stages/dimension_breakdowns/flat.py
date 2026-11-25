@@ -3,9 +3,13 @@
 Per line, axis and 10-K period, every subset of two or more members of the
 flat list is tried against every parent (another member, or the
 undimensioned line). A set must add up in at least two 10-Ks, not counting
-years where a member could be swapped for a twin of equal value. A set that
-only expands another one (iPhone, iPad, Mac, Wearables and Services beside
-Products and Services) is dropped.
+years where a member could be swapped for a twin of equal value.
+
+An axis that holds a subtotal beside its parts makes every set containing
+the subtotal add up a second time with the parts swapped in. That second
+set only expands the first and is dropped. For example, Apple reports
+Products beside iPhone, iPad, Mac and Wearables, so Revenue equals both
+Products + Services and iPhone + iPad + Mac + Wearables + Services.
 """
 
 from __future__ import annotations
@@ -32,9 +36,13 @@ _INT64_SAFE = 2**62
 def shared_members(reported: pl.DataFrame, dims: pl.DataFrame) -> pl.DataFrame:
     """Dimensions on every cross-tab cell of one axis and period: the table total.
 
-    Netflix tags every region with Streaming; dropping that member leaves the
-    regions as one flat list. A member that is itself a single-dimension row
-    on the axis is a parent in the tree, not a total, and does not count.
+    A filer can tag every cell of a table with a second member that names
+    the whole table, not a slice of it, so a flat list looks like a
+    cross-tab. A member every cell carries is that kind of label; ignoring
+    it leaves the cells as one flat list. For example, Netflix tags each
+    region's revenue with Streaming, its only segment. A member that is
+    itself a single-dimension row on the axis is a parent in the tree, not
+    a total, and does not count.
     """
     counts = dims.group_by("fact_id").agg(pl.len().alias("dim_count"))
     with_counts = reported.join(
@@ -281,9 +289,12 @@ def seen_twice(matches: pl.DataFrame) -> pl.DataFrame:
 def without_expansions(kept: pl.DataFrame) -> pl.DataFrame:
     """Drop a set that only swaps some members for their own parent's parts.
 
-    When Products = iPhone + iPad, the line equals both {Products, Services}
-    and {iPhone, iPad, Services}; the second is an expansion of the first,
-    so it is dropped in that period.
+    When a member is the sum of other members on the axis, any set holding
+    it also adds up with that member replaced by its parts. The second set
+    repeats the first one level deeper, and the deeper split is already a
+    breakdown of the subtotal, so it is dropped in that period. For example,
+    when Products = iPhone + iPad, the line equals both {Products, Services}
+    and {iPhone, iPad, Services}.
     """
     rows = kept.with_row_index("row").to_dicts()
     by_period: dict[tuple, list[dict]] = {}

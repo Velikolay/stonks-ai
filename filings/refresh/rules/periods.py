@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 
 ANNUAL_FORMS = ("10-K", "10-K/A")
@@ -41,6 +43,16 @@ def within(days: pl.Expr, bounds: tuple[int, int]) -> pl.Expr:
 def quarter_apart(later: pl.Expr, earlier: pl.Expr) -> pl.Expr:
     """The two dates are consecutive quarter-ends (80 to 100 days)."""
     return within(days_between(later, earlier), QUARTER_GAP_DAYS)
+
+
+def dates_within(later: date, earlier: date, bounds: tuple[int, int]) -> bool:
+    """:func:`within` for two plain dates."""
+    return bounds[0] <= (later - earlier).days <= bounds[1]
+
+
+def consecutive_quarters(later: date, earlier: date) -> bool:
+    """:func:`quarter_apart` for two plain dates."""
+    return dates_within(later, earlier, QUARTER_GAP_DAYS)
 
 
 def fiscal_year_of(

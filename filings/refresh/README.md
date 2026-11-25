@@ -27,6 +27,7 @@ stages, each one reads its upstream tables from the database.
 | --- | --- |
 | `pipeline.py` | Stage registry and order, per-company load, compute and write |
 | `inputs.py` | `CompanyData`, the frames a stage reads, and `Trace` for debugging |
+| `records.py` | Frames to slotted dataclasses and back, for steps decided in plain Python |
 | `io/schemas.py` | One polars schema per table, matching the database column order |
 | `io/db.py` | asyncpg load, and `DELETE` plus binary `COPY` per company |
 | `rules/` | Logic shared by several stages: fact overrides and conflicts, override precedence, rounding, units, periods, rewrites, connected components |
@@ -38,6 +39,24 @@ stages, each one reads its upstream tables from the database.
 Stages never touch the database. Each is a chain of named steps. The bigger
 ones are packages split by concern, for example `quarterly/ytd.py`,
 `quarterly/restatement.py` and `quarterly/q4.py`.
+
+Most steps are frame operations: filtering, joining, applying overrides,
+ranking within a partition. A rule that walks one group in order and
+branches (reduce one series' YTD totals, decide whether one line's year
+moves, pick the 10-K that one axis-year's Q4 comes from) is a plain function
+over slotted dataclasses instead. `records.py` moves rows between the two:
+
+```python
+rows = numbered(frame)                                   # adds row_nr
+by_series = grouped(records(rows, Amount, key=SERIES), lambda a: a.series)
+decided = frame_of((decide(s) for s in by_series.values()), schema)
+frame = rows.join(decided, on=ROW)                       # back to a frame
+```
+
+The frame keeps every column the output needs, and the record carries only
+the fields the decision reads. Use this when the frame version would need a
+flag column per branch or a self-join per "previous row"; keep bulk lookups
+as joins.
 
 ## Debugging a stage
 
