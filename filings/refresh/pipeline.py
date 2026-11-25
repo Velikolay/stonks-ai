@@ -24,7 +24,12 @@ from .inputs import CompanyData, Trace
 from .io import db
 from .io import schemas as s
 from .io.schemas import OVERRIDE_TABLES, TABLES, Table
-from .stages import concept_normalization, facts_overridden
+from .stages import (
+    concept_normalization,
+    dimension_normalization,
+    facts_overridden,
+    hierarchy_normalization,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +57,18 @@ STAGES: tuple[Stage, ...] = (
         s.CONCEPT_NORMALIZATION,
         ("financial_facts", "financial_facts_overridden"),
         concept_normalization.run,
+    ),
+    Stage(
+        "hierarchy_normalization",
+        s.HIERARCHY_NORMALIZATION,
+        ("concept_normalization",),
+        hierarchy_normalization.run,
+    ),
+    Stage(
+        "dimension_normalization",
+        s.DIMENSION_NORMALIZATION,
+        ("financial_facts", "financial_facts_overridden", "concept_normalization"),
+        dimension_normalization.run,
     ),
 )
 
