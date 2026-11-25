@@ -68,6 +68,13 @@ def _within_rounding(a: pl.Expr, b: pl.Expr) -> pl.Expr:
     return (a - b).abs() <= tolerance
 
 
+def _as_text(column: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+    """A cell as text; a list (a breakdown's fiscal years) as its items joined."""
+    if isinstance(dtype, pl.List):
+        return column.list.eval(pl.element().cast(pl.String)).list.join(",")
+    return column.cast(pl.String)
+
+
 def diff_table(
     table: str, baseline: pl.DataFrame, candidate: pl.DataFrame
 ) -> pl.DataFrame:
@@ -119,8 +126,8 @@ def diff_table(
                 company,
                 kind.alias("class"),
                 pl.lit(column).alias("column"),
-                old.cast(pl.String).alias("baseline"),
-                new.cast(pl.String).alias("candidate"),
+                _as_text(old, both.schema[column]).alias("baseline"),
+                _as_text(new, both.schema[column]).alias("candidate"),
             )
         )
     return pl.concat([missing, extra, *cells], how="vertical_relaxed").rename(

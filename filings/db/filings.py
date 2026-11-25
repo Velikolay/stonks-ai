@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from sqlalchemy import MetaData, insert, select
+from sqlalchemy import MetaData, insert, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -119,6 +119,25 @@ class FilingOperationsAsync:
         if filing_id:
             return await self.get_filing_by_id(filing_id)
         return None
+
+    async def update_fiscal_periods(self, periods: dict[int, tuple[int, int]]) -> int:
+        """Set each filing's fiscal year and quarter; return how many changed."""
+        if not periods:
+            return 0
+        table = self.filings_table
+        try:
+            async with self.engine.connect() as conn:
+                for filing_id, (year, quarter) in sorted(periods.items()):
+                    await conn.execute(
+                        update(table)
+                        .where(table.c.id == filing_id)
+                        .values(fiscal_year=year, fiscal_quarter=quarter)
+                    )
+                await conn.commit()
+            return len(periods)
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating fiscal periods: {e}")
+            return 0
 
     async def delete_filing(self, filing_id: int) -> bool:
         """Delete a filing by ID."""

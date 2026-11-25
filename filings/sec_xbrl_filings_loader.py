@@ -10,6 +10,7 @@ from edgar import Company
 
 from filings.company_ids import locked_company_id
 from filings.db import AsyncFilingsDatabase
+from filings.fiscal_periods import FilingPeriod, corrected_periods
 from filings.models.company import CompanyCreate, CompanyUpdate
 from filings.models.filing import FilingCreate
 from filings.parsers.sec_xbrl import SECXBRLParser
@@ -282,9 +283,15 @@ class SECXBRLFilingsLoader:
                         )
                         continue
 
+            corrected = await self._correct_fiscal_periods(company.id)
+
             if total_loaded == 0:
                 logger.info(f"No {form} filings found for {ticker}")
-                return {"message": f"No {form} filings found for {ticker}"}
+                return {
+                    "message": f"No {form} filings found for {ticker}",
+                    "company_id": company.id,
+                    "periods_corrected": corrected,
+                }
 
             return {
                 "ticker": ticker,
@@ -294,11 +301,50 @@ class SECXBRLFilingsLoader:
                 "total_facts": total_facts,
                 "company_id": company.id,
                 "override_mode": override,
+                "periods_corrected": corrected,
             }
 
         except Exception as e:
             logger.error(f"Error loading filings for {ticker}: {e}")
             return {"error": f"Failed to load filings for {ticker}: {str(e)}"}
+
+    async def _correct_fiscal_periods(self, company_id: int) -> int:
+        """Correct stored fiscal periods a filing cover got wrong.
+
+        Runs over all of the company's filings, so a filing stored by an
+        earlier run is corrected too. See :mod:`filings.fiscal_periods`.
+        """
+        try:
+            stored = await self.database.filings.get_filings_by_company(company_id)
+            changes = corrected_periods(
+                FilingPeriod(
+                    id=f.id,
+                    form_type=f.form_type,
+                    period_end=f.fiscal_period_end,
+                    fiscal_year=f.fiscal_year,
+                    fiscal_quarter=f.fiscal_quarter,
+                )
+                for f in stored
+            )
+            by_id = {f.id: f for f in stored}
+            for filing_id, (year, quarter) in sorted(changes.items()):
+                f = by_id[filing_id]
+                logger.info(
+                    "Filing %s (%s, %s): fiscal period %s Q%s corrected to %s Q%s",
+                    f.number,
+                    f.form_type,
+                    f.fiscal_period_end,
+                    f.fiscal_year,
+                    f.fiscal_quarter,
+                    year,
+                    quarter,
+                )
+            return await self.database.filings.update_fiscal_periods(changes)
+        except Exception:
+            logger.exception(
+                "Could not check fiscal periods for company %s", company_id
+            )
+            return 0
 
     async def _get_or_create_company(self, edgar_company: Company):
         """Get existing company or create new one from the edgar Company object.

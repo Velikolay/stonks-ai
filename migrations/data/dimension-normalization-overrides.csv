@@ -262,3 +262,4 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 19,ifrs-full:MeasurementAxis,,,False,Technology,,Wafer revenue by process node
 19,ifrs-full:MarketsOfCustomersAxis,,,False,Platform,,Revenue by end market
 19,ifrs-full:MarketsOfCustomersAxis,tsm:OtherPlatformsMember,,False,Platform,Other platforms,Residual end market; not the product Others line
+2,srt:ProductOrServiceAxis,goog:OtherRevenuesMember,,False,Product,"Google subscriptions, platforms, and devices",Google other until 2024; the Q1 and Q2 2024 10-Qs reprint 2023's Google other (7413M and 8142M) under the new member

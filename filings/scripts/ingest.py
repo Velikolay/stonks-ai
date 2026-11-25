@@ -240,6 +240,9 @@ async def ingest(
                     # that is true either way rather than its "not found" text.
                     summary["status"] = "no new filings"
                     logger.info("%s %s: %s", ticker, form, outcome["message"])
+                    # A corrected fiscal period changes the derived tables.
+                    if outcome.get("periods_corrected") and "company_id" in outcome:
+                        company_ids.add(outcome["company_id"])
                 else:
                     summary.update(
                         {
