@@ -33,7 +33,7 @@ stages, each one reads its upstream tables from the database.
 | `rules/sql.py` | Postgres semantics that change results: null ordering, collation, `DISTINCT ON`, `round`, `SUM` and `bool_and` over no rows |
 | `rules/ids.py` | Postgres `hashtextextended` and `md5`, so synthetic ids match the database |
 | `stages/` | One module (or package) per stage. Each is a pure `run(data) -> DataFrame` |
-| `parity/` | Snapshot and diff tools, and the allow-list of reviewed differences |
+| `parity/` | Snapshot and diff tools for checking a change against a baseline |
 
 Stages never touch the database. Each is a chain of named steps. The bigger
 ones are packages split by concern, for example `quarterly/ytd.py`,
@@ -65,8 +65,4 @@ make refresh-compare BASE=backups/before NEW=backups/after
 `compare` joins each table on its primary key and reports rows missing, extra,
 within rounding, or with a changed value or column. It also lists every
 diagnostics query whose row count grew for some company. Add `--out DIR` to save
-the differing rows, and `--no-allowlist` to see all of them.
-
-`parity/allowlist.csv` records differences already reviewed while porting the
-SQL procedures, with the reason for each. Most are ties the SQL broke
-arbitrarily and Python now breaks deterministically.
+the differing rows.

@@ -3,10 +3,10 @@
 Rows are joined on each table's primary key and sorted into classes:
 ``missing`` (only in the baseline), ``extra`` (only in the candidate),
 ``within_rounding`` (a value off by at most 0.1%), ``value_differs``, and
-``column_differs`` for any other column. Rows listed in the allow-list are
-reported separately, so a stage passes when nothing unexplained remains::
+``column_differs`` for any other column. The run passes when no row differs
+and no diagnostics query grew::
 
-    python -m filings.refresh.parity.compare backups/parity/sql backups/parity/python
+    python -m filings.refresh.parity.compare backups/before backups/after
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import polars as pl
 from ..io.schemas import DERIVED_TABLES, PRIMARY_KEYS
 from .snapshot import SCORECARD_FILE
 
-DEFAULT_ALLOWLIST = Path(__file__).with_name("allowlist.csv")
 VALUE_COLUMNS = ("value", "comparative_value")
 _KEY = "__key"
 
@@ -36,11 +35,6 @@ class TableDiff:
     baseline_rows: int
     candidate_rows: int
     differences: pl.DataFrame
-    allowed: int = 0
-
-    @property
-    def unexplained(self) -> int:
-        return self.differences.height
 
 
 @dataclass
@@ -51,7 +45,7 @@ class Report:
 
     @property
     def passed(self) -> bool:
-        tables_ok = all(t.unexplained == 0 for t in self.tables)
+        tables_ok = all(t.differences.is_empty() for t in self.tables)
         return tables_ok and (
             self.worse_diagnostics is None or self.worse_diagnostics.is_empty()
         )
@@ -134,20 +128,6 @@ def diff_table(
     )
 
 
-def load_allowlist(path: Optional[Path]) -> pl.DataFrame:
-    """Allow-listed differences: ``table,key,class,column,reason``."""
-    schema = {
-        "table": pl.String,
-        "key": pl.String,
-        "class": pl.String,
-        "column": pl.String,
-        "reason": pl.String,
-    }
-    if path is None or not path.exists():
-        return pl.DataFrame(schema=schema)
-    return pl.read_csv(path, schema=schema)
-
-
 def compare_diagnostics(baseline: Path, candidate: Path) -> Optional[pl.DataFrame]:
     """Diagnostic queries whose row count grew for some company."""
     old_path, new_path = baseline / SCORECARD_FILE, candidate / SCORECARD_FILE
@@ -168,10 +148,8 @@ def compare(
     baseline: Path,
     candidate: Path,
     tables: Optional[Sequence[str]] = None,
-    allowlist: Optional[Path] = DEFAULT_ALLOWLIST,
     out: Optional[Path] = None,
 ) -> Report:
-    allowed = load_allowlist(allowlist)
     report = Report()
     for spec in DERIVED_TABLES:
         if tables and spec.name not in tables:
@@ -184,33 +162,22 @@ def compare(
             continue
         old, new = pl.read_parquet(old_file), pl.read_parquet(new_file)
         differences = diff_table(spec.name, old, new)
-        table_allowed = allowed.filter(pl.col("table") == spec.name)
-        matched = differences.join(
-            table_allowed, on=["key", "class", "column"], how="semi", nulls_equal=True
-        )
-        unexplained = differences.join(
-            table_allowed, on=["key", "class", "column"], how="anti", nulls_equal=True
-        )
-        if out is not None and not unexplained.is_empty():
+        if out is not None and not differences.is_empty():
             out.mkdir(parents=True, exist_ok=True)
-            unexplained.write_parquet(out / f"{spec.name}.diff.parquet")
-        report.tables.append(
-            TableDiff(
-                spec.name, old.height, new.height, unexplained, allowed=matched.height
-            )
-        )
+            differences.write_parquet(out / f"{spec.name}.diff.parquet")
+        report.tables.append(TableDiff(spec.name, old.height, new.height, differences))
     report.worse_diagnostics = compare_diagnostics(baseline, candidate)
     return report
 
 
 def print_report(report: Report, examples: int = 5) -> None:
     for t in report.tables:
-        status = "OK  " if t.unexplained == 0 else "DIFF"
+        status = "OK  " if t.differences.is_empty() else "DIFF"
         print(
             f"{status} {t.table}: {t.baseline_rows} -> {t.candidate_rows} rows, "
-            f"{t.unexplained} unexplained, {t.allowed} allow-listed"
+            f"{t.differences.height} differences"
         )
-        if t.unexplained:
+        if not t.differences.is_empty():
             summary = (
                 t.differences.group_by("class", "column")
                 .agg(
@@ -244,18 +211,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("baseline", type=Path)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--tables", help="Comma-separated table names (default all)")
-    parser.add_argument("--allowlist", type=Path, default=DEFAULT_ALLOWLIST)
-    parser.add_argument(
-        "--no-allowlist", action="store_true", help="Report every difference"
-    )
-    parser.add_argument("--out", type=Path, help="Write unexplained differences here")
+    parser.add_argument("--out", type=Path, help="Write the differing rows here")
     parser.add_argument("--examples", type=int, default=5)
     args = parser.parse_args(argv)
     report = compare(
         args.baseline,
         args.candidate,
         tables=args.tables.split(",") if args.tables else None,
-        allowlist=None if args.no_allowlist else args.allowlist,
         out=args.out,
     )
     print_report(report, examples=args.examples)
