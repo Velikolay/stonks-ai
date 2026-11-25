@@ -336,14 +336,19 @@ def nine_month_source(
 ) -> Optional[Filing]:
     """The 10-Q whose nine months this 10-K subtracts.
 
-    A 10-Q a year later is on the 10-K's split when the first 10-K after
-    that 10-Q prints the year as this 10-K did: no shared member at another
-    value beyond rounding. Its reprint is then used when all its members are
-    the 10-K's, which covers a 10-K that moved a line out of another
-    (Tesla's fiscal 2021 10-K taking regulatory credits out of automotive
-    sales). Otherwise a 10-Q with the same members, the year's own first, so
-    a 10-K that recast its year pairs with the 10-Q that reprinted the nine
-    months that way and not with quarters filed on the earlier members.
+    Q4 is the 10-K minus nine months, and both must split the year the same
+    way, or Q4 absorbs whatever moved between members. Two cases:
+
+    * A 10-K moves an amount out of one member into a new one, and next
+      year's 10-Q reprints this year's nine months on the new split, while
+      this year's own 10-Qs still hold the old one. That reprint is used
+      when all its members are this 10-K's and the first 10-K after it
+      prints the year as this 10-K did (no shared member at another value
+      beyond rounding). For example, Tesla's fiscal 2021 10-K took
+      regulatory credits out of automotive sales.
+    * A 10-K recasts its year onto other members. It pairs with a 10-Q on
+      exactly its members, the year's own first, and not with quarters
+      filed on the earlier members.
     """
     best: Optional[tuple[tuple, Filing]] = None
     for nine in nines:
@@ -383,9 +388,16 @@ def member_q4(
     """``(annual row, amount to subtract)`` for every member that gets a Q4.
 
     Each member comes from the best-ranked 10-K that has it and something to
-    subtract. A member of the first-ranked 10-K gets Q4 from its nine months
-    even when its Q1-Q3 are hidden as a recast (Amazon's 2016 10-K introduced
-    new categories, and only the 2017 10-Qs printed 2016's quarters on them).
+    subtract.
+
+    A 10-K can introduce members that no 10-Q of its own year used. Only
+    next year's 10-Qs print this year's quarters on them, and those reprints
+    are hidden as a recast, so the member has no Q1-Q3 of its own. A member
+    of the first-ranked 10-K therefore gets Q4 from that 10-K's nine months
+    alone; lower-ranked 10-Ks still need the member's Q1-Q3, so a later
+    recast cannot fill a member that way. For example, Amazon's 2016 10-K
+    introduced new sales categories, and only the 2017 10-Qs printed 2016's
+    quarters on them.
     """
     chosen: dict[str, tuple[tuple, int, Decimal]] = {}
     for source in sources:

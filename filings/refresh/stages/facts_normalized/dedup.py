@@ -48,10 +48,15 @@ def fiscal_filings(filings: pl.DataFrame) -> pl.DataFrame:
 def recast_filings(rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFrame:
     """Later filings that printed a member of an earlier period at another value.
 
-    Such a filing recast that split (NVIDIA's fiscal 2025 10-K carving
-    Singapore out of fiscal 2023 and 2024); none of its members for that
-    period are shown. A filing that only adds members, rounded or not,
-    extends the split instead.
+    A later filing can restate an earlier year's split by moving an amount
+    out of some members into another, so the members it shares with the
+    original filing no longer carry their original values. Mixing the two
+    splits would count the moved amount twice. So when a later filing
+    changes any shared member beyond rounding, it recast the period, and
+    none of its members for that period are shown; the original split
+    stands. For example, NVIDIA's fiscal 2025 10-K carved Singapore out of
+    its other regions for fiscal 2023 and 2024. A filing that only adds
+    members, rounded or not, extends the split instead.
     """
     period = filings.select(pl.col("id").alias("filing_id"), "fiscal_period_end")
     dims = rows.filter((pl.col("axis").fill_null("") != "") & ~pl.col("is_abstract"))
