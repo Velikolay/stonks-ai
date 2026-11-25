@@ -311,7 +311,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--no-refresh",
         dest="refresh",
         action="store_false",
-        help="Skip refresh_financials after ingesting",
+        help="Skip the refresh after ingesting",
     )
     parser.set_defaults(refresh=True)
     return parser.parse_args(argv)
