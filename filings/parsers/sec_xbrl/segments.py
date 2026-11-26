@@ -190,6 +190,8 @@ class SegmentSupplement:
                 self.adopt(fact)
         for fact in self.extension_revenue_members(parsed):
             self.adopt(fact)
+        for fact in self.nested_revenue_members(parsed):
+            self.adopt(fact)
         self.keep_revenue_components(undimensioned)
 
         members = [
@@ -272,6 +274,50 @@ class SegmentSupplement:
             if not isinstance(face_value, Decimal) or len(members) < 2:
                 continue
             if sum((m.value or Decimal(0) for m in members), Decimal(0)) == face_value:
+                kept.extend(members)
+        return kept
+
+    def nested_revenue_members(
+        self, facts: list[FinancialFactCreate]
+    ) -> list[FinancialFactCreate]:
+        """Members of another axis whose revenue adds up to one segment member.
+
+        A note can split one member of a split instead of the whole line:
+        TSMC's 20-Fs cut wafer revenue (``ProductsAndServicesAxis`` = Wafer)
+        by technology node on ``MeasurementAxis``. Each such fact carries the
+        member it splits as its one other real coordinate, on a segment,
+        product or geographic axis, and the note prints that member alone.
+        The members are kept when they add up to it exactly in the period.
+        """
+        totals: dict[tuple, Decimal] = {}
+        for f in facts:
+            if f.axis in SEGMENT_AXES and is_total_revenue_concept(f.concept):
+                if isinstance(f.value, Decimal) and f.period_end is not None:
+                    totals.setdefault(
+                        (f.axis, f.member, f.period_end, f.period), f.value
+                    )
+
+        grouped: dict[tuple, list[FinancialFactCreate]] = {}
+        for f in facts:
+            if not f.axis or f.axis in SEGMENT_AXES or f.is_abstract:
+                continue
+            if not is_total_revenue_concept(f.concept):
+                continue
+            if not isinstance(f.value, Decimal) or f.period_end is None:
+                continue
+            parents = [d for d in f.dimensions if not d.is_default and d.axis != f.axis]
+            if len(parents) != 1 or parents[0].axis not in SEGMENT_AXES:
+                continue
+            parent = (parents[0].axis, parents[0].member, f.period_end, f.period)
+            grouped.setdefault((f.axis, *parent), []).append(f)
+
+        kept: list[FinancialFactCreate] = []
+        for (_, *parent), members in grouped.items():
+            total = totals.get(tuple(parent))
+            if total is None or len({m.member for m in members}) < 2:
+                continue
+            distinct = {m.member: m.value for m in members}
+            if sum(distinct.values(), Decimal(0)) == total:
                 kept.extend(members)
         return kept
 

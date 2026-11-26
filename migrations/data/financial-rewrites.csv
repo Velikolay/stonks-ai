@@ -5,3 +5,4 @@ company_id,statement,normalized_label,axis,member,period_end,granularity,action,
 8,Income Statement,Revenue,Geographical,Other,2024-01-28,quarterly,set,1159000000
 13,Income Statement,Depreciation,,,2012-03-31,quarterly,set,22000000
 13,Income Statement,Depreciation,,,2012-09-30,quarterly,set,24000000
+10,Income Statement,Revenue,Product,All Other,2013-12-28,quarterly,add,2000000

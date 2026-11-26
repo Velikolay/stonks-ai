@@ -9,6 +9,7 @@ the tree.
 from __future__ import annotations
 
 import logging
+import re
 from decimal import Decimal
 from typing import Any, Optional, cast
 
@@ -155,7 +156,9 @@ def dimension_coordinates(
                 FactDimension(
                     axis=dim_axis,
                     member=dim_member,
-                    member_label=str(item.get("member_label") or dim_member),
+                    member_label=str(
+                        plain_member_label(item.get("member_label") or dim_member)
+                    ),
                     is_default=context.is_axis_total(dim_member),
                 )
             )
@@ -171,6 +174,20 @@ def dimension_coordinates(
             )
         ]
     return []
+
+
+#: The IFRS taxonomy's standard member labels end in this; edgartools falls
+#: back to them when a member has no terse label (TSMC's "10-nanometer
+#: [member]" beside "5-nanometer").
+_MEMBER_SUFFIX = re.compile(r"\s*\[member\]\s*$", re.IGNORECASE)
+
+
+def plain_member_label(label: object) -> object:
+    """A member label without the taxonomy's trailing "[member]"."""
+    if isinstance(label, str):
+        stripped = _MEMBER_SUFFIX.sub("", label)
+        return stripped or label
+    return label
 
 
 def _display_member(
@@ -232,10 +249,11 @@ def dimension_fact(
         member, member_label = _display_member(
             row,
             sec_member(raw_member),
-            row.get("dimension_member_label"),
+            plain_member_label(row.get("dimension_member_label")),
             collapsed_members,
             ambiguous_suffixes,
         )
+        member = plain_member_label(member)
         if not axis or member is None:
             return None
         is_abstract = row.get("abstract")

@@ -164,3 +164,50 @@ GROUP BY s.company_id, s.statement, s.normalized_label, s.axis, s.members,
          s.fiscal_years
 ORDER BY s.company_id, s.statement, s.normalized_label, s.axis
 LIMIT 50;
+
+\echo '--- Revenue facts cut two ways but stored on one cut only ---'
+-- edgartools stores a fact's first axis only. A fact cut by two charted axes
+-- (Netflix's streaming revenue: product = Streaming and a region) lands on
+-- one cut, and the other cut misses it unless the filing also prints that
+-- amount alone there. stored_twice counts the facts the other cut has at the
+-- same value in the same filing. Facts never stored twice are clone
+-- candidates (financial-facts-overrides.csv, action clone onto the other
+-- cut's member).
+WITH coordinates AS (
+    SELECT d.fact_id, d.axis, d.member
+    FROM financial_fact_dimensions d
+    WHERE NOT d.is_default
+      AND d.axis ~* 'ProductOrService|Geographical|BusinessSegments|SegmentsAxis|GeographicalAreas|ProductsAndServices'
+),
+two_way AS (
+    SELECT ff.id, ff.company_id, ff.filing_id, ff.concept, ff.axis AS stored_axis,
+           other.axis AS other_axis, other.member AS other_member,
+           ff.period_end, ff.period, ff.value
+    FROM financial_facts ff
+    JOIN coordinates mine ON mine.fact_id = ff.id AND mine.axis = ff.axis
+    JOIN coordinates other ON other.fact_id = ff.id AND other.axis <> ff.axis
+    WHERE ff.statement = 'Income Statement'
+      AND ff.concept ~* 'revenue|sales'
+      AND ff.value IS NOT NULL
+      AND (SELECT COUNT(*) FROM financial_fact_dimensions x
+           WHERE x.fact_id = ff.id AND NOT x.is_default) = 2
+)
+SELECT
+    t.company_id,
+    t.stored_axis,
+    t.other_axis,
+    COUNT(*) AS facts,
+    COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM financial_facts twin
+        WHERE twin.filing_id = t.filing_id
+          AND twin.axis = t.other_axis
+          AND twin.period_end = t.period_end
+          AND twin.period IS NOT DISTINCT FROM t.period
+          AND twin.value = t.value
+    )) AS stored_twice,
+    MIN(t.period_end) AS first_period,
+    MAX(t.period_end) AS last_period
+FROM two_way t
+GROUP BY t.company_id, t.stored_axis, t.other_axis
+ORDER BY t.company_id, t.stored_axis, t.other_axis
+LIMIT 50;

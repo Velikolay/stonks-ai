@@ -10,8 +10,8 @@
 -- list nothing that is not explained. Run them per company:
 --   make diagnose COMPANY_IDS=4 FILES=16
 --
--- Only member axes a chart stacks are read: Product, Geographical and
--- segment, product or region axes. Per-share amounts and share counts are
+-- Only member axes a chart stacks are read: axes an override named (Product,
+-- Geographical, Technology, no namespace) and segment, product or region axes. Per-share amounts and share counts are
 -- left out.
 --
 -- The usual causes, in the order to check them:
@@ -73,7 +73,7 @@ members AS (
            array_agg(member ORDER BY member) FILTER (WHERE value < 0) AS negatives
     FROM scoped
     WHERE axis <> ''
-      AND (axis IN ('Product', 'Geographical')
+      AND (axis NOT LIKE '%:%'
            OR axis ~* 'segment|product|geograph|region')
     GROUP BY granularity, company_id, statement, normalized_label, axis,
              period_end
@@ -209,7 +209,7 @@ scoped AS (
                         axis, member, period_end) *
     FROM series
     WHERE axis <> ''
-      AND (axis IN ('Product', 'Geographical')
+      AND (axis NOT LIKE '%:%'
            OR axis ~* 'segment|product|geograph|region')
       AND statement <> 'Balance Sheet'
       AND normalized_label !~* 'per share|EPS|shares'
@@ -267,7 +267,7 @@ WITH yearly AS (
     WHERE axis <> ''
       AND value IS NOT NULL
       AND value <> 0
-      AND (axis IN ('Product', 'Geographical')
+      AND (axis NOT LIKE '%:%'
            OR axis ~* 'segment|product|geograph|region')
       AND statement <> 'Balance Sheet'
       AND normalized_label !~* 'per share|EPS|shares'
@@ -318,4 +318,50 @@ JOIN spans sb
 WHERE p.equal
   AND (sa.first_year, sa.last_year) <> (sb.first_year, sb.last_year)
 ORDER BY p.company_id, p.statement, p.normalized_label, p.axis, p.member_a
+LIMIT 50;
+
+\echo '--- Distinct members of one filing merged into one label ---'
+-- One filing reports two or more qnames at different values for one period,
+-- and they land on the same normalized member, so all but one value is lost
+-- and the axis cannot add up. Label grouping chains members that share a
+-- label; a filing whose label linkbase crosses its labels (AMD's FY2024
+-- 10-K labelling country:JP "China") collapses a whole axis onto one member.
+-- Rewrite that filing's facts onto their own labels, bounded by filing period.
+WITH printed AS (
+    SELECT n.company_id, n.statement, n.normalized_label, n.axis, n.member,
+           n.period_end, n.period, n.filing_id,
+           COALESCE(o.member, ff.member) AS qname, n.value
+    FROM financial_facts_normalized n
+    JOIN financial_facts ff ON ff.id = n.id
+    LEFT JOIN financial_facts_overridden o
+        ON o.id = n.id AND o.source_fact_id IS NULL
+    WHERE n.axis <> ''
+      AND NOT n.is_abstract
+      AND n.value IS NOT NULL
+      AND n.statement <> 'Balance Sheet'
+      AND (n.axis NOT LIKE '%:%' OR n.axis ~* 'segment|product|geograph|region')
+),
+merged AS (
+    SELECT company_id, statement, normalized_label, axis, member, period_end,
+           filing_id,
+           array_agg(DISTINCT qname ORDER BY qname) AS qnames
+    FROM printed
+    GROUP BY company_id, statement, normalized_label, axis, member, period_end,
+             period, filing_id
+    HAVING COUNT(DISTINCT qname) > 1 AND COUNT(DISTINCT value) > 1
+)
+SELECT
+    company_id,
+    statement,
+    normalized_label,
+    axis,
+    member,
+    COUNT(DISTINCT filing_id) AS filings,
+    MIN(period_end) AS first_period,
+    MAX(period_end) AS last_period,
+    (array_agg(array_to_string(qnames, '; ') ORDER BY period_end DESC))[1]
+        AS qnames_in_latest
+FROM merged
+GROUP BY company_id, statement, normalized_label, axis, member
+ORDER BY company_id, statement, normalized_label, axis, member
 LIMIT 50;

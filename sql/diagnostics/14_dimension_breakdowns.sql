@@ -318,3 +318,55 @@ SELECT
 FROM dimension_breakdowns
 ORDER BY company_id, statement, normalized_label, axis, parent_member, fiscal_years
 LIMIT 50;
+
+\echo '--- Axes whose members add up to a member of another axis, not to the line ---'
+-- A note can split one member of another split instead of the line: TSMC's
+-- technology nodes add up to wafer revenue on Product. No breakdown of the
+-- line forms on that axis. Clone the remaining member (TSMC's non-wafer
+-- revenue) onto the axis so it adds up to the line, or declare the split
+-- under its parent member if the axes are one.
+WITH yearly AS (
+    SELECT company_id, statement, normalized_label, axis, member, fiscal_year,
+           MAX(value) AS value
+    FROM yearly_financials
+    WHERE value IS NOT NULL AND statement <> 'Balance Sheet'
+    GROUP BY company_id, statement, normalized_label, axis, member, fiscal_year
+),
+totals AS (
+    SELECT company_id, statement, normalized_label, axis, fiscal_year,
+           SUM(value) AS total, COUNT(*) AS members
+    FROM yearly
+    WHERE axis <> ''
+    GROUP BY company_id, statement, normalized_label, axis, fiscal_year
+    HAVING COUNT(*) >= 2
+)
+SELECT
+    t.company_id,
+    t.statement,
+    t.normalized_label,
+    t.axis,
+    p.axis AS parent_axis,
+    p.member AS parent_member,
+    array_to_string(array_agg(t.fiscal_year ORDER BY t.fiscal_year), '; ')
+        AS fiscal_years
+FROM totals t
+JOIN yearly p
+    ON p.company_id = t.company_id
+    AND p.statement = t.statement
+    AND p.normalized_label = t.normalized_label
+    AND p.fiscal_year = t.fiscal_year
+    AND p.axis <> ''
+    AND p.axis <> t.axis
+    AND p.value <> 0
+    AND ABS(p.value - t.total) <= ABS(p.value) * 0.001
+JOIN yearly line
+    ON line.company_id = t.company_id
+    AND line.statement = t.statement
+    AND line.normalized_label = t.normalized_label
+    AND line.fiscal_year = t.fiscal_year
+    AND line.axis = ''
+WHERE ABS(line.value - t.total) > ABS(line.value) * 0.001
+  AND (t.axis NOT LIKE '%:%' OR t.axis ~* 'segment|product|geograph|region')
+GROUP BY t.company_id, t.statement, t.normalized_label, t.axis, p.axis, p.member
+ORDER BY t.company_id, t.statement, t.normalized_label, t.axis
+LIMIT 50;

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pandas as pd
 
 from filings.models import PeriodType
+from filings.models.financial_fact import FactDimension, FinancialFactCreate
 from filings.parsers.sec_xbrl import (
     FilingContext,
     filed_unit,
@@ -15,7 +16,11 @@ from filings.parsers.sec_xbrl import (
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
 from filings.parsers.sec_xbrl.facts import face_fact
-from filings.parsers.sec_xbrl.segments import disclosure_notes, segment_disclosure_facts
+from filings.parsers.sec_xbrl.segments import (
+    SegmentSupplement,
+    disclosure_notes,
+    segment_disclosure_facts,
+)
 from filings.parsers.sec_xbrl.statement import parse_statement
 
 
@@ -1527,3 +1532,64 @@ class TestSECXBRLParser:
         assert geo[date(2014, 12, 31)].comparative_value == Decimal("43959000000")
         assert geo[date(2013, 12, 31)].value == Decimal("43959000000")
         assert geo[date(2013, 12, 31)].comparative_value is None
+
+
+def _revenue(member: str, axis: str, value: str, *dimensions) -> FinancialFactCreate:
+    return FinancialFactCreate(
+        company_id=1,
+        filing_id=1,
+        form_type="20-F",
+        concept="ifrs-full:RevenueFromContractsWithCustomers",
+        label="Revenue",
+        period_end=date(2023, 12, 31),
+        is_abstract=False,
+        value=Decimal(value),
+        axis=axis or None,
+        member=member or None,
+        member_label=member or None,
+        statement="Income Statement",
+        period=PeriodType.YTD,
+        key=f"{axis}|{member}|{value}",
+        dimensions=[
+            FactDimension(axis=a, member=m, member_label=m) for a, m in dimensions
+        ],
+    )
+
+
+PRODUCT = "ifrs-full:ProductsAndServicesAxis"
+NODE = "ifrs-full:MeasurementAxis"
+
+
+def _node_note(three_nm: str) -> list[FinancialFactCreate]:
+    """TSMC's FY2023 20-F: wafer revenue by node, each node fact cut by Wafer."""
+    return [
+        _revenue("", "", "100"),
+        _revenue("tsm:WaferMember", PRODUCT, "90", (PRODUCT, "tsm:WaferMember")),
+        _revenue("tsm:OtherMember", PRODUCT, "10", (PRODUCT, "tsm:OtherMember")),
+        *(
+            _revenue(node, NODE, value, (NODE, node), (PRODUCT, "tsm:WaferMember"))
+            for node, value in (("tsm:ThreeNm", three_nm), ("tsm:FiveNm", "60"))
+        ),
+    ]
+
+
+class TestNestedRevenueMembers:
+    def test_members_that_add_up_to_the_member_they_cut_are_kept(self):
+        face = _revenue("", "", "100")
+        supplement = SegmentSupplement([face], FilingContext())
+        nested = supplement.nested_revenue_members(_node_note("30"))
+        assert sorted(f.member for f in nested) == ["tsm:FiveNm", "tsm:ThreeNm"]
+
+    def test_members_that_miss_the_member_they_cut_are_left_out(self):
+        face = _revenue("", "", "100")
+        supplement = SegmentSupplement([face], FilingContext())
+        assert supplement.nested_revenue_members(_node_note("20")) == []
+
+
+def test_member_label_drops_the_taxonomy_member_suffix():
+    from filings.parsers.sec_xbrl.facts import plain_member_label
+
+    assert plain_member_label("10-nanometer [member]") == "10-nanometer"
+    assert plain_member_label("Wafer [Member]") == "Wafer"
+    assert plain_member_label("Products") == "Products"
+    assert plain_member_label(None) is None

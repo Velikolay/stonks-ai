@@ -427,7 +427,10 @@ def _prints_year_as(own: Filing, later: Filing) -> bool:
 
 
 def nine_month_source(
-    annual: Filing, annuals: Sequence[Filing], nines: Sequence[Filing]
+    annual: Filing,
+    annuals: Sequence[Filing],
+    nines: Sequence[Filing],
+    rebased: bool = False,
 ) -> Optional[Filing]:
     """The 10-Q whose nine months this 10-K subtracts.
 
@@ -440,7 +443,11 @@ def nine_month_source(
       when all its members are this 10-K's and the first 10-K after it
       prints the year as this 10-K did (no shared member at another value
       beyond rounding). For example, Tesla's fiscal 2021 10-K took
-      regulatory credits out of automotive sales.
+      regulatory credits out of automotive sales. Before any later 10-K
+      exists, the reprint is used when this 10-K is ``rebased``: it reprinted
+      an earlier year on the axis at other values, so it moved amounts
+      between members, and next year's 10-Qs follow it (Broadcom's fiscal
+      2025 10-K moving revenue from subscriptions and services to products).
     * A 10-K recasts its year onto other members. It pairs with a 10-Q on
       exactly its members, the year's own first, and not with quarters
       filed on the earlier members.
@@ -454,10 +461,13 @@ def nine_month_source(
             later = [a for a in annuals if a.filing_date > nine.filing_date]
             if later:
                 following = min(later, key=lambda a: (a.filing_date, a.filing_id))
-                # The reprint moved amounts between members, not the total:
-                # Alphabet's 2013 10-Qs reprinted 2012 without Motorola's
-                # home business, which the year's own quarters still hold.
-                on_split = _prints_year_as(annual, following) and not nine.restates_line
+                same_basis = _prints_year_as(annual, following)
+            else:
+                same_basis = rebased
+            # The reprint moved amounts between members, not the total:
+            # Alphabet's 2013 10-Qs reprinted 2012 without Motorola's home
+            # business, which the year's own quarters still hold.
+            on_split = same_basis and not nine.restates_line
         if not (on_split or nine.members == annual.members):
             continue
         rank = (
@@ -540,12 +550,17 @@ def q4_sources(
     nine_rows = grouped(
         records(nines, NineMonthMember, key=AXIS_YEAR), lambda r: r.axis_year
     )
+    filings_of = {axis_year: _filings(rows) for axis_year, rows in annual_rows.items()}
+    rebased = rebased_filings(filings_of)
     out = {}
-    for axis_year, rows in annual_rows.items():
-        annuals = _filings(rows)
+    for axis_year, annuals in filings_of.items():
         nine_filings = _filings(nine_rows.get(axis_year, []))
+        axis = axis_year[:-1]
         nine_of = {
-            a.filing_id: nine_month_source(a, annuals, nine_filings) for a in annuals
+            a.filing_id: nine_month_source(
+                a, annuals, nine_filings, (axis, a.filing_id) in rebased
+            )
+            for a in annuals
         }
         paired = frozenset(i for i, nine in nine_of.items() if nine is not None)
         covered = frozenset(
@@ -570,6 +585,24 @@ def q4_sources(
             for rank, a in enumerate(ranked, start=1)
         ]
     return out
+
+
+def rebased_filings(filings_of: dict[tuple, list[Filing]]) -> set[tuple]:
+    """``(axis, filing_id)`` of 10-Ks that reprinted an earlier year at other values.
+
+    An axis-year's 10-Ks include later 10-Ks' comparatives of it; one that
+    does not print the year as its own 10-K did moved amounts between the
+    members on that axis.
+    """
+    rebased = set()
+    for axis_year, annuals in filings_of.items():
+        own = next((a for a in annuals if a.filing_id == axis_year[-1]), None)
+        if own is None:
+            continue
+        for later in annuals:
+            if later is not own and not _prints_year_as(own, later):
+                rebased.add((axis_year[:-1], later.filing_id))
+    return rebased
 
 
 def by_axis_year(
