@@ -152,6 +152,7 @@ def parse_statement(
     statement: str,
     include_dimensions: bool,
     context: FilingContext = FilingContext(),
+    every_quarter: bool = False,
 ) -> list[FinancialFactCreate]:
     """Every fact of one statement frame.
 
@@ -160,6 +161,9 @@ def parse_statement(
         statement: Statement name stored on the facts.
         include_dimensions: Also parse the frame's dimension rows.
         context: The filing's reporting currency and axis defaults.
+        every_quarter: Keep the printed quarter of every undimensioned row,
+            not only of revenue totals and per-share amounts. A note's rows
+            only survive the segment rules, which match them by period.
     """
     facts: list[FinancialFactCreate] = []
     if frame is None or frame.empty:
@@ -171,7 +175,11 @@ def parse_statement(
             logger.warning("No period columns found in %s", statement)
             return facts
         is_dimension = frame["dimension"] == True  # noqa: E712
-        facts.extend(_face_facts(frame[~is_dimension], statement, columns, context))
+        facts.extend(
+            _face_facts(
+                frame[~is_dimension], statement, columns, context, every_quarter
+            )
+        )
         dimensions = frame[is_dimension]
         if include_dimensions and not dimensions.empty:
             # A dimension row reuses the label of the face line it splits.
@@ -192,7 +200,11 @@ def parse_statement(
 
 
 def _face_facts(
-    rows: pd.DataFrame, statement: str, columns: _Columns, context: FilingContext
+    rows: pd.DataFrame,
+    statement: str,
+    columns: _Columns,
+    context: FilingContext,
+    every_quarter: bool = False,
 ) -> list[FinancialFactCreate]:
     facts: list[FinancialFactCreate] = []
     position = 0
@@ -209,7 +221,9 @@ def _face_facts(
             continue
         facts.append(fact)
         position += 1
-        quarter = _published_quarter(row, statement, fact, columns, context)
+        quarter = _published_quarter(
+            row, statement, fact, columns, context, every_quarter
+        )
         if quarter is not None:
             facts.append(quarter)
     return facts
@@ -221,6 +235,7 @@ def _published_quarter(
     ytd_fact: FinancialFactCreate,
     columns: _Columns,
     context: FilingContext,
+    every_quarter: bool = False,
 ) -> Optional[FinancialFactCreate]:
     """The printed quarter beside a year-to-date face fact, when it keeps one.
 
@@ -230,7 +245,7 @@ def _published_quarter(
     if (
         ytd_fact.is_abstract
         or ytd_fact.axis
-        or not keeps_published_quarter(ytd_fact)
+        or not (every_quarter or keeps_published_quarter(ytd_fact))
         or columns.quarter == columns.latest
     ):
         return None

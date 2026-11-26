@@ -31,7 +31,11 @@ import polars as pl
 from ...records import ROW, frame_of, grouped, numbered, records
 from ...rules import ordering
 from ...rules.periods import ANNUAL_FORMS, QUARTERLY_FORMS, quarter_apart
-from ...rules.rounding import decimal, reprint_tolerance_of
+from ...rules.rounding import (
+    decimal,
+    differs_beyond_reprint,
+    reprint_tolerance_of,
+)
 from .rows import SERIES, WEIGHTED_AVERAGE_SHARES, is_per_share
 
 AXIS_YEAR = ["company_id", "statement", "normalized_label", "axis", "fiscal_tag"]
@@ -172,11 +176,16 @@ def annual_members(data_rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFra
 
 
 def nine_months(
-    data_rows: pl.DataFrame, filings: pl.DataFrame, tags: pl.DataFrame
+    data_rows: pl.DataFrame,
+    filings: pl.DataFrame,
+    tags: pl.DataFrame,
+    moved: Optional[pl.DataFrame] = None,
 ) -> pl.DataFrame:
     """Every 10-Q that printed the nine months before a 10-K.
 
-    Includes reprints a year later under that year's members.
+    Includes reprints a year later under that year's members. ``moved`` are
+    the line-years whose quarters next year's comparatives replaced (see
+    :mod:`.restatement`); a reprint on that basis matches them.
     """
     src = filings.select(pl.col("id").alias("filing_id"), "filing_date")
     fiscal = tags.select(
@@ -200,9 +209,58 @@ def nine_months(
         .join(annual, on="fiscal_tag", how="inner")
         .filter(quarter_apart(pl.col("annual_period_end"), pl.col("period_end")))
     )
+    # A later 10-Q prints the year's nine months on the line as a comparative.
+    # When that differs from the year's own 10-Q, the reprint restated the
+    # total, so its members are on another basis than the year's quarters.
+    line = data_rows.filter(
+        pl.col("form_type").is_in(QUARTERLY_FORMS)
+        & (pl.col("period") == "YTD")
+        & (pl.col("axis") == "")
+        & ~pl.col("is_abstract")
+    )
+    line_keys = ["company_id", "statement", "normalized_label", "period_end"]
+    own_line = ordering.distinct_on(
+        line.filter(pl.col("filing_id") == pl.col("fiscal_filing_id")),
+        [*line_keys, "concept"],
+        ["id"],
+    ).select(*line_keys, "concept", pl.col("value").alias("own_line"))
+    reprinted = (
+        line.filter(pl.col("comparative_period_end").is_not_null())
+        .select(
+            "filing_id",
+            "company_id",
+            "statement",
+            "normalized_label",
+            "concept",
+            pl.col("comparative_period_end").alias("period_end"),
+            pl.col("comparative_value").alias("reprinted_line"),
+        )
+        .join(own_line, on=[*line_keys, "concept"], how="inner")
+        .with_columns(
+            differs_beyond_reprint(pl.col("own_line"), pl.col("reprinted_line"))
+            .fill_null(False)
+            .alias("restates_line")
+        )
+        # One label can sit on two concepts; the total that agrees decides.
+        .group_by(["filing_id", *line_keys])
+        .agg(pl.col("restates_line").all())
+    )
+    rows = rows.join(reprinted, on=["filing_id", *line_keys], how="left").with_columns(
+        pl.col("restates_line").fill_null(False)
+    )
+    if moved is not None and not moved.is_empty():
+        line_year = ["company_id", "statement", "normalized_label", "fiscal_tag"]
+        on_new_basis = (
+            moved.select(line_year).unique().with_columns(pl.lit(True).alias("_moved"))
+        )
+        rows = (
+            rows.join(on_new_basis, on=line_year, how="left")
+            .with_columns(pl.col("restates_line") & pl.col("_moved").is_null())
+            .drop("_moved")
+        )
     keys = [*SERIES, "filing_id", "fiscal_tag"]
     return ordering.distinct_on(rows, keys, ["is_duplicate", "id"]).select(
-        *keys, "filing_date", "value"
+        *keys, "filing_date", "value", "restates_line"
     )
 
 
@@ -233,6 +291,8 @@ class NineMonthMember:
     filing_date: date
     member: str
     value: Optional[Decimal]
+    #: The 10-Q printed the year's nine-month line at another value.
+    restates_line: bool = False
 
 
 @dataclass
@@ -244,6 +304,8 @@ class Filing:
     is_amendment: bool = False
     rows: list[AnnualMember] = field(default_factory=list)
     values: dict[str, list[Optional[Decimal]]] = field(default_factory=dict)
+    #: A nine-month 10-Q that printed the line itself at another value.
+    restates_line: bool = False
 
     @property
     def members(self) -> frozenset[str]:
@@ -259,8 +321,20 @@ def _filings(rows: Sequence[AnnualMember | NineMonthMember]) -> list[Filing]:
             f = out[r.filing_id] = Filing(r.filing_id, r.filing_date, amendment)
         if isinstance(r, AnnualMember):
             f.rows.append(r)
+        elif r.restates_line:
+            f.restates_line = True
         f.values.setdefault(r.member, []).append(r.value)
     return list(out.values())
+
+
+def introduced(annual: Filing, quarters: dict[str, FirstThree]) -> frozenset[str]:
+    """Members a 10-K reports, beyond zero, that the year's quarters do not have."""
+    return frozenset(
+        r.member
+        for r in annual.rows
+        if r.value
+        and (quarters.get(r.member) is None or quarters[r.member].value is None)
+    )
 
 
 def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> bool:
@@ -281,9 +355,17 @@ def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> bool:
 
 
 def rank_annual_filings(
-    fiscal_tag: int, annuals: Sequence[Filing], quarters: dict[str, FirstThree]
+    fiscal_tag: int,
+    annuals: Sequence[Filing],
+    quarters: dict[str, FirstThree],
+    paired: frozenset[int] = frozenset(),
+    covered: frozenset[str] = frozenset(),
 ) -> list[Filing]:
-    """The 10-Ks of one axis-year, best source of Q4 first (see the module)."""
+    """The 10-Ks of one axis-year, best source of Q4 first (see the module).
+
+    ``paired`` are the 10-Ks with a nine-month 10-Q on their members, and
+    ``covered`` the members those nine months print.
+    """
     filed = [
         q.filed
         for a in annuals
@@ -291,11 +373,28 @@ def rank_annual_filings(
         if (q := quarters.get(r.member)) is not None and q.filed is not None
     ]
     quarters_filed = max(filed) if filed else None
+    shown = {a.filing_id for a in annuals if any(not r.is_duplicate for r in a.rows)}
 
     def rank(a: Filing) -> tuple:
         after = quarters_filed is not None and a.filing_date >= quarters_filed
+        # A later 10-K that restated the year replaced every member of the
+        # year's own 10-K (see facts_normalized.dedup.restating_filings).
+        restated = a.filing_id == fiscal_tag and shown and a.filing_id not in shown
+        # The year's own 10-K moved amounts onto members its quarters do not
+        # have, and no 10-Q printed the nine months on them, so subtracting
+        # the quarters puts the move into Q4. A later 10-K paired with a
+        # 10-Q on its members goes first: Microsoft's fiscal 2023 10-K split
+        # Dynamics out of Office and Other, and only the fiscal 2024 10-K and
+        # its third-quarter 10-Q print fiscal 2023 on one split.
+        unpaired_recast = (
+            a.filing_id == fiscal_tag
+            and a.filing_id not in paired
+            and bool(introduced(a, quarters) & covered)
+        )
         return (
             not a.is_amendment,
+            bool(restated),
+            unpaired_recast,
             a.filing_id != fiscal_tag,
             not on_quarter_split(a, quarters),
             # The first 10-K filed after the quarters, else the latest before.
@@ -347,7 +446,10 @@ def nine_month_source(
             later = [a for a in annuals if a.filing_date > nine.filing_date]
             if later:
                 following = min(later, key=lambda a: (a.filing_date, a.filing_id))
-                on_split = _prints_year_as(annual, following)
+                # The reprint moved amounts between members, not the total:
+                # Alphabet's 2013 10-Qs reprinted 2012 without Motorola's
+                # home business, which the year's own quarters still hold.
+                on_split = _prints_year_as(annual, following) and not nine.restates_line
         if not (on_split or nine.members == annual.members):
             continue
         rank = (
@@ -368,6 +470,9 @@ class Q4Source:
     annual: Filing
     rank: int
     nine_months: Optional[Filing]
+    #: First-ranked over the year's own 10-K, which recast the year with no
+    #: nine months to pair; the other 10-Ks are on another split.
+    alone: bool = False
 
 
 def member_q4(
@@ -388,6 +493,11 @@ def member_q4(
     quarters on them.
     """
     chosen: dict[str, tuple[tuple, int, Decimal]] = {}
+    if sources and sources[0].alone:
+        # Filling a member it left out from the year's own 10-K would count
+        # a line twice beside its restated successor (Microsoft's Enterprise
+        # Services beside Enterprise and Partner Services).
+        sources = sources[:1]
     for source in sources:
         for row in source.annual.rows:
             q = quarters.get(row.member)
@@ -426,11 +536,28 @@ def q4_sources(
     for axis_year, rows in annual_rows.items():
         annuals = _filings(rows)
         nine_filings = _filings(nine_rows.get(axis_year, []))
+        nine_of = {
+            a.filing_id: nine_month_source(a, annuals, nine_filings) for a in annuals
+        }
+        paired = frozenset(i for i, nine in nine_of.items() if nine is not None)
+        covered = frozenset(
+            m for nine in nine_of.values() if nine is not None for m in nine.members
+        )
+        year_quarters = quarters.get(axis_year, {})
         ranked = rank_annual_filings(
-            axis_year[-1], annuals, quarters.get(axis_year, {})
+            axis_year[-1], annuals, year_quarters, paired, covered
+        )
+        own = next((a for a in annuals if a.filing_id == axis_year[-1]), None)
+        alone = (
+            own is not None
+            and ranked[0] is not own
+            and not ranked[0].is_amendment
+            and own.filing_id not in paired
+            and ranked[0].filing_id in paired
+            and bool(introduced(own, year_quarters) & ranked[0].members)
         )
         out[axis_year] = [
-            Q4Source(a, rank, nine_month_source(a, annuals, nine_filings))
+            Q4Source(a, rank, nine_of[a.filing_id], alone and rank == 1)
             for rank, a in enumerate(ranked, start=1)
         ]
     return out

@@ -58,6 +58,16 @@ ORDER BY distinct_values DESC, company_id, statement, concept
 LIMIT 50;
 
 \echo '--- Raw facts that never reached financial_facts_normalized ---'
+-- A finer cut (the slot's amount cut again by a second, non-default
+-- dimension) beside the same filing's fact on that slot is dropped on
+-- purpose (without_finer_cuts in filings/refresh/rules/facts.py) and is not
+-- listed.
+WITH coordinates AS (
+    SELECT fact_id, COUNT(*) AS n
+    FROM financial_fact_dimensions
+    WHERE NOT is_default
+    GROUP BY fact_id
+)
 SELECT
     ff.company_id,
     ff.statement,
@@ -66,9 +76,24 @@ SELECT
     ff.period_end,
     COUNT(*) AS facts
 FROM financial_facts ff
+LEFT JOIN coordinates c ON c.fact_id = ff.id
 WHERE NOT EXISTS (
     SELECT 1 FROM financial_facts_normalized n WHERE n.id = ff.id
 )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM financial_facts twin
+    LEFT JOIN coordinates tc ON tc.fact_id = twin.id
+    WHERE twin.filing_id = ff.filing_id
+      AND twin.statement = ff.statement
+      AND twin.concept = ff.concept
+      AND twin.axis = ff.axis
+      AND twin.member = ff.member
+      AND twin.period_end = ff.period_end
+      AND twin.period IS NOT DISTINCT FROM ff.period
+      AND ff.axis <> ''
+      AND COALESCE(tc.n, 0) < COALESCE(c.n, 0)
+  )
 GROUP BY ff.company_id, ff.statement, ff.concept, ff.label, ff.period_end
 ORDER BY facts DESC
 LIMIT 50;

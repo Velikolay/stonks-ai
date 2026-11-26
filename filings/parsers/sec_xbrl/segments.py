@@ -47,7 +47,8 @@ from .statement import parse_statement, statement_frame
 
 logger = logging.getLogger(__name__)
 
-#: ``(concept, axis, member, period_end)``: one member of one line and period.
+#: ``(concept, axis, member, period_end, period)``: one member of one line and
+#: period. The period type keeps a 10-Q's nine months beside its quarter.
 MemberKey = tuple
 
 
@@ -59,8 +60,16 @@ class Note:
     frame: pd.DataFrame
 
     def facts(self, context: FilingContext) -> list[FinancialFactCreate]:
-        """The note's facts, parsed afresh: the rules rewrite the facts they keep."""
-        return parse_statement(self.frame, "Income Statement", True, context)
+        """The note's facts, parsed afresh: the rules rewrite the facts they keep.
+
+        Undimensioned rows keep their printed quarter beside the year-to-date
+        total. A plug such as Alphabet's hedging gains closes the quarter's
+        members to the face quarter; its year-to-date value has no members to
+        close, since a note member is kept once per period end.
+        """
+        return parse_statement(
+            self.frame, "Income Statement", True, context, every_quarter=True
+        )
 
     @property
     def has_segment_axis(self) -> bool:
@@ -145,13 +154,15 @@ class SegmentSupplement:
         for f in self.income_facts:
             if not f.axis:
                 continue
-            seen.add((f.concept, f.axis, f.member, f.period_end))
+            seen.add((f.concept, f.axis, f.member, f.period_end, f.period))
             if (
                 self.revenue is not None
                 and is_revenue_concept_strict(f.concept)
                 and f.concept != self.revenue.concept
             ):
-                seen.add((self.revenue.concept, f.axis, f.member, f.period_end))
+                seen.add(
+                    (self.revenue.concept, f.axis, f.member, f.period_end, f.period)
+                )
         return seen
 
     # --- Reading the notes ----------------------------------------------------
@@ -215,7 +226,7 @@ class SegmentSupplement:
             if fact.concept not in self.face_concepts and label not in self.face_labels:
                 return
 
-        key = (fact.concept, fact.axis, fact.member, fact.period_end)
+        key = (fact.concept, fact.axis, fact.member, fact.period_end, fact.period)
         if key in self.seen or key in self.added:
             if original != RESIDUAL_REVENUE_CONCEPT:
                 # A revenue total replaces a component that claimed the member first.
@@ -229,7 +240,7 @@ class SegmentSupplement:
                 return
             fact.member = RESIDUAL_MEMBER
             fact.member_label = RESIDUAL_MEMBER
-            key = (fact.concept, fact.axis, fact.member, fact.period_end)
+            key = (fact.concept, fact.axis, fact.member, fact.period_end, fact.period)
             if key in self.seen or key in self.added:
                 return
         self.added[key] = fact

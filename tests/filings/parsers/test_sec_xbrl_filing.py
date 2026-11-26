@@ -90,3 +90,21 @@ def test_without_a_year_back_column_the_closest_earlier_one_is_used() -> None:
     columns = ["2024-12-31 (FY)", "2022-12-31 (FY)", "2021-12-31 (FY)"]
     assert prior_column(columns, "2024-12-31 (FY)") == "2022-12-31 (FY)"
     assert prior_column(columns, "2021-12-31 (FY)") is None
+
+
+def test_printed_quarter_hangs_under_its_parents_quarter():
+    """Alphabet's quarterly hedging gains sit under the quarter's revenue."""
+    from filings.parsers.sec_xbrl.parser import link_published_quarters
+
+    def fact(key, parent_key=None):
+        return SimpleNamespace(key=key, parent_key=parent_key)
+
+    revenue_ytd = fact("rev|IS|2025-06-30")
+    revenue_q = fact("rev|IS|2025-06-30|q")
+    hedge_q = fact("hedge|IS|2025-06-30|q", "rev|IS|2025-06-30")
+    cost_q = fact("cost|IS|2025-06-30|q", "opex|IS|2025-06-30")
+    link_published_quarters([revenue_ytd, revenue_q, hedge_q, cost_q])
+
+    assert hedge_q.parent_key == "rev|IS|2025-06-30|q"
+    # No printed quarter of the parent: the year-to-date parent stays.
+    assert cost_q.parent_key == "opex|IS|2025-06-30"

@@ -146,6 +146,10 @@ class BreakdownResponse(BaseModel):
 
     axis: str
     members: List[str]
+    #: 10-K years the members add up in. Sets on one axis that share no year
+    #: with the latest set are earlier presentations; the chart fills years
+    #: the latest set does not cover from them.
+    fiscal_years: List[int] = []
 
 
 def _breakdowns_to_show(
@@ -154,41 +158,27 @@ def _breakdowns_to_show(
     statement: str,
     label: str,
 ) -> Optional[List[BreakdownResponse]]:
-    """Choose the breakdowns a response should list.
+    """Choose the breakdowns a response should list, with their years.
 
-    Sets on one axis that never share a year are successive presentations, so
-    only those that meet the latest one are alternatives. A set is omitted when
-    this granularity reports fewer than two of its members.
+    Every set is listed, earlier presentations included: the chart draws the
+    latest sets and fills the years they do not cover from the newest earlier
+    set that adds up (Alphabet's U.S., U.K. and rest of the world before its
+    2015 regions). A set is omitted when this granularity reports fewer than
+    two of its members.
     """
-    by_axis: Dict[str, List[Dict[str, Any]]] = {}
-    for item in items:
-        by_axis.setdefault(item["axis"], []).append(item)
-    current_years: Dict[str, Set[int]] = {}
-    for axis, sets in by_axis.items():
-        latest = max(
-            (year for item in sets for year in item.get("fiscal_years") or []),
-            default=None,
-        )
-        if latest is None:
-            continue
-        current_years[axis] = {
-            year
-            for item in sets
-            if latest in (item.get("fiscal_years") or [])
-            for year in item["fiscal_years"]
-        }
     chosen: List[BreakdownResponse] = []
     for item in items:
-        years = set(item.get("fiscal_years") or [])
-        if not years & current_years.get(item["axis"], set()):
-            continue
         present = sum(
             (statement, label, item["axis"], member) in reported
             for member in item["members"]
         )
         if present >= 2:
             chosen.append(
-                BreakdownResponse(axis=item["axis"], members=list(item["members"]))
+                BreakdownResponse(
+                    axis=item["axis"],
+                    members=list(item["members"]),
+                    fiscal_years=sorted(item.get("fiscal_years") or []),
+                )
             )
     return chosen or None
 

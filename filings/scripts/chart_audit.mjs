@@ -1,0 +1,274 @@
+// Chart audit: what the stacked chart in stonks-ui draws for every dimension.
+//
+// For each company, granularity, Income Statement line and axis, fetch the
+// two series the UI fetches (/financials with breakdowns=true, with and
+// without the axis), run the UI's own resolveDimensionStack on them, and
+// classify each period of the undimensioned line:
+//
+//   exact             a split the API sends adds up
+//   member_remainder  adds up, but a member is drawn with "(remainder)"
+//   short             the split falls short; the gap is the gray metric bar
+//   over              the members present exceed the line, nothing is drawn
+//   unsplit           members exist that period but no sent split applies
+//   gap_inside        no member that period, inside the members' span
+//   no_breakdown      members exist but the API sends no split for the axis
+//   no_members        nothing on the axis that period (outside its span)
+//
+// It then lists breaks: periods that look wrong beside their neighbours on
+// the same line, axis and granularity, which is what a reader of the chart
+// notices first. A period breaks when
+//
+//   status            it does not add up (gray over 0.5%, over, unsplit,
+//                     gap_inside, a remainder) and the period before does,
+//                     as does the period after unless this is the latest
+//   members           the members it draws differ from the periods before
+//                     and after, which agree with each other (a member
+//                     missing for one quarter, a member not opened into its
+//                     split for one quarter)
+//   negative          it draws a member negative that is positive before
+//                     (not on profit, income or tax lines, and not a
+//                     corporate, reconciling, elimination or hedging member)
+//
+// Only Product, Geographical and segment, product or region axes are read,
+// as in 16_chart_breaks.sql.
+// Breaks are printed per ticker and kept on each JSONL row under "breaks".
+//
+// Usage (the API must be running, Node 22.6+ for TypeScript type stripping):
+//   node filings/scripts/chart_audit.mjs [--ui ../stonks-ui] [--tickers AAPL,MSFT]
+//        [--api http://localhost:8000] [--out audit.jsonl] [--base before.jsonl]
+//
+// --base compares split coverage per line with an earlier --out file.
+
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const args = Object.fromEntries(
+  process.argv.slice(2).reduce((pairs, arg, i, all) => {
+    if (arg.startsWith("--")) pairs.push([arg.slice(2), all[i + 1] ?? ""]);
+    return pairs;
+  }, [])
+);
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const uiDir = resolve(args.ui || join(repo, "../stonks-ui"));
+const api = args.api || "http://localhost:8000";
+const out = args.out || "chart_audit.jsonl";
+const only = args.tickers ? args.tickers.split(",") : null;
+const KEY = [
+  "Revenue",
+  "Net sales",
+  "Cost of Revenue",
+  "Gross Profit",
+  "Operating Expenses",
+  "Operating Income",
+];
+
+// The UI module imports its types from "@/lib/services/financial-data"; make
+// that import type-only so Node can strip it, and load the copy.
+const work = mkdtempSync(join(tmpdir(), "chart-audit-"));
+const stackSource = readFileSync(
+  join(uiDir, "src/components/charts/dimension-stack.ts"),
+  "utf8"
+).replace(
+  /^import \{([^}]*)\} from "@\/lib\/services\/financial-data";/m,
+  'import type {$1} from "./types.ts";'
+);
+writeFileSync(join(work, "types.ts"), "export {};\n");
+writeFileSync(join(work, "dimension-stack.ts"), stackSource);
+const { resolveDimensionStack } = await import(join(work, "dimension-stack.ts"));
+
+async function get(path, params) {
+  const url = new URL(api + path);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const response = await fetch(url);
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error(`${response.status} ${url}`);
+  return response.json();
+}
+
+function parse(raw) {
+  return raw.map(item => ({
+    name: item.member || item.normalized_label || "Total",
+    data: (item.values || [])
+      .map(v => ({
+        date: v.period_end,
+        value: typeof v.value === "number" ? v.value : parseFloat(v.value) || 0,
+        fiscal_quarter: v.fiscal_quarter,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    breakdowns: item.breakdowns?.length
+      ? item.breakdowns.map(b => ({
+          axis: b.axis,
+          members: [...new Set(b.members)],
+          fiscal_years: b.fiscal_years?.length ? [...b.fiscal_years] : undefined,
+        }))
+      : undefined,
+  }));
+}
+
+const tolerance = v => Math.max(1, Math.abs(v) * 1e-6);
+
+async function auditAxis(ticker, granularity, label, statement, axis) {
+  const base = { ticker, granularity, normalized_labels: label, statement, breakdowns: "true" };
+  const [memberRaw, totalRaw] = await Promise.all([
+    get("/financials/", { ...base, axis }),
+    get("/financials/", base),
+  ]);
+  const series = parse(memberRaw);
+  const total = parse(Array.isArray(totalRaw) ? totalRaw.slice(0, 1) : [totalRaw])[0];
+  const stack = resolveDimensionStack(
+    { ticker, metric: label, granularity, series, total },
+    axis
+  );
+  const splits = (total?.breakdowns ?? []).filter(b => b.axis === axis);
+  const byMember = new Map(series.map(s => [s.name, new Map(s.data.map(p => [p.date, p.value]))]));
+  const memberDates = [...new Set(series.flatMap(s => s.data.map(p => p.date)))].sort();
+  const cuts = stack.cuts.length ? stack.cuts : [{ label: "", periods: stack.periods }];
+  const periods = [];
+  for (const point of total?.data ?? []) {
+    const { date, value } = point;
+    const views = cuts.map(cut => {
+      const leaves = cut.periods[date] ?? [];
+      const isGray = l => l.name === label || l.name.startsWith(`${label} (`);
+      return {
+        drawn: leaves.filter(l => !isGray(l)).length,
+        gray: leaves.find(isGray)?.value ?? 0,
+        remainders: leaves.filter(l => l.name.endsWith("(remainder)")).map(l => l.name),
+        leaves: leaves.filter(l => !isGray(l)).map(l => [l.name, l.value]),
+      };
+    });
+    const best = views.reduce(
+      (a, b) => (b.drawn > 0 && (a.drawn === 0 || b.gray < a.gray) ? b : a),
+      views[0]
+    );
+    const present = series.filter(s => byMember.get(s.name).has(date)).length;
+    let status;
+    if (splits.length === 0) status = present ? "no_breakdown" : "no_members";
+    else if (best.drawn === 0) {
+      if (!present) {
+        const inside = date > memberDates[0] && date < memberDates.at(-1);
+        status = inside ? "gap_inside" : "no_members";
+      } else {
+        const over = splits.some(split => {
+          const sum = split.members.reduce((acc, m) => acc + (byMember.get(m)?.get(date) ?? 0), 0);
+          return split.members.some(m => byMember.get(m)?.has(date)) && sum - value > tolerance(value);
+        });
+        status = over ? "over" : "unsplit";
+      }
+    } else if (best.gray > tolerance(value)) status = "short";
+    else if (best.remainders.length) status = "member_remainder";
+    else status = "exact";
+    periods.push({
+      date,
+      status,
+      grayPct: value ? +((100 * best.gray) / Math.abs(value)).toFixed(2) : null,
+      remainders: best.remainders,
+      leaves: best.leaves ?? [],
+    });
+  }
+  return { ticker, granularity, label, statement, axis, members: series.map(s => s.name), splits: splits.map(s => s.members), periods, breaks: CHARTED_AXIS(axis) ? breaks(periods, label) : [] };
+}
+
+const ADDS_UP = new Set(["exact", "no_breakdown", "no_members"]);
+const addsUp = p => ADDS_UP.has(p.status) || (p.status === "short" && p.grayPct < 0.5);
+const names = p => p.leaves.map(([n]) => n).sort().join("|");
+// Breaks are read on the axes 16_chart_breaks.sql reads: Product,
+// Geographical and segment, product or region axes. A member that changes
+// sign by nature, or a profit line whose segments can lose money, is not a
+// negative break.
+const CHARTED_AXIS = axis => axis === "Product" || axis === "Geographical" || /segment|product|geograph|region/i.test(axis);
+const SIGNED = /corporate|unallocated|reconcil|eliminat|hedg|intersegment/i;
+const SIGNED_LINE = /income|profit|loss|margin|earnings|tax/i;
+
+function breaks(periods, label) {
+  const found = [];
+  periods.forEach((p, i) => {
+    const before = periods[i - 1], after = periods[i + 1];
+    if (!before) return;
+    const drawnBefore = new Map(before.leaves);
+    if (!addsUp(p) && addsUp(before) && (!after || addsUp(after)))
+      found.push({ date: p.date, kind: "status", detail: `${p.status}${p.grayPct ? ` gray ${p.grayPct}%` : ""}${p.remainders.length ? ` ${p.remainders.join(", ")}` : ""}` });
+    if (after && before.leaves.length && names(before) === names(after) && names(p) !== names(before)) {
+      const here = new Set(p.leaves.map(([n]) => n));
+      const missing = [...drawnBefore.keys()].filter(n => !here.has(n));
+      const added = [...here].filter(n => !drawnBefore.has(n));
+      found.push({ date: p.date, kind: "members", detail: `missing ${missing.join(", ") || "-"}; added ${added.join(", ") || "-"}` });
+    }
+    const negative = p.leaves
+      .filter(([n, v]) => v < 0 && (drawnBefore.get(n) ?? 0) > 0 && !SIGNED.test(n) && !SIGNED_LINE.test(label))
+      .map(([n]) => n);
+    if (negative.length) found.push({ date: p.date, kind: "negative", detail: negative.join(", ") });
+  });
+  return found;
+}
+
+const tickers = [];
+const seen = new Set();
+for (const line of readFileSync(join(repo, "migrations/data/company-ids.csv"), "utf8").trim().split("\n").slice(1)) {
+  const [id, ticker] = line.split(",");
+  if (seen.has(id) || (only && !only.includes(ticker))) continue;
+  seen.add(id);
+  tickers.push([Number(id), ticker]);
+}
+
+const rows = [];
+const jobs = tickers.flatMap(([id, ticker]) =>
+  ["yearly", "quarterly"].map(granularity => async () => {
+    const labels = await get("/financials/normalized-labels", { ticker, granularity, statement: "Income Statement" });
+    const combos = new Map();
+    for (const l of labels) if (l.axis) combos.set(`${l.normalized_label}|${l.axis}`, [l.normalized_label, l.axis]);
+    for (const [label, axis] of combos.values()) {
+      try {
+        rows.push({ company_id: id, ...(await auditAxis(ticker, granularity, label, "Income Statement", axis)) });
+      } catch (error) {
+        rows.push({ company_id: id, ticker, granularity, label, axis, error: String(error) });
+      }
+    }
+  })
+);
+let next = 0;
+await Promise.all(Array.from({ length: 6 }, async () => { while (next < jobs.length) await jobs[next++](); }));
+writeFileSync(out, rows.map(r => JSON.stringify(r)).join("\n") + "\n");
+
+// Coverage: periods of each key line where some axis draws a split that adds up.
+function coverage(list) {
+  const ok = new Map(), all = new Map();
+  for (const r of list) {
+    if (!KEY.includes(r.label) || !r.periods) continue;
+    const key = `${r.company_id}|${r.ticker}|${r.label}|${r.granularity}`;
+    for (const p of r.periods) {
+      if (!all.has(key)) { all.set(key, new Set()); ok.set(key, new Set()); }
+      all.get(key).add(p.date);
+      if (p.status === "exact" || p.status === "member_remainder") ok.get(key).add(p.date);
+    }
+  }
+  return { ok, all };
+}
+const now = coverage(rows);
+const before = args.base
+  ? coverage(readFileSync(args.base, "utf8").trim().split("\n").map(l => JSON.parse(l)))
+  : null;
+console.log(`wrote ${rows.length} rows to ${out}; ${rows.filter(r => r.error).length} errors`);
+console.log("periods with a split that adds up / periods of the line");
+console.log("co ticker metric               yearly        quarterly");
+const lines = [...new Set([...now.all.keys()].map(k => k.split("|").slice(0, 3).join("|")))].sort(
+  (a, b) => Number(a.split("|")[0]) - Number(b.split("|")[0]) || a.localeCompare(b)
+);
+for (const line of lines) {
+  const cells = ["yearly", "quarterly"].map(g => {
+    const key = `${line}|${g}`;
+    const n = now.all.get(key)?.size ?? 0, y = now.ok.get(key)?.size ?? 0;
+    const was = before ? `${before.ok.get(key)?.size ?? 0}->` : "";
+    return `${was}${y}/${n}`.padEnd(13);
+  });
+  const [id, ticker, label] = line.split("|");
+  console.log(`${id.padStart(2)} ${ticker.padEnd(6)} ${label.padEnd(20)} ${cells.join(" ")}`);
+}
+
+const broken = rows.filter(r => r.breaks?.length);
+console.log(`\nbreaks: ${broken.reduce((n, r) => n + r.breaks.length, 0)} periods on ${broken.length} line/axis/granularity series`);
+for (const r of broken.sort((a, b) => a.company_id - b.company_id || a.label.localeCompare(b.label) || a.axis.localeCompare(b.axis))) {
+  for (const b of r.breaks)
+    console.log(`${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ${b.date} ${b.kind}: ${b.detail}`);
+}
