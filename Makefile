@@ -1,5 +1,5 @@
 .PHONY: help install format lint test clean db-init db-reset db-status \
-	ingest refresh refresh-snapshot refresh-compare chart-audit parser-snapshot parser-compare overrides-load overrides-check psql diagnose
+	ingest refresh refresh-snapshot refresh-compare chart-audit xbrl-facts parser-snapshot parser-compare overrides-load overrides-check psql diagnose
 
 # Connection string used by the psql-based targets below. Override per-invocation
 # with `make psql DATABASE_URL=...`.
@@ -37,6 +37,7 @@ help:
 	@echo "  refresh-snapshot - Save derived tables and diagnostics counts (OUT=dir)"
 	@echo "  refresh-compare - Diff two snapshots (BASE=dir NEW=dir)"
 	@echo "  chart-audit     - Run the UI's stacking rules over every split (TICKERS=, UI_DIR=, OUT=, BASE=)"
+	@echo "  xbrl-facts      - A filing's XBRL facts with every dimension (ACCESSION=, CONCEPT=, DIMENSION=)"
 	@echo "  parser-snapshot - Parse a fixed sample of filings (OUT=dir, SAMPLE=file optional)"
 	@echo "  parser-compare  - Diff two parser snapshots (BASE=dir NEW=dir)"
 	@echo "  overrides-load  - Sync migrations/data/*.csv overrides into the database"
@@ -178,6 +179,11 @@ chart-audit:
 		$(if $(TICKERS),--tickers $(TICKERS)) \
 		--out $(or $(OUT),chart_audit.jsonl) \
 		$(if $(BASE),--base $(BASE))
+
+xbrl-facts:
+	python -m filings.scripts.xbrl_facts $(ACCESSION) \
+		$(if $(CONCEPT),--concept "$(CONCEPT)") \
+		$(if $(DIMENSION),--dimension "$(DIMENSION)")
 
 diagnose:
 ifdef COMPANY_IDS

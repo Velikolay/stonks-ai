@@ -88,8 +88,9 @@ or empty filings, period gaps inside a real series are gone, orphaned parents
 are gone, no fiscal year fails the four-quarters-sum-to-the-10-K check, Balance
 Sheet identities hold, dimension axis splits are gone, `14` lists no member
 the chart draws with a remainder, the first three queries of `15` list
-nothing for the company but explained rows, and neither `16` nor the breaks
-that `make chart-audit` prints list a period you have not explained. Explain
+nothing for the company but explained rows, and neither `16`, nor the breaks,
+nor the axes that do not add up that `make chart-audit` prints list a period
+you have not explained. Explain
 each remaining rollup, sign-flip, conflicting-fact, value-anomaly, and
 remainder row as a source-data artifact. Segments get their own pass once the
 rest holds; see [Aligning segments](#aligning-segments).
@@ -101,6 +102,10 @@ the chart-audit breaks for that company and fix or explain everything they
 list, so the next broken period is found by the diagnostics and not by the
 user. A fix to one quarter often leaves its neighbour broken (Alphabet's
 Q4 2018 and Q2 2019 had two different causes).
+
+The same goes for every company, not only the one asked about: a review is
+done when the stop condition holds for all of them (see
+[Reviewing every company](#reviewing-every-company)).
 
 Duplicate and disjoint rows are not themselves a reason to keep going:
 
@@ -205,6 +210,16 @@ revenue splits the revenue line:
 - Only currency amounts cut by segment axes alone are kept. Percentages,
   counts, a segment further cut by debt instrument or plan, and roll-forwards
   whose note reports no revenue stay out.
+- Two exceptions keep a note's revenue split on another axis
+  ([segments.py](filings/parsers/sec_xbrl/segments.py)). Its members are kept
+  when they add up exactly to the face revenue (`extension_revenue_members`),
+  or to one segment, product or geographic member that each fact carries as
+  its only other real coordinate and the note prints alone
+  (`nested_revenue_members`): TSMC's 20-Fs from FY2019 cut wafer revenue by
+  technology node on `MeasurementAxis`. A split that falls short of both
+  stays out, which drops partial country lists and top customers.
+- A member label loses the taxonomy's trailing " [member]", which edgartools
+  prints for an IFRS member without a terse label ("10-nanometer [member]").
 
 Such a line links to revenue through its axis and member. Member labels are
 inferred per line, so two lines normally agree because the filer labels a
@@ -320,10 +335,13 @@ Microsoft's fiscal 2025 product lines continue its fiscal 2018-2021 and older
 product lines, while product and service revenue, current since fiscal 2018,
 takes only the sets that began before 2018. A stopped set that began with
 every current set stays a view. Before a view's first period that adds up,
-a period that none of its earlier presentations closes draws the metric bar
-alone, not the view's members that happen to share a name with an older
-split: Microsoft's fiscal 2017 quarters exist on product lines only as the
-ASC 606 restatement in the fiscal 2018 10-Qs, 7% above the revenue filed. `make chart-audit` prints each view's exact
+a period that lacks one of the view's members and that none of its earlier
+presentations closes draws the metric bar alone, not the view's members that
+happen to share a name with an older split: Microsoft's fiscal 2017 quarters
+exist on product lines only as the ASC 606 restatement in the fiscal 2018
+10-Qs, 7% above the revenue filed. With every member present and short, the
+period is a partial disclosure and is drawn: Netflix's four streaming regions
+before DVD ended, beside a gray sliver the size of DVD. `make chart-audit` prints each view's exact
 periods for the key lines (`views` in the JSONL), since the best view can add
 up everywhere while the one a reader picks does not. The API leaves out a set when fewer than two of its members exist
 at the requested granularity, so a split reported only in the 10-K is absent
@@ -417,7 +435,12 @@ later 10-K's members. Microsoft's fiscal 2023 10-K split Dynamics out of Office
 and Other, so subtracting the old quarters gave Other a Q4 of -3,924. The nine months come from the 10-Q a year later when the
 first 10-K after it prints the year as this 10-K did and all its members on that
 axis are the 10-K's, and its comparative nine-month line equals the year's own
-(Alphabet's 2013 10-Qs reprinted 2012 without Motorola's home business), unless
+(Alphabet's 2013 10-Qs reprinted 2012 without Motorola's home business). Before
+any later 10-K exists, a 10-K that reprinted an earlier year on the axis at
+other values counts as that basis: Broadcom's fiscal 2025 10-K moved revenue
+from subscriptions and services to products, and its fiscal 2026 third-quarter
+10-Q reprinted the nine months on it, so Q4 is 4,793 rather than -898. That
+holds unless
 next year's comparatives already replaced that line's quarters: a 10-K that moved a line out of another (Tesla's fiscal
 2021 10-K taking regulatory credits out of automotive sales) subtracts the
 reprint on its own split. Otherwise they come from a 10-Q whose members are the
@@ -465,6 +488,9 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Company-specific concept that should be a dimension of a standard concept | `financial-facts-overrides.csv` | `to_concept`, `to_axis`, `to_member`, `to_member_label` |
 | Advertising and other revenue filed as their own concepts, with no axis | `financial-facts-overrides.csv` | `to_concept` is the face revenue concept, plus `to_axis`, `to_member`, `to_member_label` |
 | One bad value in one filing only | `financial-facts-overrides.csv` | `from_period`, `to_period`, `form_type`, `from_filing_period`, `to_filing_period` |
+| Every member of an axis collapses onto one label (AMD's regions all "CHINA") | `financial-facts-overrides.csv` | One filing's label linkbase crossed the labels (AMD's FY2024 10-K labels `country:JP` "China"), and grouping chained every member through them. Rewrite that filing's facts onto their own qnames with their own labels, bounded by filing period |
+| A split adds up only to a member on another axis (TSMC's nodes to wafer revenue) | `financial-facts-overrides.csv` | `action=clone` of the remaining member onto the split's axis, so the split adds up to the line (TSMC's non-wafer revenue on Technology) |
+| A two-dimension fact is stored on one cut only (Netflix's streaming regions only on Geographical) | `financial-facts-overrides.csv` | `action=clone` onto the other cut's member, unbounded; where a filing prints that member too, the clone ties it |
 
 Reach for `concept-normalization-overrides.csv` first. It is declarative and
 global-capable, so one row can fix every company at once. Use
@@ -690,7 +716,9 @@ rows each). `FILES=14,16` restricts it to files by prefix. Use it, not the
 plain target: plain `make diagnose` runs each file through `psql` for every
 company, most queries `LIMIT` 50, and on a populated database that first page
 belongs to other filers. Microsoft's negative Q4 FY2023 Other was in `11` all
-along, one row of 68 for Microsoft alone and off the global page. Run one
+along, one row of 68 for Microsoft alone and off the global page. A section whose
+SQL fails is printed as FAILED, the others still run, and the command exits
+non-zero, so do not filter its output before checking the last line. Run one
 file by hand with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
 Refresh stays narrow too: `make refresh COMPANY_IDS=7`.
 
@@ -716,9 +744,9 @@ drift that way, so when the two disagree, trust the audit and fix the query.
 | `11_value_anomalies.sql` | Negative / outlier Q4s, repeating Q4 anomalies, yearly spikes, rare sign outliers |
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
-| `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, members the chart draws with a remainder, every breakdown with its years |
-| `15_segment_alignment.sql` | Segment members a line reports on another axis than revenue, profit and cost lines on revenue's segment axis with no breakdown, segment amounts still under an axis total, breakdowns that are earlier presentations |
-| `16_chart_breaks.sql` | One period that looks wrong beside its neighbours: members covering a different share of the line than the periods around it, a member negative between positive periods, two members carrying the same values under two names |
+| `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, members the chart draws with a remainder, every breakdown with its years, axes whose members add up to a member of another axis rather than the line |
+| `15_segment_alignment.sql` | Segment members a line reports on another axis than revenue, profit and cost lines on revenue's segment axis with no breakdown, segment amounts still under an axis total, breakdowns that are earlier presentations, revenue facts cut two ways but stored on one cut only |
+| `16_chart_breaks.sql` | One period that looks wrong beside its neighbours: members covering a different share of the line than the periods around it, a member negative between positive periods, two members carrying the same values under two names, distinct members of one filing merged into one label |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -935,6 +963,12 @@ cost member drawn negative after a positive period. It reads the same axes as
 (Microsoft's product lines from FY2022) has no breaks there; `16` reads the
 members directly and covers it.
 
+Last it prints the **axes that do not add up**: every key line and charted
+axis (an axis an override named, or a segment, product or region axis) with
+members in a period that does not draw exactly. That list is the work list of
+[Reviewing every company](#reviewing-every-company). `--report audit.jsonl`
+reads a saved run instead of the API, so an earlier run can be read again.
+
 ### The procedure, one company at a time
 
 1. Find revenue's segment axis: `14`'s last query lists revenue's
@@ -988,6 +1022,50 @@ Explaining a row means naming the filing and the period, as for any other
 diagnostic. Earlier presentations, segment profit before unallocated costs and
 a member reprinted coarser than its parent stay listed and stay explained; see
 below.
+
+### Reviewing every company
+
+The segment pass ends with every company, not the ones someone asked about.
+Each of these was once found by a reader instead of a diagnostic, and each
+now shows in the list below:
+
+```bash
+make chart-audit OUT=audit.jsonl          # all companies; prints three lists
+make diagnose COMPANY_IDS=<id> FILES=14,15,16
+```
+
+1. **Axes that do not add up** (the audit's last list): every key line and
+   charted axis with members in a period that does not draw exactly, with
+   the runs of periods and their status. Every row is a finding. Start with
+   `0/n` rows: an axis that never adds up is almost always one cause.
+2. **Breaks**: one period off beside its neighbours (see
+   [One period that looks wrong](#one-period-that-looks-wrong)).
+3. **`14`, `15` and `16`** for each company the lists name. They give the
+   cause.
+
+Work each finding to a fix or an explanation that names the filing. An
+explanation that the filing "does not tag it" must come from the filing's
+XBRL, not from `financial_facts`, which only holds what the parser keeps:
+
+```bash
+make xbrl-facts ACCESSION=0001193125-24-099840 DIMENSION=nanometer
+make xbrl-facts ACCESSION=0000002488-23-000076 CONCEPT=Revenue DIMENSION=Geograph
+```
+
+TSMC's 20-Fs tag revenue by node from FY2019, which the stored facts only
+showed from FY2025; AMD's 10-Qs tag no geography at all, so its quarterly
+geography stays empty. A claim from a subagent's report is checked the same
+way before it becomes an explanation.
+
+| What the axis list shows | Where the cause shows | Usual fix |
+| --- | --- | --- |
+| `0/n no_breakdown` on an axis whose members exist every year | `16`: distinct members of one filing merged into one label | A filing's label linkbase crossed its labels (AMD's FY2024 10-K): fact overrides onto the members' own labels, bounded by filing period |
+| `0/n no_breakdown`, members adding up to a member of another axis | `14`: axes whose members add up to a member of another axis | Clone the remaining member onto the axis (TSMC's non-wafer revenue on Technology) |
+| `unsplit` for years where the other cut has every member | `15`: revenue facts cut two ways but stored on one cut only | Clone the facts onto the other cut's member (Netflix's streaming regions onto Product) |
+| A run of `unsplit` or `gap_inside` in the earliest or latest years only | `make xbrl-facts` on a filing of those years | Tagged but not stored is a parser rule (TSMC's node note before FY2025); not tagged is explained |
+| `member_remainder` in the latest years | `14`'s remainder query, `16`'s renames | A member relabelled in the latest 10-K (Moody's "Total Decision Solutions") |
+| One quarter `unsplit` in an otherwise exact run | `16` and the breaks | See [One period that looks wrong](#one-period-that-looks-wrong) |
+| `short` under 1% for years a member is rounded coarser (Netflix's DVD to $100 million) | the members' values | Explained |
 
 ### What stays unsplit, and why
 
@@ -1083,7 +1161,8 @@ balance sheets and statements of equity first. Re-ingest with `--override`
 afterwards, since existing rows were written by the old parser.
 
 **Bad SEC data.** Companies do restate, mistag and occasionally invert signs.
-Confirm against the filing HTML before concluding this. The fix is a narrowly
+Confirm against the filing HTML, or the instance with `make xbrl-facts`,
+before concluding this. The fix is a narrowly
 scoped `financial-facts-overrides.csv` row bounded by `from_period` and
 `to_period`, with a `description` in the concept CSV if a label needs explaining.
 Do not widen the scope to make a diagnostic pass.

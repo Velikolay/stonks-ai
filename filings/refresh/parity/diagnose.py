@@ -28,25 +28,37 @@ async def run(
     files: Optional[list[str]] = None,
     limit: int = 200,
     search_path: Optional[str] = None,
-) -> int:
-    """Print every non-empty section; return the number of sections printed."""
+) -> tuple[int, list[str]]:
+    """Print every non-empty section; return how many printed and which failed.
+
+    A section that fails is reported and skipped, so one broken query does
+    not hide the others, and the run still ends in failure.
+    """
     settings = {"search_path": search_path} if search_path else None
     conn = await asyncpg.connect(db.to_dsn(database_url), server_settings=settings)
     printed = 0
+    failed: list[str] = []
     try:
         for file, title, sql in diagnostic_queries():
             if files and not any(file.startswith(prefix) for prefix in files):
                 continue
-            statement = await conn.prepare(f"SELECT * FROM ({sql}) q LIMIT 0")
-            names = [a.name for a in statement.get_attributes()]
-            if "company_id" in names:
-                rows = await conn.fetch(
-                    f"SELECT * FROM ({sql}) q WHERE company_id = ANY($1::int[])"
-                    f" LIMIT {limit + 1}",
-                    companies,
-                )
-            else:
-                rows = await conn.fetch(f"SELECT * FROM ({sql}) q LIMIT {limit + 1}")
+            try:
+                statement = await conn.prepare(f"SELECT * FROM ({sql}) q LIMIT 0")
+                names = [a.name for a in statement.get_attributes()]
+                if "company_id" in names:
+                    rows = await conn.fetch(
+                        f"SELECT * FROM ({sql}) q WHERE company_id = ANY($1::int[])"
+                        f" LIMIT {limit + 1}",
+                        companies,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        f"SELECT * FROM ({sql}) q LIMIT {limit + 1}"
+                    )
+            except asyncpg.PostgresError as error:
+                failed.append(f"{file} | {title}: {error}")
+                print(f"\n=== {file} | {title} | FAILED: {error}")
+                continue
             if not rows:
                 continue
             printed += 1
@@ -68,7 +80,7 @@ async def run(
                 print(frame)
     finally:
         await conn.close()
-    return printed
+    return printed, failed
 
 
 def _plain(value):
@@ -93,7 +105,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         "--search-path", help="Read derived tables from another schema first"
     )
     args = parser.parse_args(argv)
-    printed = asyncio.run(
+    printed, failed = asyncio.run(
         run(
             db.database_url_from_env(),
             [int(c) for c in args.companies.split(",")],
@@ -102,7 +114,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             args.search_path,
         )
     )
-    print(f"\n{printed} sections with rows")
+    print(f"\n{printed} sections with rows, {len(failed)} failed")
+    if failed:
+        for line in failed:
+            print(f"FAILED {line}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

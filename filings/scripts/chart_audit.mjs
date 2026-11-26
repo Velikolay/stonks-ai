@@ -29,8 +29,8 @@
 //                     (not on profit, income or tax lines, and not a
 //                     corporate, reconciling, elimination or hedging member)
 //
-// Only Product, Geographical and segment, product or region axes are read,
-// as in 16_chart_breaks.sql.
+// Only named axes (Product, Geographical, Technology) and segment, product or
+// region axes are read, as in 16_chart_breaks.sql.
 // Breaks are printed per ticker and kept on each JSONL row under "breaks".
 // Each row also keeps "views": every view the chart offers on the axis, with
 // the periods it draws and the periods it draws exactly. With --tickers, the
@@ -41,6 +41,12 @@
 //        [--api http://localhost:8000] [--out audit.jsonl] [--base before.jsonl]
 //
 // --base compares split coverage per line with an earlier --out file.
+// --report reads an earlier --out file instead of the API and prints its
+// summaries, so a saved run can be read again.
+//
+// Last it lists the axes that do not add up: every key line and charted axis
+// whose periods with members do not all draw exactly, the work list of a
+// company review.
 
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -187,11 +193,13 @@ async function auditAxis(ticker, granularity, label, statement, axis) {
 const ADDS_UP = new Set(["exact", "no_breakdown", "no_members"]);
 const addsUp = p => ADDS_UP.has(p.status) || (p.status === "short" && p.grayPct < 0.5);
 const names = p => p.leaves.map(([n]) => n).sort().join("|");
-// Breaks are read on the axes 16_chart_breaks.sql reads: Product,
-// Geographical and segment, product or region axes. A member that changes
+// Breaks are read on the axes 16_chart_breaks.sql reads: axes an override
+// named (Product, Geographical, Technology) and segment, product or region
+// axes. A member that changes
 // sign by nature, or a profit line whose segments can lose money, is not a
 // negative break.
-const CHARTED_AXIS = axis => axis === "Product" || axis === "Geographical" || /segment|product|geograph|region/i.test(axis);
+// An axis an override named (Product, Geographical, Technology) has no namespace.
+const CHARTED_AXIS = axis => !axis.includes(":") || /segment|product|geograph|region/i.test(axis);
 const SIGNED = /corporate|unallocated|reconcil|eliminat|hedg|intersegment/i;
 const SIGNED_LINE = /income|profit|loss|margin|earnings|tax/i;
 
@@ -226,8 +234,10 @@ for (const line of readFileSync(join(repo, "migrations/data/company-ids.csv"), "
   tickers.push([Number(id), ticker]);
 }
 
-const rows = [];
-const jobs = tickers.flatMap(([id, ticker]) =>
+const rows = args.report
+  ? readFileSync(args.report, "utf8").trim().split("\n").map(l => JSON.parse(l)).filter(r => !only || only.includes(r.ticker))
+  : [];
+const jobs = args.report ? [] : tickers.flatMap(([id, ticker]) =>
   ["yearly", "quarterly"].map(granularity => async () => {
     const labels = await get("/financials/normalized-labels", { ticker, granularity, statement: "Income Statement" });
     const combos = new Map();
@@ -243,7 +253,7 @@ const jobs = tickers.flatMap(([id, ticker]) =>
 );
 let next = 0;
 await Promise.all(Array.from({ length: 6 }, async () => { while (next < jobs.length) await jobs[next++](); }));
-writeFileSync(out, rows.map(r => JSON.stringify(r)).join("\n") + "\n");
+if (!args.report) writeFileSync(out, rows.map(r => JSON.stringify(r)).join("\n") + "\n");
 
 // Coverage: periods of each key line where some axis draws a split that adds up.
 function coverage(list) {
@@ -263,7 +273,7 @@ const now = coverage(rows);
 const before = args.base
   ? coverage(readFileSync(args.base, "utf8").trim().split("\n").map(l => JSON.parse(l)))
   : null;
-console.log(`wrote ${rows.length} rows to ${out}; ${rows.filter(r => r.error).length} errors`);
+console.log(args.report ? `read ${rows.length} rows from ${args.report}` : `wrote ${rows.length} rows to ${out}; ${rows.filter(r => r.error).length} errors`);
 console.log("periods with a split that adds up / periods of the line");
 console.log("co ticker metric               yearly        quarterly");
 const lines = [...new Set([...now.all.keys()].map(k => k.split("|").slice(0, 3).join("|")))].sort(
@@ -293,4 +303,35 @@ if (only) {
     for (const v of r.views)
       console.log(`${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ${v.exact}/${v.drawn}/${v.periods} ${v.label.slice(0, 90)}`);
   }
+}
+
+// Axes that do not add up: every key line and charted axis with members in a
+// period that does not draw exactly. A reader picking that axis sees these
+// periods gray or unsplit; each is a finding until fixed or explained. A
+// gray under 0.5% (a member reprinted coarser) is left out.
+const fine = p => p.status === "exact" || (p.status === "short" && p.grayPct < 0.5);
+function runs(periods) {
+  const out = [];
+  for (const p of periods) {
+    const last = out.at(-1);
+    if (last && last.status === p.status) last.to = p.date;
+    else out.push({ status: p.status, from: p.date, to: p.date });
+  }
+  return out.map(r => `${r.from.slice(0, 7)}${r.to !== r.from ? ".." + r.to.slice(0, 7) : ""} ${r.status}`);
+}
+const gaps = rows
+  .filter(r => KEY.includes(r.label) && r.periods && CHARTED_AXIS(r.axis))
+  .map(r => {
+    const withMembers = r.periods.filter(p => p.status !== "no_members");
+    return { r, withMembers, bad: withMembers.filter(p => !fine(p)) };
+  })
+  .filter(g => g.withMembers.length && g.bad.length)
+  .sort((a, b) => a.r.company_id - b.r.company_id || a.r.label.localeCompare(b.r.label) || a.r.axis.localeCompare(b.r.axis) || a.r.granularity.localeCompare(b.r.granularity));
+console.log(`\naxes that do not add up: ${gaps.length} line/axis/granularity series (exact / periods with members)`);
+for (const { r, withMembers, bad } of gaps) {
+  const shown = runs(bad);
+  console.log(
+    `${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ` +
+      `${withMembers.length - bad.length}/${withMembers.length} | ${shown.slice(0, 4).join("; ")}${shown.length > 4 ? ` (+${shown.length - 4})` : ""}`
+  );
 }

@@ -16,6 +16,7 @@ from filings.refresh.stages.quarterly.q4 import (
     member_q4,
     nine_month_source,
     rank_annual_filings,
+    rebased_filings,
 )
 from filings.refresh.stages.quarterly.restatement import YearBasis, moved_years
 from filings.refresh.stages.quarterly.ytd import (
@@ -238,6 +239,27 @@ def test_a_10k_pairs_with_the_10q_on_its_members() -> None:
     same = nine_month_filing(5, date(2023, 11, 1), {"A": 60, "B": 30})
     other = nine_month_filing(6, date(2023, 11, 1), {"A": 60})
     assert nine_month_source(annual, [annual], [other, same]) is same
+
+
+def test_a_rebased_latest_10k_takes_next_years_reprint_of_its_nine_months() -> None:
+    """Broadcom's fiscal 2025 10-K moved revenue between members.
+
+    No later 10-K confirms its basis yet; having reprinted the prior year at
+    other values is what shows next year's 10-Q follows it.
+    """
+    annual = annual_filing(10, date(2025, 12, 18), {"Products": 44847, "S&S": 19040})
+    own = nine_month_filing(5, date(2025, 9, 10), {"Products": 25934, "S&S": 19938})
+    reprint = nine_month_filing(6, date(2026, 9, 10), {"Products": 31625, "S&S": 14247})
+    assert nine_month_source(annual, [annual], [own, reprint], rebased=True) is reprint
+    assert nine_month_source(annual, [annual], [own, reprint]) is own
+
+
+def test_a_10k_that_reprints_an_earlier_year_differently_is_rebased() -> None:
+    axis = ("co", "Income Statement", "Revenue", "Product")
+    prior = annual_filing(1, date(2024, 12, 18), {"Products": 30359, "S&S": 21215})
+    reprint = annual_filing(10, date(2025, 12, 18), {"Products": 34960, "S&S": 16614})
+    same = annual_filing(11, date(2025, 12, 18), {"Products": 30359, "S&S": 21215})
+    assert rebased_filings({(*axis, 1): [prior, reprint, same]}) == {(axis, 10)}
 
 
 def test_only_the_first_ranked_10k_uses_nine_months_without_quarters() -> None:
