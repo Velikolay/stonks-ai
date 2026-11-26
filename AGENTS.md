@@ -54,8 +54,9 @@ EDGAR_IDENTITY="Jane Doe jane@example.com"
 ```
 
 `make refresh` and the other Python targets read `DATABASE_URL` from the
-environment or `.env`. The `psql`-based targets (`make diagnose`, `make psql`)
-read it from the environment and otherwise default to
+environment or `.env`, and so does `make diagnose COMPANY_IDS=...`. The
+`psql`-based targets (plain `make diagnose`, `make psql`) read it from the
+environment and otherwise default to
 `postgresql://rag_user:rag_password@localhost:5432/rag_db`.
 
 ## The loop
@@ -69,9 +70,10 @@ make ingest TICKERS=AAPL,MSFT FORMS=10-K,10-Q
 # 2. Normalize (make ingest already refreshes; run this after editing overrides)
 make refresh COMPANY_IDS=1,2
 
-# 3. Diagnose the company you just refreshed. make diagnose is global and
-#    most queries LIMIT 50, so filter the SQL to that company_id first.
-make diagnose
+# 3. Diagnose the companies you just refreshed: every query, filtered to
+#    them, without LIMIT, printing only sections that return rows
+make diagnose COMPANY_IDS=1,2              # FILES=14,16 narrows to some files
+make chart-audit TICKERS=AAPL,MSFT         # needs the API running
 
 # 4. Fix: edit the CSVs in migrations/data/, then
 make overrides-check         # dry run: shows what would change
@@ -84,9 +86,21 @@ make refresh COMPANY_IDS=1,2
 **Stop when**, for the company under work, coverage shows no missing 10-K years
 or empty filings, period gaps inside a real series are gone, orphaned parents
 are gone, no fiscal year fails the four-quarters-sum-to-the-10-K check, Balance
-Sheet identities hold, dimension axis splits are gone, and `14` lists no member
-the chart draws with a remainder. Explain each remaining rollup, sign-flip,
-conflicting-fact, value-anomaly, and remainder row as a source-data artifact.
+Sheet identities hold, dimension axis splits are gone, `14` lists no member
+the chart draws with a remainder, the first three queries of `15` list
+nothing for the company but explained rows, and neither `16` nor the breaks
+that `make chart-audit` prints list a period you have not explained. Explain
+each remaining rollup, sign-flip, conflicting-fact, value-anomaly, and
+remainder row as a source-data artifact. Segments get their own pass once the
+rest holds; see [Aligning segments](#aligning-segments).
+
+The stop condition is re-checked after every fix, for every company the fix
+could touch, not only the period that prompted it. A user asking about one
+broken quarter means the check was not run: before answering, run `16` and
+the chart-audit breaks for that company and fix or explain everything they
+list, so the next broken period is found by the diagnostics and not by the
+user. A fix to one quarter often leaves its neighbour broken (Alphabet's
+Q4 2018 and Q2 2019 had two different causes).
 
 Duplicate and disjoint rows are not themselves a reason to keep going:
 
@@ -195,7 +209,25 @@ revenue splits the revenue line:
 Such a line links to revenue through its axis and member. Member labels are
 inferred per line, so two lines normally agree because the filer labels a
 member the same way everywhere; a `dimension-normalization-overrides.csv` row
-applies on every statement and settles a disagreement. A concept that later
+applies on every statement and settles a disagreement.
+
+Segment notes often tag a segment's amount twice over: `ConsolidationItemsAxis
+= OperatingSegmentsMember` (the whole of the segments) beside the segment on
+`StatementBusinessSegmentsAxis`. edgartools stores the first axis, with a
+member such as "Operating Segments - Google Cloud". The refresh reads such a
+fact on its real slice instead (`on_real_slice` in
+[rules/facts.py](filings/refresh/rules/facts.py)): when the stored axis's
+coordinate is an axis total and exactly one coordinate is a real slice on a
+segment, geography or product axis, the fact takes that coordinate's axis,
+qname member and label, the key a single-dimension fact on that segment has.
+A fact whose filing also tags that slot alone with another value (a segment
+total beside external revenue) keeps its stored axis. A fact that the same
+filing also tags on its stored slot with fewer real coordinates is a finer cut
+of that amount and is dropped (`without_finer_cuts`): Microsoft's fiscal 2016
+first-quarter 10-Q tags Corporate and Other operating income as -1,274 and,
+with `IncomeStatementLocationAxis` = impairment and restructuring, as 0, and
+the two values used to drop the slot. A fact override still matches the fact
+as filed, and its axis wins. A concept that later
 appears on the face keeps its label and moves to the face statement's rows.
 Notes other than segments (income tax, leases) are not stored.
 
@@ -276,9 +308,24 @@ total in thousands, may miss it by half a unit each, up to 0.1%.
 Diagnostic 14 finds those years by comparing the members to
 `yearly_financials`: at least two members present, none negative, and short of
 a positive parent. The shortfall is unallocated. Several breakdowns of one
-parent are alternatives when their years overlap. A set that ends before
-another on the same axis begins is an earlier presentation, and the API leaves
-it out. The API also leaves out a set when fewer than two of its members exist
+parent are alternatives when they begin together. A set that stops before the
+axis's latest year and began before a set reaching that year is an earlier
+presentation of that set, even when it overlaps it for a year or two
+(Alphabet's U.S., U.K. and rest of the world, reported beside its 2015 regions
+through 2016). The API sends every set with its `fiscal_years`; the chart does
+not offer an earlier presentation as a view but draws a period of a view on
+the most recent of the view's earlier presentations that adds up when the view
+does not, so the later split wins wherever both apply. The test is per view:
+Microsoft's fiscal 2025 product lines continue its fiscal 2018-2021 and older
+product lines, while product and service revenue, current since fiscal 2018,
+takes only the sets that began before 2018. A stopped set that began with
+every current set stays a view. Before a view's first period that adds up,
+a period that none of its earlier presentations closes draws the metric bar
+alone, not the view's members that happen to share a name with an older
+split: Microsoft's fiscal 2017 quarters exist on product lines only as the
+ASC 606 restatement in the fiscal 2018 10-Qs, 7% above the revenue filed. `make chart-audit` prints each view's exact
+periods for the key lines (`views` in the JSONL), since the best view can add
+up everywhere while the one a reader picks does not. The API leaves out a set when fewer than two of its members exist
 at the requested granularity, so a split reported only in the 10-K is absent
 from a quarterly response. With `breakdowns=true`, the API returns
 `breakdowns` once on the series: each
@@ -305,7 +352,30 @@ are too. A later filing fills members the period's own filing left out only
 when it extends that split: if it prints any shared member at another value,
 beyond rounding, it recast the period (NVIDIA's fiscal 2025 10-K carving
 Singapore out of fiscal 2023 and 2024), and all of its members for that period
-become duplicates, which only the Q4 calculation reads. A row that rounds to the
+become duplicates, which only the Q4 calculation reads. One rounding unit is a
+re-rounding, not a recast: Alphabet's 2017 first-quarter 10-Q reprinted the
+2016 quarter with Google at 20,092 million against 20,091, and adds the Google
+properties, Network and other revenues the 2016 10-Q never tagged. A later
+filing that reprints the period on a complete new presentation, sharing no
+changed member, stays beside the original as a second view; the chart draws
+the later one (Microsoft's fiscal 2027 first-quarter 10-Q reprinting
+September 2025 on new segments). The exception is a
+restatement that fixes a split. A fiscal year moves onto a later filing's
+members on one axis when four things hold:
+
+- the year's 10-K split misses the line by more than 0.1%;
+- a later 10-K's members, or two or more of them when the split carries a
+  subtotal beside its parts, add up to the line as filed;
+- that later 10-K keeps every member the original had;
+- each quarter of the year with a split follows onto a later filing that
+  recast it, adding up to the quarter's own line where one exists.
+
+The earliest such filing wins. If any quarter cannot follow, the year stays
+as filed, so a year is never half on one basis. Amazon's FY2015 10-K segment
+operating income left out stock-based compensation (4,523 against 2,233);
+its FY2016 10-K restated it to 1,425 + (699) + 1,507 = 2,233, and the 2016
+10-Qs restated the quarters. The undimensioned line always stays as filed.
+A row that rounds to the
 winner's value, within 0.1%, beats it, so a later reprint in millions does not
 replace the original's digits. Losers get `is_duplicate = true`, and both `yearly_financials` and
 `quarterly_financials` filter them out. If a value vanishes from the
@@ -335,13 +405,20 @@ amounts and share counts stay on the filed quarters. A reversal smaller than
 figure of that same member minus the nine-month YTD on the quarter before the
 10-K. A later filing can recast the year under new members, so every member's
 Q4 on one axis comes from the same 10-K, including rows dedup ranked lower: an
-amendment, then the year's own 10-K, then one on the quarters' split (its
+amendment, then the year's own 10-K unless a restatement replaced all its
+members, then one on the quarters' split (its
 members all have quarters and every member with quarters is in it), then the
 first 10-K filed after the quarters (a backfilled comparative does not count),
 then the latest before them. A member that 10-K leaves out comes from the next
-one in that order. The nine months come from the 10-Q a year later when the
+one in that order. The year's own 10-K yields to a later one when it introduced a line its
+quarters lack, no 10-Q prints the nine months on its split, and a later 10-K
+pairs with a 10-Q whose nine months carry that line. Q4 then uses only that
+later 10-K's members. Microsoft's fiscal 2023 10-K split Dynamics out of Office
+and Other, so subtracting the old quarters gave Other a Q4 of -3,924. The nine months come from the 10-Q a year later when the
 first 10-K after it prints the year as this 10-K did and all its members on that
-axis are the 10-K's: a 10-K that moved a line out of another (Tesla's fiscal
+axis are the 10-K's, and its comparative nine-month line equals the year's own
+(Alphabet's 2013 10-Qs reprinted 2012 without Motorola's home business), unless
+next year's comparatives already replaced that line's quarters: a 10-K that moved a line out of another (Tesla's fiscal
 2021 10-K taking regulatory credits out of automotive sales) subtracts the
 reprint on its own split. Otherwise they come from a 10-Q whose members are the
 10-K's, the year's own first, so a 10-K on new members subtracts a 10-Q that
@@ -380,7 +457,8 @@ Blank cells mean NULL. In `financial-facts-overrides.csv` only, the literal
 | Missing section header in the statement tree | `concept-normalization-overrides.csv` | `is_abstract`, `abstract_concept` |
 | Expense reported positive in some years, negative in others | `concept-normalization-overrides.csv` | `weight` |
 | Segment or product members named differently across years | `dimension-normalization-overrides.csv` | `normalized_member_label` |
-| Same segment on Product for Revenue but ConsolidationItems for Operating Income | `dimension-normalization-overrides.csv` | `normalized_axis_label=Product` on the ConsolidationItems members |
+| Same segment on Product for Revenue but on `StatementBusinessSegmentsAxis` (or Geographical) for Operating Income or segment costs | `dimension-normalization-overrides.csv` | the segment's qname on `us-gaap:StatementBusinessSegmentsAxis`, `normalized_axis_label` = revenue's axis |
+| Segment members never add up to Operating Income | `dimension-normalization-overrides.csv` | the corporate, unallocated or elimination member (`CorporateNonSegmentMember`, `MaterialReconcilingItemsMember`, `IntersegmentEliminationMember`) onto the segment axis |
 | A set of members that adds up to a subtotal or to the line is missing, or one is a coincidence | `dimension-breakdown-overrides.csv` | `parent_member`, `members` |
 | One member is wrong for one period on the quarterly or yearly layer | `financial-rewrites.csv` | `granularity`, `action`, `period_end`, `value` |
 | The same fact must also appear on another axis, and the original line stays | `financial-facts-overrides.csv` | `action=clone` |
@@ -467,16 +545,23 @@ is semicolon-separated.
 2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleServicesMember,,False,Product,Google Services,
 0,us-gaap:StatementBusinessSegmentsAxis,,Japan,True,Geographical,Japan,
 0,srt:ProductOrServiceAxis,,,True,Product,,
-6,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,
+6,us-gaap:StatementBusinessSegmentsAxis,uber:RidesMember,,False,Product,Mobility,
+8,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,All Other,
 ```
 
 The first maps one company's segment member. The second matches any company that
 labels a segment "Japan". The third renames an axis globally and leaves members
-alone. The fourth is the Operating-Income case: filers often put segment OI on
-`ConsolidationItemsAxis` while Revenue uses `ProductOrServiceAxis`. Grouping is
-per metric, so inference will not pull OI onto Product — override the members
-(and legacy names like Rides / Eats) explicitly. `13_dimension_axis_splits.sql`
-flags these splits.
+alone. The fourth is the Operating-Income case: segment revenue, operating
+income and the ASU 2023-07 segment expenses all arrive on
+`StatementBusinessSegmentsAxis` with the segment's qname once the refresh reads
+`OperatingSegmentsMember` facts on their real slice, so one row per qname puts
+every line on revenue's axis, and a legacy qname (Rides) joins its successor.
+Grouping is per metric, so inference will not pull OI onto Product by itself.
+The fifth puts the corporate member beside the segments so they add up to the
+line. Key these rows on the qname: a row on `ConsolidationItemsAxis` with a
+label such as `Operating Segments - X` only matches facts the refresh could
+not move (see `15`). `13_dimension_axis_splits.sql` and
+`15_segment_alignment.sql` flag these splits.
 
 An override labels a whole group, not one member. Members that share an XBRL
 member name, a member label, or a normalized label are one group, and the
@@ -525,7 +610,12 @@ Left-hand columns match, `to_*` columns rewrite. `to_axis`, `to_member` and
 the source concept there. `from_period` and `to_period` bound the fact's
 `period_end`; `from_filing_period` and `to_filing_period` bound the fiscal
 period of the filing it came from, so a rewrite can leave a later filing's
-comparatives alone. The `id` column is preserved so admin CSV exports
+comparatives alone. Bound a member rewrite by filing period whenever a later
+filing restated those periods. A rewrite bounded only by `from_period` and
+`to_period` also catches the restated reprints. `dimension_normalization`
+then sees two values in one slot and drops the slot, so the target member
+gets no mapping. Alphabet's overrides 63 and 65 left Q2 and Q3 2019 other
+revenues on the raw axis that way, drawn as "Google (remainder)". The `id` column is preserved so admin CSV exports
 round-trip. The loader inserts the file in one batch, so once any row has an
 `id`, a new row needs the next integer too. A blank `id` fails the load.
 
@@ -556,6 +646,16 @@ Flip a sign for one form type only:
 6,5,us-gaap:IncomeTaxExpenseBenefit,Income Statement,,,,10-K,,,us-gaap:IncomeTaxExpenseBenefit,,,,-1,False
 ```
 
+`to_weight` only flips the value against a concept weight: the value is
+negated when the fact's weight and the resolved concept weight disagree, and
+with no concept weight the fact's own weight is the resolved one. A concept
+whose global row leaves `weight` blank (Operating Income) needs a
+company-specific concept row with `weight` 1 beside the fact override. AMD's
+10-Ks from FY2022 tag the All Other operating loss as a positive
+`MaterialReconcilingItemsMember` amount; fact override 134 sets `to_weight`
+-1 and the company 10 `us-gaap:OperatingIncomeLoss` row sets weight 1. Check
+that no other fact of that concept has raw weight -1 first, or it flips too.
+
 Scope a rewrite to a single filing period:
 
 ```csv
@@ -583,14 +683,23 @@ warning rather than failing the load, so overrides can be written ahead of time.
 
 ## Diagnostics
 
-`make diagnose` runs everything in [sql/diagnostics/](sql/diagnostics/) for every
-company. It takes no company filter, and most queries `LIMIT` 50.
-`10_unlinked_series.sql` joins every company before that limit, so on a populated
-database the first page is not the company you just ingested and the unlinked
-query is the slow one. Filter each file to that `company_id` on the base table
-scan, then read it. Run one file with
-`psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`. Refresh stays
-narrow: `make refresh COMPANY_IDS=7`.
+`make diagnose COMPANY_IDS=7` runs every section of
+[sql/diagnostics/](sql/diagnostics/) filtered to those companies, without the
+files' `LIMIT`, and prints only the sections that return rows (at most 200
+rows each). `FILES=14,16` restricts it to files by prefix. Use it, not the
+plain target: plain `make diagnose` runs each file through `psql` for every
+company, most queries `LIMIT` 50, and on a populated database that first page
+belongs to other filers. Microsoft's negative Q4 FY2023 Other was in `11` all
+along, one row of 68 for Microsoft alone and off the global page. Run one
+file by hand with `psql "$DATABASE_URL" -f sql/diagnostics/03_duplicates.sql`.
+Refresh stays narrow too: `make refresh COMPANY_IDS=7`.
+
+The queries that mirror a display rule (`14`'s remainder query mirrors
+`_breakdowns_to_show` in [api/financials.py](api/financials.py)) must change
+in the same commit as the rule. A query that disagrees with the chart lists
+periods the chart draws correctly, teaches you to skip it, and hides the
+period it draws wrongly. `make chart-audit` runs the UI's own code and cannot
+drift that way, so when the two disagree, trust the audit and fix the query.
 
 | File | Finds |
 | --- | --- |
@@ -608,6 +717,8 @@ narrow: `make refresh COMPANY_IDS=7`.
 | `12_balance_sheet_structure.sql` | BS identities and missing Current / Non-current section abstracts |
 | `13_dimension_axis_splits.sql` | Same segment under Product for one metric and ConsolidationItems/Segments for another; product-like members not remapped to Product |
 | `14_dimension_breakdowns.sql` | Exact breakdown years that do not add up in yearly_financials, axes with years no exact breakdown covers, added overrides that never add up, years a known breakdown falls short, members the chart draws with a remainder, every breakdown with its years |
+| `15_segment_alignment.sql` | Segment members a line reports on another axis than revenue, profit and cost lines on revenue's segment axis with no breakdown, segment amounts still under an axis total, breakdowns that are earlier presentations |
+| `16_chart_breaks.sql` | One period that looks wrong beside its neighbours: members covering a different share of the line than the periods around it, a member negative between positive periods, two members carrying the same values under two names |
 
 Start with `01` and `02`, scoped to the company. Coverage gaps and concepts
 whose presentation label is still raw cause most of what the later files report,
@@ -623,9 +734,13 @@ grouping disabled on purpose. Do not force it onto one label.
 
 `13` catches a UI-shaped gap that `02` misses: the members are normalized, but
 Revenue is on `Product` while Operating Income (or similar) is still on
-`ConsolidationItemsAxis`. Filter-by-Product then looks empty for that metric.
-Remap the ConsolidationItems members to `Product` in
-`dimension-normalization-overrides.csv` (see the cookbook example).
+`StatementBusinessSegmentsAxis` or `ConsolidationItemsAxis`. Filter-by-Product
+then looks empty for that metric. Remap the segment qnames to `Product` in
+`dimension-normalization-overrides.csv` (see the cookbook example). `13` only
+compares against `Product`; `15` compares every line against revenue's own
+axis, Geographical segments included, and is the one to clear. Its "product-like"
+query flags a member by name, so a company whose segments deliberately stay on
+the segment axis (S&P Global's Mobility) keeps a row there.
 
 `14` checks the breakdowns. Its first query must stay empty: a row there means
 an exact `fiscal_years` entry no longer adds up in `yearly_financials`, which
@@ -640,8 +755,9 @@ beside regions), segment profit before unallocated corporate costs, and
 equity-component or share-class axes are expected and stay listed.
 
 The remainder query is what the chart shows. It takes the breakdowns the API
-sends at each granularity and lists members, quarterly and yearly, where no
-sent split of the member adds up and one falls short, which the chart draws as
+sends at each granularity (every set, earlier presentations included) and
+lists members, quarterly and yearly, where no sent split of the member adds
+up and one falls short, which the chart draws as
 "<member> (remainder)". A shortfall against the undimensioned line is the gray
 metric bar, which partial disclosures leave, so it is not listed. The usual
 causes, with `present_in_first` naming the members that were found:
@@ -785,6 +901,120 @@ Expect false positives in the last two queries; two unrelated line items can
 swap places at the same boundary by coincidence. That is the intended cost of a
 candidate list, and it is why the filing is the arbiter.
 
+## Aligning segments
+
+A segment chart is right when every line the segment note reports (revenue,
+cost of revenue, the ASU 2023-07 segment expenses, segment profit) sits on the
+same normalized axis with the same member labels, and the members add up to
+the line in every year the filing says they do. Revenue usually gets there
+by itself; the other lines do not, because filers tag them on other axes and
+leave the corporate and elimination pieces on `ConsolidationItemsAxis`.
+
+### What the chart draws
+
+`make chart-audit TICKERS=AMZN` runs the chart's own stacking code
+(`resolveDimensionStack` from `stonks-ui`, `UI_DIR` defaults to
+`../stonks-ui`) against the running API for every Income Statement line and
+axis, and classifies each period of the line: `exact`, `member_remainder`,
+`short` (the gray metric bar), `over` (members exceed the line, so nothing is
+drawn), `unsplit`, `gap_inside`, `no_breakdown`. It prints, for revenue, cost,
+gross profit, operating expenses and operating income, the periods where some
+axis draws a split that adds up. Save a run with `OUT=` before a change and
+pass it as `BASE=` after, the way `refresh-compare` works for tables. The
+JSONL keeps each period's status, the gray share and the members that were
+missing, which is where to look next.
+
+The coverage table counts periods; it does not show the one quarter a reader
+spots at a glance. The audit therefore also prints **breaks**, periods that
+look wrong beside their neighbours on the same line, axis and granularity:
+a status that stops adding up between two that do, drawn members that differ
+from the periods before and after while those agree (a member missing for a
+quarter, a member not opened into its split for a quarter), and a revenue or
+cost member drawn negative after a positive period. It reads the same axes as
+`16`. The audit only sees splits the API sends, so a line with no breakdown
+(Microsoft's product lines from FY2022) has no breaks there; `16` reads the
+members directly and covers it.
+
+### The procedure, one company at a time
+
+1. Find revenue's segment axis: `14`'s last query lists revenue's
+   breakdowns. Segments go on `Product` beside product lines when the filer
+   has no separate segment cut (Google, Amazon, AMD, Uber), on
+   `Geographical` when the segments are regions (Apple, Costco), or stay on
+   `us-gaap:StatementBusinessSegmentsAxis` when revenue already splits there
+   (Microsoft, NVIDIA, S&P Global).
+2. Run `15`. Its first query lists segment members a line reports on another
+   axis than revenue. Map each qname on the axis the fact is read on
+   (usually `us-gaap:StatementBusinessSegmentsAxis`) to revenue's axis and
+   label, one row per qname, legacy names included.
+3. Its second query lists profit and cost lines with segment members but no
+   breakdown. Add the reconciling member to the same axis: corporate
+   (`CorporateNonSegmentMember`, a filer's `AllOtherMember`), unallocated
+   (`MaterialReconcilingItemsMember`), eliminations
+   (`IntersegmentEliminationMember`). Check the identity in the 10-K first,
+   segments plus that member equal the line, and write it in the row's
+   description. Apple's FY2025 10-K: 175,677 + (42,627) = 133,050.
+4. Its third query lists segment amounts still under an axis total. They are
+   usually a different measure (Moody's segment totals before intersegment
+   royalties, beside external revenue) and stay.
+5. Refresh, rerun `make chart-audit` with `BASE=`, and fix what got worse.
+   Two members with equal values in every year (a segment renamed between
+   10-Ks, S&P's Commodity Insights and Energy for 2024) stop inference from
+   finding any breakdown; give them one label. `16`'s last query lists them.
+6. Read the chart period by period: `make diagnose COMPANY_IDS=<id>
+   FILES=16` and the audit's breaks, at both granularities. Work each row
+   through the table below until it is fixed or explained. This step is what
+   finds the quarter a user would otherwise report.
+
+### One period that looks wrong
+
+Each row of `16` or of the audit's breaks is one of these. Find the cause in
+the data before writing anything: the first stage where the member is wrong
+(see [Isolate the layer](#debugging-beyond-overrides)) tells you which.
+
+| What `16` or the audit shows | Usual cause | Fix |
+| --- | --- | --- |
+| A member missing in the latest period, and `16`'s last query pairs it with a new member that equals it in the comparatives | The 10-K renamed the member (Microsoft's FY2026 10-K files Gaming as `msft:XBOXMember`, equal for fiscal 2024-2025) | A fact override onto the old qname and label (override 137). A dimension override on the new qname would also take the label group of any older member with that name: the 2013-2017 Xbox line would become Gaming |
+| A member negative or missing in Q4 only, its Q1-Q3 positive (`source_type = 'calculated'`) | The 10-K split differs from its quarters' split, and Q4 subtracts nine months on the old basis (Microsoft's FY2023 10-K carving Dynamics out of Other: Q4 Other = 211 - 4,135) | Read `q4_sources` from `--dump-dir`. A later 10-K paired with a 10-Q that prints the nine months on the new split takes over (see Quarterly derivation). If none exists, the year stays gray |
+| A member missing in one or two quarters while its own filing tagged it, often with `"<parent> (remainder)"` | The slot dropped out of `dimension_normalization`: a fact override bounded only by period also caught a restated reprint, so the slot saw two values (Alphabet's overrides 63 and 65) | Bound the override by `from_filing_period` and `to_filing_period` |
+| A parent member not opened into its split for one quarter (the audit shows its children missing, the parent added) | The children have no value in that quarter. For a Q4, an earlier quarter of the year lacks them, and Q4 is only calculated when Q1-Q3 exist (Alphabet's 2016: the Q1 10-Q tagged Google but not its children; next year's 10-Q reprinted them, beside Google one million off, which dedup took for a recast until a one-unit change counted as re-rounding) | Look for a later filing that printed the children for that quarter (`financial_facts_normalized`, `is_duplicate`) and why it lost. A child tagged under another concept or axis is an override; one never tagged is explained |
+| Members over the line in one period, coverage doubling, with `new_members` | Two splits mixed. 16 already skips a later filing whose members alone cover the line as the neighbours do (a second presentation). A row here means the new members only make sense with the old ones, usually a renamed member reprinted beside its old name | Find the renamed pair in `16`'s last query and merge it (Microsoft's FY2026 10-K filing Search and News Advertising under the older `SearchAdvertisingMember`, fact override 141) |
+| A segment or reconciling member missing in one quarter while the line and the other members are there | The filing tagged the member twice in that slot, once cut again by a second dimension. Before `without_finer_cuts` the two values dropped the slot (Microsoft's Corporate and Other, September 2014 and 2015) | Check `financial_fact_dimensions` for the fact ids in `09`'s conflicts. A second real coordinate is now dropped; a conflict left between two single-coordinate facts is the filer's |
+| An earlier presentation unsplit in one year while the years around it split | A member renamed or moved to another qname in that year's filings, so the set no longer matches across 10-Ks (Microsoft's FY2013 10-K: Windows & Windows Live became Windows Division, and Unallocated and other moved onto `CorporateAndReconcilingItemsMember`) | A dimension override for a pure rename; a fact override bounded by filing period when the qname means something else in other years (overrides 138-140) |
+| A member present in every quarter but one, with no rename and no override involved | The quarter's own filing never tagged it, or tagged it under another concept | Check `financial_facts` for that filing; rewrite the other concept onto the line, or explain it |
+| A Q4 whose members exceed the line, with one member gone that quarter | The 10-K moved a business to discontinued operations after the third quarter, so the line's Q4 is the 10-K minus nine months that still include it (Alphabet's FY2012 10-K and Motorola Home: Q4 revenue 13,215 against 12,904 + 1,515 = 14,419 of members) | Explained: the members are on the 10-K's basis, the filed quarters are not |
+
+Explaining a row means naming the filing and the period, as for any other
+diagnostic. Earlier presentations, segment profit before unallocated costs and
+a member reprinted coarser than its parent stay listed and stay explained; see
+below.
+
+### What stays unsplit, and why
+
+- **Segment profit before unallocated costs.** Apple before FY2023, Amazon
+  before 2016 and S&P Global report segment operating income that excludes
+  R&D, stock compensation or corporate expense, and tag those only as
+  reconciling items of another concept. The members overshoot the line
+  (`over`) and the chart draws the gray bar. Do not invent the missing piece.
+- **Earlier presentations.** After a re-segmentation (AMD's Computing and
+  Graphics, NVIDIA's GPU and Tegra, Alphabet's old regions) the chart draws
+  the older years on the older split, one chart per axis, as described under
+  Breakdowns. A year still draws gray when neither the current split nor any
+  earlier one adds up there. `15`'s last query lists the earlier sets.
+- **As filed, unless a restatement fixes the split.** Dedup keeps the
+  period's own filing, and a later filing that recast the period is hidden,
+  except when the year as filed does not add up and the restatement does
+  for the 10-K and every quarter (see Dedup). Amazon's FY2015 segments
+  therefore show the FY2016 10-K's restated basis. Its FY2014 split stays as
+  filed: the FY2016 10-K restated the year, but the only reprints of its
+  quarters, in the 2015 10-Qs, still left stock-based compensation out.
+- **Filer tagging errors.** Confirm in the instance (`filings.public_url`,
+  or `Filing.xbrl()` in edgartools, whose facts carry the context
+  dimensions) before writing an override. NVIDIA's FY2026 10-K tags the
+  segment total on `CorporateNonSegmentMember`; fact override 135 moves it
+  onto `OperatingSegmentsMember`, its twin, bounded by filing period, and the
+  year's All Other is left missing rather than computed.
+
 ## Debugging beyond overrides
 
 An override is the right fix when the source data is fine but our mapping is
@@ -872,8 +1102,10 @@ usually surfaces a handful of new concepts that then apply to everything after i
 Refresh narrowly while iterating. `make refresh COMPANY_IDS=1,2` recomputes two
 companies in seconds; a full refresh over hundreds of companies is far slower and
 tells you nothing extra when you are testing one override. Diagnose narrowly
-too: `make diagnose` does not accept a company list, so filter the diagnostic
-SQL to those ids or the `LIMIT 50` pages belong to other companies.
+too: `make diagnose COMPANY_IDS=1,2`, since the plain target's `LIMIT 50`
+pages belong to other companies. A logic change is the exception: refresh
+everything and compare snapshots, whose scorecard counts every query per
+company.
 
 Back up before bulk re-ingestion with `make docker-backup`. Re-ingesting with
 `--override` deletes and reinserts facts, and the derived tables follow.
@@ -885,5 +1117,7 @@ Back up before bulk re-ingestion with `make docker-backup`. Re-ingesting with
 - Never hand-edit `financial_facts_normalized`, `quarterly_financials`, `yearly_financials`, or any `*_normalization` table. They are rebuilt on every refresh and your edit will vanish.
 - Never edit the seeded override rows inside `migrations/versions/`. Edit the CSVs and run `make overrides-load`.
 - `make overrides-load` replaces whole tables from the CSVs. If overrides were created through the admin API and not written back to the CSVs, export them first with `GET /admin/*/export`.
-- Always `make refresh` after changing overrides, and always re-run `make diagnose` after refreshing. An unrefreshed database shows stale results and looks like the override failed.
+- Always `make refresh` after changing overrides, and always re-run `make diagnose COMPANY_IDS=...` after refreshing. An unrefreshed database shows stale results and looks like the override failed.
+- Do not report a company's charts as fixed until `16` and the chart-audit breaks for it are clear or explained. Fixing only the period someone asked about leaves the next one for them to find.
 - Do not widen an override's scope to silence a diagnostic. If a global override fixes one company and breaks another, the mapping is wrong.
+- A company-specific row's `company_id` must be the filer whose members it names. Look it up in `company-ids.csv` before writing it; a row naming `amzn:` members under Microsoft's id matches nothing and fails silently.

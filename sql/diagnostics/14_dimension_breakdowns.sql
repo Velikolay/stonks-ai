@@ -204,10 +204,11 @@ ORDER BY b.company_id, b.statement, b.normalized_label, b.axis, b.parent_member,
 LIMIT 50;
 
 \echo '--- Members the chart draws with a remainder: no breakdown the API sends adds up to the member, and one falls short ---'
--- Mirrors _breakdowns_to_show in api/financials.py: on one axis, only sets
--- sharing a year with the latest set are sent, and only at a granularity that
--- reports two of their members. The chart opens a member into a split wherever
--- one of its members is present, and draws the shortfall as
+-- Mirrors _breakdowns_to_show in api/financials.py: every set is sent, earlier
+-- presentations included, at a granularity that reports two of its members.
+-- The chart opens a member into a split wherever one of its members is
+-- present, falls back to an earlier presentation where the current one does
+-- not add up, and draws a shortfall no sent set closes as
 -- "<member> (remainder)". A shortfall against the undimensioned line is the
 -- gray metric bar instead, which partial disclosures are expected to leave.
 WITH layers AS (
@@ -221,37 +222,16 @@ WITH layers AS (
     FROM yearly_financials
     WHERE value IS NOT NULL
 ),
-breakdown_years AS (
-    SELECT b.*, fy
-    FROM dimension_breakdowns b
-    CROSS JOIN LATERAL unnest(b.fiscal_years) AS fy
-),
-current_years AS (
-    SELECT y.company_id, y.statement, y.normalized_label, y.parent_member, y.axis,
-           array_agg(DISTINCT y.fy) AS years
-    FROM breakdown_years y
-    JOIN (
-        SELECT company_id, statement, normalized_label, parent_member, axis,
-               MAX(fy) AS latest_year
-        FROM breakdown_years
-        GROUP BY company_id, statement, normalized_label, parent_member, axis
-    ) l USING (company_id, statement, normalized_label, parent_member, axis)
-    WHERE l.latest_year = ANY(y.fiscal_years)
-    GROUP BY y.company_id, y.statement, y.normalized_label, y.parent_member, y.axis
-),
 member_rows AS (
     SELECT b.company_id, b.statement, b.normalized_label, b.axis, b.parent_member,
            b.members, m.granularity, m.period_end, m.member, m.value
     FROM dimension_breakdowns b
-    JOIN current_years cy
-        USING (company_id, statement, normalized_label, parent_member, axis)
     JOIN layers m
         ON m.company_id = b.company_id
         AND m.statement = b.statement
         AND m.normalized_label = b.normalized_label
         AND m.axis = b.axis
         AND m.member = ANY(b.members)
-    WHERE cy.years && b.fiscal_years
 ),
 member_totals AS (
     SELECT company_id, statement, normalized_label, axis, parent_member, members,

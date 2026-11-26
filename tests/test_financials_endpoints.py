@@ -258,15 +258,28 @@ class TestGetFinancialsBreakdowns:
 
     @patch("api.financials.filings_db")
     def test_series_lists_its_breakdowns(self, mock_filings_db, client):
-        """A series lists current splits whose members this granularity reports."""
+        """A series lists every split, with its years, whose members this granularity reports.
+
+        Earlier presentations are sent too; the chart fills the years the
+        current splits do not cover from them. A split with fewer than two
+        members at this granularity is left out.
+        """
         mock_company = Mock()
         mock_company.id = 1
         mock_filings_db.companies.get_company_by_ticker = AsyncMock(
             return_value=mock_company
         )
         expected = [
-            {"axis": "Product", "members": ["Products", "Services"]},
-            {"axis": "Geographical", "members": ["Americas", "Europe"]},
+            {
+                "axis": "Product",
+                "members": ["Products", "Services"],
+                "fiscal_years": [2019, 2024],
+            },
+            {
+                "axis": "Geographical",
+                "members": ["Americas", "Europe"],
+                "fiscal_years": [2015, 2024],
+            },
         ]
 
         def row(row_id: int, year: int) -> SimpleNamespace:

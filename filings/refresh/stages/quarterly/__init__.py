@@ -96,13 +96,13 @@ def run(data: CompanyData) -> pl.DataFrame:
         "discrete", discrete_quarters(quarters, backfill, ytd_anchors(data), filings)
     )
     moved = restated_years(quarters, discrete, tagged)
-    data.keep("restated_years", moved_frame(moved))
+    moved_years = data.keep("restated_years", moved_frame(moved))
     restated = with_restated_values(discrete, moved)
 
     by_year = quarters_by_year(restated, filings)
     by_year_rows = data.keep("quarters_by_year", by_year_frame(by_year))
     members = annual_members(normalized, filings)
-    nines = nine_months(normalized, filings, tags)
+    nines = nine_months(normalized, filings, tags, moved_years)
     member_rows, sources = dimension_q4(members, nines, by_year)
     data.keep("q4_sources", sources_frame(sources))
 

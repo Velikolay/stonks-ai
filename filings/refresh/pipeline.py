@@ -59,7 +59,7 @@ STAGES: tuple[Stage, ...] = (
     Stage(
         "concept_normalization",
         s.CONCEPT_NORMALIZATION,
-        ("financial_facts", "financial_facts_overridden"),
+        ("financial_facts", "financial_fact_dimensions", "financial_facts_overridden"),
         concept_normalization.run,
     ),
     Stage(
@@ -71,7 +71,12 @@ STAGES: tuple[Stage, ...] = (
     Stage(
         "dimension_normalization",
         s.DIMENSION_NORMALIZATION,
-        ("financial_facts", "financial_facts_overridden", "concept_normalization"),
+        (
+            "financial_facts",
+            "financial_fact_dimensions",
+            "financial_facts_overridden",
+            "concept_normalization",
+        ),
         dimension_normalization.run,
     ),
     Stage(
@@ -79,6 +84,7 @@ STAGES: tuple[Stage, ...] = (
         s.FINANCIAL_FACTS_NORMALIZED,
         (
             "financial_facts",
+            "financial_fact_dimensions",
             "filings",
             "financial_facts_overridden",
             "concept_normalization",

@@ -15,10 +15,7 @@ from filings.parsers.sec_xbrl import (
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
 from filings.parsers.sec_xbrl.facts import face_fact
-from filings.parsers.sec_xbrl.segments import (
-    disclosure_notes,
-    segment_disclosure_facts,
-)
+from filings.parsers.sec_xbrl.segments import disclosure_notes, segment_disclosure_facts
 from filings.parsers.sec_xbrl.statement import parse_statement
 
 
@@ -515,6 +512,7 @@ class TestSECXBRLParser:
         already.axis = "srt:ProductOrServiceAxis"
         already.member = "nvda:GamingMember"
         already.label = "Revenue"
+        already.period = PeriodType.YTD
         already.period_end = date(2022, 1, 30)
 
         frame = pd.DataFrame(
@@ -653,6 +651,7 @@ class TestSECXBRLParser:
         face.member = ""
         face.label = "Revenues"
         face.value = Decimal("100")
+        face.period = PeriodType.YTD
         face.period_end = date(2016, 12, 31)
 
         segment_total = Mock()
@@ -660,6 +659,7 @@ class TestSECXBRLParser:
         segment_total.axis = "us-gaap:StatementBusinessSegmentsAxis"
         segment_total.member = "goog:GoogleInc.Member"
         segment_total.label = "Revenues"
+        segment_total.period = PeriodType.YTD
         segment_total.period_end = date(2016, 12, 31)
 
         frame = pd.DataFrame(
@@ -813,6 +813,74 @@ class TestSECXBRLParser:
             undimensioned[0].label
             == "Hedging gains (losses) included in consolidated revenue"
         )
+
+    def test_supplement_keeps_the_quarterly_plug_beside_year_to_date(self):
+        """Alphabet's second-quarter 10-Q prints hedging gains for the quarter
+        and the half year; the quarter closes the quarter's members."""
+        faces = []
+        for period, value in ((PeriodType.Q, "100"), (PeriodType.YTD, "200")):
+            face = Mock()
+            face.concept = "us-gaap:Revenues"
+            face.axis = ""
+            face.member = ""
+            face.label = "Revenues"
+            face.value = Decimal(value)
+            face.is_abstract = False
+            face.period = period
+            face.period_end = date(2025, 6, 30)
+            faces.append(face)
+
+        frame = pd.DataFrame(
+            {
+                "concept": [
+                    "us-gaap_Revenues",
+                    "us-gaap_Revenues",
+                    "us-gaap_Revenues",
+                    "us-gaap_RevenueNotFromContractWithCustomer",
+                ],
+                "label": [
+                    "Revenues",
+                    "United States",
+                    "EMEA",
+                    "Hedging gains (losses)",
+                ],
+                "abstract": [False, False, False, False],
+                "dimension": [False, True, True, False],
+                "dimension_axis": [
+                    None,
+                    "srt:StatementGeographicalAxis",
+                    "srt:StatementGeographicalAxis",
+                    None,
+                ],
+                "dimension_member": [None, "country:US", "us-gaap:EMEAMember", None],
+                "dimension_member_label": [None, "United States", "EMEA", None],
+                "unit": ["usd", "usd", "usd", "usd"],
+                "weight": [1.0, 1.0, 1.0, 1.0],
+                "preferred_sign": [1.0, 1.0, 1.0, 1.0],
+                "point_in_time": [False, False, False, False],
+                "2025-06-30 (Q2)": [100.0, 60.0, 43.0, -3.0],
+                "2025-06-30 (YTD)": [200.0, 110.0, 88.0, 2.0],
+                "parent_concept": [None, None, None, None],
+                "parent_abstract_concept": [None, None, None, None],
+            }
+        )
+        statement = Mock()
+        statement.to_dataframe.return_value = frame
+        available = pd.DataFrame(
+            {
+                "category": ["disclosure"],
+                "name": ["Revenues - Revenue by Geographic Location (Details)"],
+                "role_name": ["GeographicRevenue"],
+            }
+        )
+        xbrl = Mock()
+        xbrl.statements.list_available.return_value = available
+        xbrl.statements.get.return_value = statement
+
+        added = segment_disclosure_facts(disclosure_notes(xbrl), faces, FilingContext())
+        plugs = [(f.period, f.value) for f in added if not f.axis]
+
+        assert (PeriodType.Q, Decimal("-3.0")) in plugs
 
     def test_supplement_keeps_extension_axis_that_sums_to_revenue(self):
         """A company axis is kept when its revenue members equal face revenue."""

@@ -86,6 +86,7 @@ class SECXBRLParser:
                 parsed.facts.extend(segment_disclosure_facts(notes, facts, context))
         if found:
             parsed.facts.extend(segment_measures(notes, parsed.facts, context))
+            link_published_quarters(parsed.facts)
 
         if found == 0:
             logger.info("Filing %s has no financial statements", accession)
@@ -114,3 +115,17 @@ class SECXBRLParser:
             logger.exception("Could not read %s for %s", spec.name, accession)
             return []
         return parse_statement(frame, spec.name, spec.with_dimensions, context)
+
+
+def link_published_quarters(facts: list[FinancialFactCreate]) -> None:
+    """Hang a printed quarter under its parent's printed quarter.
+
+    A quarter beside a year-to-date total (``|q``) inherits the total's
+    parent key, which names the parent's year-to-date fact. When the parent
+    prints its quarter too, point at that instead: Alphabet's quarterly
+    hedging gains belong under the quarter's revenue, not the half year's.
+    """
+    keys = {f.key for f in facts}
+    for f in facts:
+        if f.key.endswith("|q") and f.parent_key and f.parent_key + "|q" in keys:
+            f.parent_key = f.parent_key + "|q"

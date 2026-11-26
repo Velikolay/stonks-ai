@@ -7,7 +7,6 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 2,us-gaap:StatementBusinessSegmentsAxis,goog:GoogleInc.Member,,False,Product,Google,Pre-2021 Google segment; filing label is Google
 2,us-gaap:StatementBusinessSegmentsAxis,goog:HomeSegmentMember,,False,Product,Motorola Home,2012 Q2-Q3 Motorola Home segment
 2,us-gaap:StatementBusinessSegmentsAxis,goog:MobileSegmentMember,,False,Product,Motorola Mobile,2012-2013 Motorola Mobile segment
-2,us-gaap:StatementBusinessSegmentsAxis,goog:MotorolaRemainderMember,,False,Product,Motorola,2012 10-K Motorola remainder; not the quarterly Home or Mobile lines
 2,dei:LegalEntityAxis,goog:MotorolaEntityMember,,False,dei:LegalEntityAxis,Motorola entity,2012 legal-entity total; Home and Mobile already add up
 2,dei:LegalEntityAxis,Hardware and other,,False,dei:LegalEntityAxis,Hardware and other,2013 legal-entity hardware line; same amount as the Motorola Mobile segment
 2,us-gaap:ConsolidationItemsAxis,goog:MotorolaConsolidationMember,,False,us-gaap:ConsolidationItemsAxis,Motorola consolidation,2013 reconciliation line; the segment member is the one that adds up
@@ -55,6 +54,15 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 6,srt:ConsolidationItemsAxis,Freight,,False,Product,Freight,UBER segment OI uses ConsolidationItemsAxis; align with Revenue Product
 6,srt:ConsolidationItemsAxis,Rides,,False,Product,Mobility,Pre-Mobility segment name for OI
 6,srt:ConsolidationItemsAxis,Eats,,False,Product,Delivery,Pre-Delivery segment name for OI
+6,us-gaap:StatementBusinessSegmentsAxis,uber:MobilityMember,,False,Product,Mobility,Uber segment on Product with revenue, so operating income and segment costs share the cut
+6,us-gaap:StatementBusinessSegmentsAxis,uber:RidesMember,,False,Product,Mobility,Rides, renamed Mobility in the 2020 10-K
+6,us-gaap:StatementBusinessSegmentsAxis,uber:DeliveryMember,,False,Product,Delivery,Uber segment on Product with revenue, so operating income and segment costs share the cut
+6,us-gaap:StatementBusinessSegmentsAxis,uber:EatsMember,,False,Product,Delivery,Eats, renamed Delivery in the 2020 10-K
+6,us-gaap:StatementBusinessSegmentsAxis,uber:FreightMember,,False,Product,Freight,Uber segment on Product with revenue, so operating income and segment costs share the cut
+6,us-gaap:StatementBusinessSegmentsAxis,uber:OtherBetsMember,,False,Product,Other Bets,Uber segment on Product with revenue, so operating income and segment costs share the cut
+6,us-gaap:StatementBusinessSegmentsAxis,uber:ATGAndOtherTechnologyProgramsMember,,False,Product,ATG and Other Technology Programs,Uber segment on Product with revenue, so operating income and segment costs share the cut
+6,us-gaap:StatementBusinessSegmentsAxis,uber:CorePlatformMember,,False,Product,Core Platform,2019 segment: Rides and Eats together
+6,us-gaap:StatementBusinessSegmentsAxis,uber:AllOtherMember,,False,Product,All Other,Uber segment on Product with revenue, so operating income and segment costs share the cut
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticMember,,False,Geographical,Domestic,Revenue is already Geographical; segment operating income used BusinessSegmentsAxis
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:InternationalMember,,False,Geographical,International,Revenue is already Geographical; segment operating income used BusinessSegmentsAxis
 7,srt:ProductOrServiceAxis,Asia-Pacific,,False,Geographical,Asia-Pacific (APAC),Region filed on the product axis
@@ -70,15 +78,32 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticDvdMember,,False,Product,Domestic DVD,2012-2019 DVD segment
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:DomesticStreamingMember,,False,Product,Domestic Streaming,2012-2019 streaming segment
 7,us-gaap:StatementBusinessSegmentsAxis,nflx:InternationalStreamingMember,,False,Product,International Streaming,2012-2019 streaming segment
-4,us-gaap:StatementBusinessSegmentsAxis,amzn:AmazonWebServicesSegmentMember,,False,Product,AWS,Segment AWS revenue already sits on Product; align operating income and expenses
-4,us-gaap:ConsolidationItemsAxis,AWS,,False,Product,AWS,AWS segment member aligned with the product-line cut
-4,us-gaap:ConsolidationItemsAxis,Amazon Web Services Segment,,False,Product,AWS,2015-2016 AWS segment label
-4,us-gaap:ConsolidationItemsAxis,North America,,False,us-gaap:StatementBusinessSegmentsAxis,North America,Segment member aligned with the business-segment axis
-4,us-gaap:ConsolidationItemsAxis,North America Segment,,False,us-gaap:StatementBusinessSegmentsAxis,North America,2015-2016 North America operating-expense member
-4,us-gaap:ConsolidationItemsAxis,International,,False,us-gaap:StatementBusinessSegmentsAxis,International,Segment member aligned with the business-segment axis
-4,us-gaap:ConsolidationItemsAxis,International Segment,,False,us-gaap:StatementBusinessSegmentsAxis,International,2015-2016 International operating-expense member
-4,amzn:RegionReportingInformationByRegionAxis,amzn:NorthAmericaMember,,False,us-gaap:StatementBusinessSegmentsAxis,North America,2010 regional cost of revenue; same cut as the North America segment
-4,amzn:RegionReportingInformationByRegionAxis,amzn:InternationalRegionsMember,,False,us-gaap:StatementBusinessSegmentsAxis,International,2010 regional cost of revenue; same cut as the International segment
+3,us-gaap:StatementBusinessSegmentsAxis,amzn:NorthAmericaSegmentMember,,False,Product,North America,Amazon segment; on Product with the AWS product line so revenue, operating income and expenses share one cut
+3,us-gaap:StatementBusinessSegmentsAxis,amzn:InternationalSegmentMember,,False,Product,International,Amazon segment; on Product with the AWS product line so revenue, operating income and expenses share one cut
+3,us-gaap:StatementBusinessSegmentsAxis,amzn:AmazonWebServicesSegmentMember,,False,Product,AWS,Amazon segment; on Product with the AWS product line so revenue, operating income and expenses share one cut
+3,us-gaap:StatementGeographicalAxis,us-gaap:NorthAmericaMember,,False,Product,North America,Segment tagged as a region beside OperatingSegmentsMember; not the country cut
+3,us-gaap:StatementGeographicalAxis,amzn:InternationalRegionsMember,,False,Product,International,Segment tagged as a region beside OperatingSegmentsMember; not the country cut
+3,amzn:RegionReportingInformationByRegionAxis,amzn:NorthAmericaMember,,False,Product,North America,2009-2011 segment axis
+3,amzn:RegionReportingInformationByRegionAxis,us-gaap:NorthAmericaMember,,False,Product,North America,2009-2011 segment axis
+3,amzn:RegionReportingInformationByRegionAxis,amzn:InternationalRegionsMember,,False,Product,International,2009-2011 segment axis
+4,srt:ConsolidationItemsAxis,msft:CorporateAndReconcilingItemsMember,,False,us-gaap:StatementBusinessSegmentsAxis,Corporate and Other,"Corporate and Other on the segment axis, so the three segments and it add up to operating income (FY2016 10-K: 9,358 + 6,142 + 12,461 - 7,779 = 20,182)"
+4,us-gaap:ConsolidationItemsAxis,msft:CorporateAndReconcilingItemsMember,,False,us-gaap:StatementBusinessSegmentsAxis,Corporate and Other,"Corporate and Other on the segment axis, so the three segments and it add up to operating income (FY2016 10-K: 9,358 + 6,142 + 12,461 - 7,779 = 20,182)"
+4,msft:ConsolidationItemsAxis,msft:CorporateAndReconcilingItemsMember,,False,us-gaap:StatementBusinessSegmentsAxis,Corporate and Other,"Corporate and Other on the segment axis, so the three segments and it add up to operating income (FY2016 10-K: 9,358 + 6,142 + 12,461 - 7,779 = 20,182)"
+4,us-gaap:ConsolidationItemsAxis,msft:CommercialMember,,False,us-gaap:StatementBusinessSegmentsAxis,Commercial,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,us-gaap:ConsolidationItemsAxis,msft:DevicesAndConsumerMember,,False,us-gaap:StatementBusinessSegmentsAxis,Devices and Consumer,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,us-gaap:ConsolidationItemsAxis,Commercial Licensing,,False,us-gaap:StatementBusinessSegmentsAxis,Commercial Licensing,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,us-gaap:ConsolidationItemsAxis,Commercial Other,,False,us-gaap:StatementBusinessSegmentsAxis,Commercial Other,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,us-gaap:ConsolidationItemsAxis,Devices and Consumer Licensing,,False,us-gaap:StatementBusinessSegmentsAxis,Devices and Consumer Licensing,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,us-gaap:ConsolidationItemsAxis,Devices and Consumer Other,,False,us-gaap:StatementBusinessSegmentsAxis,Devices and Consumer Other,FY2013-2015 segment structure; on the segment axis with Corporate and Other
+4,srt:ProductOrServiceAxis,msft:DynamicsMember,,False,Product,Dynamics products and cloud services,FY2023 10-K and Q1 FY2024 10-Q name; FY2022-2023 equal the FY2024 10-K (4687 and 5437)
+4,us-gaap:StatementBusinessSegmentsAxis,msft:WindowsAndWindowsLiveMember,,False,us-gaap:StatementBusinessSegmentsAxis,Windows Division,"Renamed Windows Division from the Q2 FY2013 10-Q (fiscal 2012 Q2: 4,709 as Windows & Windows Live, 4,714 as Windows Division)"
+4,msft:ProductsOrServicesSecondaryCategorizationAxis,msft:CommercialCloudMember,,False,msft:ProductsOrServicesSecondaryCategorizationAxis,Microsoft Cloud,"Renamed Microsoft Cloud in the FY2022 10-K, which prints fiscal 2020 and 2021 at the Commercial Cloud values"
+4,us-gaap:ProductOrServiceAxis,msft:WindowsPCOperatingSystemsMember,,False,Product,Windows PC operating system,"Same line as WindowsOperatingSystemsForComputingDevicesMember: equal for fiscal 2011 and 2012 in the FY2014 10-K"
+4,us-gaap:ProductOrServiceAxis,msft:WindowsPersonalComputerOperatingSystemsMember,,False,Product,Windows PC operating system,"FY2012 10-K qname for Windows PC operating systems; equal to the FY2014 10-K for fiscal 2012"
+4,us-gaap:ProductOrServiceAxis,msft:XboxPlatformMember,,False,Product,Xbox,"FY2014 10-K name; fiscal 2014 equals Xbox in the FY2015-2016 10-Ks"
+8,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,All Other,NVIDIA All Other (stock comp, acquisition and corporate costs) on the segment axis, so segments plus All Other add up to the line
+8,us-gaap:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,All Other,NVIDIA All Other (stock comp, acquisition and corporate costs) on the segment axis, so segments plus All Other add up to the line
+8,us-gaap:StatementBusinessSegmentsAxis,nvda:AllOtherMember,,False,us-gaap:StatementBusinessSegmentsAxis,All Other,NVIDIA All Other (stock comp, acquisition and corporate costs) on the segment axis, so segments plus All Other add up to the line
 9,us-gaap:StatementBusinessSegmentsAxis,fb:FamilyOfAppsMember,,False,Product,Family of Apps,Segment revenue and operating income on Product beside Advertising and Other revenue
 9,us-gaap:StatementBusinessSegmentsAxis,meta:FamilyOfAppsMember,,False,Product,Family of Apps,Successor member of fb:FamilyOfAppsMember
 9,us-gaap:StatementBusinessSegmentsAxis,fb:RealityLabsMember,,False,Product,Reality Labs,Reality Labs revenue and operating income share this segment
@@ -110,6 +135,8 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 10,us-gaap:StatementBusinessSegmentsAxis,amd:GraphicsMember,,False,Product,Graphics and Visual Solutions,AMD segment cut; put operating income on Product with revenue
 10,us-gaap:StatementBusinessSegmentsAxis,amd:AllOtherMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
 10,us-gaap:StatementBusinessSegmentsAxis,us-gaap:AllOtherSegmentsMember,,False,Product,All Other,AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:ClientAndGamingMember,,False,Product,Client and Gaming,FY2025 segment that combines Client and Gaming; AMD segment cut; put operating income on Product with revenue
+10,us-gaap:StatementBusinessSegmentsAxis,amd:EnterpriseEmbeddedAndSemiCustomsMember,,False,Product,"Enterprise, Embedded and Semi-Custom",AMD segment cut; put operating income on Product with revenue
 1,us-gaap:StatementBusinessSegmentsAxis,,iPhone and related products and services,False,Product,iPhone,AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,iPad and related products and services,False,Product,iPad,AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,iPod,False,Product,iPod,AAPL 2010-2014 product line
@@ -119,6 +146,7 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 1,us-gaap:StatementBusinessSegmentsAxis,,Accessories,False,Product,Accessories,AAPL 2013-2014 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,Desktops,False,us-gaap:StatementBusinessSegmentsAxis,Desktops,Part of Total Mac net sales
 1,us-gaap:StatementBusinessSegmentsAxis,,Mac desktops,False,us-gaap:StatementBusinessSegmentsAxis,Mac desktops,Part of Total Mac net sales
+1,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Geographical,Corporate non-segment,"R&D and corporate costs beside the five regional segments, so segment operating income and expenses add up to the line (FY2025 10-K: 175,677 - 42,627 = 133,050)"
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Automotive segment,Reportable segment; includes services and other
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveMember,,False,us-gaap:StatementBusinessSegmentsAxis,Automotive segment,2016-2017 segment member
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:EnergyGenerationAndStorageSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy generation and storage segment,Reportable segment
@@ -133,29 +161,33 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 5,srt:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
 5,us-gaap:StatementGeographicalAxis,tsla:OtherCountriesMember,,False,Geographical,Other International,Same line as the later Other international member
 5,srt:StatementGeographicalAxis,tsla:OtherInternationalMember,,False,Geographical,Other International,2023 member id for the Other international line
-13,srt:ConsolidationItemsAxis,Ratings,,False,Product,Ratings,Reportable segment; same cut as operating income
-13,srt:ConsolidationItemsAxis,Operating Segments - Ratings,,False,Product,Ratings,2024 successor; external revenue kept distinct from intersegment and combined totals
-13,srt:ConsolidationItemsAxis,Operating segments - Ratings,,False,Product,Ratings,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Market Intelligence,,False,Product,Market Intelligence,Reportable segment
-13,srt:ConsolidationItemsAxis,Operating Segments - Market Intelligence,,False,Product,Market Intelligence,2024 successor of Market Intelligence
-13,srt:ConsolidationItemsAxis,Operating segments - Market Intelligence,,False,Product,Market Intelligence,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Indices,,False,Product,Indices,Reportable segment
-13,srt:ConsolidationItemsAxis,Operating Segments - Indices,,False,Product,Indices,2024 successor of Indices
-13,srt:ConsolidationItemsAxis,Operating segments - Indices,,False,Product,Indices,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Energy,,False,Product,Energy,Reportable segment
-13,srt:ConsolidationItemsAxis,Operating Segments - Energy,,False,Product,Energy,2025 successor of Commodity Insights
-13,srt:ConsolidationItemsAxis,Operating segments - Energy,,False,Product,Energy,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Mobility,,False,Product,Mobility,Reportable segment
-13,srt:ConsolidationItemsAxis,Operating Segments - Mobility,,False,Product,Mobility,2024 successor of Mobility
-13,srt:ConsolidationItemsAxis,Operating segments - Mobility,,False,Product,Mobility,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Engineering Solutions,,False,Product,Engineering Solutions,Reportable segment
-13,srt:ConsolidationItemsAxis,Operating segments - Engineering Solutions,,False,Product,Engineering Solutions,External segment total
-13,srt:ConsolidationItemsAxis,Commodity Insights,,False,Product,Commodity Insights,Reportable segment through 2024
-13,srt:ConsolidationItemsAxis,Operating Segments - Commodity Insights,,False,Product,Commodity Insights,2024 successor of Commodity Insights
-13,srt:ConsolidationItemsAxis,Operating segments - Commodity Insights,,False,Product,Commodity Insights,Lowercase parent label on the same external segment total
-13,srt:ConsolidationItemsAxis,Platts,,False,Product,Platts,2016-2021 predecessor of Commodity Insights
-13,srt:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Corporate segment on the same cut as the reportable segments
-13,us-gaap:ConsolidationItemsAxis,Corporate,,False,Product,Corporate,Earlier corporate member on the legacy consolidation axis
+13,srt:ConsolidationItemsAxis,Ratings,,False,us-gaap:StatementBusinessSegmentsAxis,Ratings,Reportable segment; same cut as operating income
+13,srt:ConsolidationItemsAxis,Operating Segments - Ratings,,False,us-gaap:StatementBusinessSegmentsAxis,Ratings,2024 successor; external revenue kept distinct from intersegment and combined totals
+13,srt:ConsolidationItemsAxis,Operating segments - Ratings,,False,us-gaap:StatementBusinessSegmentsAxis,Ratings,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Market Intelligence,,False,us-gaap:StatementBusinessSegmentsAxis,Market Intelligence,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Market Intelligence,,False,us-gaap:StatementBusinessSegmentsAxis,Market Intelligence,2024 successor of Market Intelligence
+13,srt:ConsolidationItemsAxis,Operating segments - Market Intelligence,,False,us-gaap:StatementBusinessSegmentsAxis,Market Intelligence,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Indices,,False,us-gaap:StatementBusinessSegmentsAxis,Indices,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Indices,,False,us-gaap:StatementBusinessSegmentsAxis,Indices,2024 successor of Indices
+13,srt:ConsolidationItemsAxis,Operating segments - Indices,,False,us-gaap:StatementBusinessSegmentsAxis,Indices,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Energy,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Energy,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,2025 successor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Operating segments - Energy,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Mobility,,False,us-gaap:StatementBusinessSegmentsAxis,Mobility,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating Segments - Mobility,,False,us-gaap:StatementBusinessSegmentsAxis,Mobility,2024 successor of Mobility
+13,srt:ConsolidationItemsAxis,Operating segments - Mobility,,False,us-gaap:StatementBusinessSegmentsAxis,Mobility,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Engineering Solutions,,False,us-gaap:StatementBusinessSegmentsAxis,Engineering Solutions,Reportable segment
+13,srt:ConsolidationItemsAxis,Operating segments - Engineering Solutions,,False,us-gaap:StatementBusinessSegmentsAxis,Engineering Solutions,External segment total
+13,srt:ConsolidationItemsAxis,Commodity Insights,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Reportable segment through 2024; renamed Energy in the FY2025 10-K
+13,srt:ConsolidationItemsAxis,Operating Segments - Commodity Insights,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,2024 successor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Operating segments - Commodity Insights,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Lowercase parent label on the same external segment total
+13,srt:ConsolidationItemsAxis,Platts,,False,us-gaap:StatementBusinessSegmentsAxis,Platts,2016-2021 predecessor of Commodity Insights
+13,srt:ConsolidationItemsAxis,Corporate,,False,us-gaap:StatementBusinessSegmentsAxis,Corporate,Corporate segment on the same cut as the reportable segments
+13,us-gaap:ConsolidationItemsAxis,Corporate,,False,us-gaap:StatementBusinessSegmentsAxis,Corporate,Earlier corporate member on the legacy consolidation axis
+13,us-gaap:StatementBusinessSegmentsAxis,spgi:EnergySegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Commodity Insights, renamed Energy in the FY2025 10-K (FY2024 revenue 2,142 under both names); one series so the segment split is not a twin
+13,us-gaap:StatementBusinessSegmentsAxis,spgi:CommodityInsightsSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Commodity Insights, renamed Energy in the FY2025 10-K (FY2024 revenue 2,142 under both names); one series so the segment split is not a twin
+13,us-gaap:StatementBusinessSegmentsAxis,spgi:CommodityInsightsMember,,False,us-gaap:StatementBusinessSegmentsAxis,Energy,Commodity Insights, renamed Energy in the FY2025 10-K (FY2024 revenue 2,142 under both names); one series so the segment split is not a twin
+13,srt:ConsolidationItemsAxis,us-gaap:IntersegmentEliminationMember,,False,us-gaap:StatementBusinessSegmentsAxis,Intersegment Elimination,Eliminations on the same cut as the reportable segments
 15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartUSMember,,False,Product,Walmart U.S.,Walmart U.S. segment
 15,us-gaap:StatementBusinessSegmentsAxis,wmt:WalmartInternationalMember,,False,Product,Walmart International,Walmart International segment
 15,us-gaap:StatementBusinessSegmentsAxis,wmt:SamsClubMember,,False,Product,Sam's Club,Sam's Club segment
@@ -215,6 +247,8 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 16,us-gaap:StatementBusinessSegmentsAxis,mco:MoodysAnalyticsMember,,False,Segment,Moody's Analytics,External segment revenue. Same member label as early operating income on ConsolidationItems
 16,srt:ConsolidationItemsAxis,MIS,,False,Segment,Moody's Investors Service,Segment operating income through 2017. Shares the MIS label with the revenue member
 16,srt:ConsolidationItemsAxis,MA,,False,Segment,Moody's Analytics,Segment operating income through 2017. Shares the MA label with the revenue member
+16,us-gaap:StatementBusinessSegmentsAxis,us-gaap:IntersegmentEliminationMember,,False,Segment,Eliminations,"Intersegment royalty; with MA and MIS (segment totals before eliminations) it adds up to revenue, FY2015 10-K: 1,163.4 + 2,427.7 - 106.6 = 3,484.5"
+16,srt:ConsolidationItemsAxis,us-gaap:IntersegmentEliminationMember,,False,Segment,Eliminations,Intersegment royalty beside the segments on the same cut
 17,srt:ConsolidationItemsAxis,,Canada,False,Geographical,Canada,Later name for the Canadian Operations segment
 17,srt:ConsolidationItemsAxis,,Canada Operations,False,Geographical,Canada,Same segment as Canadian Operations
 17,srt:ConsolidationItemsAxis,,Canadian Operations,False,Geographical,Canada,Canadian Operations segment
@@ -235,6 +269,9 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:CanadianOperationsMember,,False,Geographical,Canada,Early Canadian Operations segment on the country axis
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:UnitedStatesOperationsMember,,False,Geographical,United States,Early United States Operations segment on the country axis
 17,us-gaap:EntityWideDisclosureOnGeographicAreasLongLivedAssetsInIndividualForeignCountriesByCountryAxis,cost:OtherInternationalOperationsMember,,False,Geographical,Other International,Early Other International Operations segment on the country axis
+17,us-gaap:StatementBusinessSegmentsAxis,cost:UnitedStatesMember,,False,Geographical,United States,Geographic segment on the segment axis; same cut as revenue
+17,us-gaap:StatementBusinessSegmentsAxis,cost:CanadaMember,,False,Geographical,Canada,Geographic segment on the segment axis; same cut as revenue
+17,us-gaap:StatementBusinessSegmentsAxis,cost:OtherInternationalMember,,False,Geographical,Other International,Geographic segment on the segment axis; same cut as revenue
 18,srt:ConsolidationItemsAxis,Commercial,,False,Product,Commercial,Commercial segment revenue
 18,srt:ConsolidationItemsAxis,Government,,False,Product,Government,Government segment revenue
 18,srt:ConsolidationItemsAxis,Government Operating Segment,,False,Product,Government,2022-2024 label for the same government segment
@@ -242,6 +279,11 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 18,srt:StatementGeographicalAxis,United Kingdom - Geographic Concentration Risk,,False,Geographical,United Kingdom,Same revenue as country:GB
 18,srt:StatementGeographicalAxis,United States - Geographic Concentration Risk,,False,Geographical,United States,Same revenue as country:US
 18,srt:StatementGeographicalAxis,Rest of world - Geographic Concentration Risk,,False,Geographical,Rest of world,Same revenue as the rest-of-world member
+18,us-gaap:StatementBusinessSegmentsAxis,pltr:CommercialMember,,False,Product,Commercial,Segment on Product with revenue so contribution and operating income share the cut
+18,us-gaap:StatementBusinessSegmentsAxis,pltr:CommercialOperatingSegmentMember,,False,Product,Commercial,Segment on Product with revenue so contribution and operating income share the cut
+18,us-gaap:StatementBusinessSegmentsAxis,pltr:CommercialSegmentMember,,False,Product,Commercial,Segment on Product with revenue so contribution and operating income share the cut
+18,us-gaap:StatementBusinessSegmentsAxis,pltr:GovernmentOperatingSegmentMember,,False,Product,Government,Segment on Product with revenue so contribution and operating income share the cut
+18,us-gaap:StatementBusinessSegmentsAxis,us-gaap:GovernmentMember,,False,Product,Government,Segment on Product with revenue so contribution and operating income share the cut
 20,srt:ProductOrServiceAxis,asml:EuvMember,,False,Product,NXE,EUV systems; same value as NXE in the 2021 and 2022 20-F
 20,us-gaap:ProductOrServiceAxis,asml:EuvMember,,False,Product,NXE,EUV systems on the legacy product axis
 20,srt:ProductOrServiceAxis,Euv,,False,Product,NXE,2016-2018 label for EUV systems
@@ -263,3 +305,5 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 19,ifrs-full:MarketsOfCustomersAxis,,,False,Platform,,Revenue by end market
 19,ifrs-full:MarketsOfCustomersAxis,tsm:OtherPlatformsMember,,False,Platform,Other platforms,Residual end market; not the product Others line
 2,srt:ProductOrServiceAxis,goog:OtherRevenuesMember,,False,Product,"Google subscriptions, platforms, and devices",Google other until 2024; the Q1 and Q2 2024 10-Qs reprint 2023's Google other (7413M and 8142M) under the new member
+2,us-gaap:IncomeStatementLocationAxis,us-gaap:SalesMember,,False,us-gaap:IncomeStatementLocationAxis,Revenues,"The revenue line itself, as the derivatives note locates hedge gains; not a product (182,527 for 2020)"
+2,us-gaap:ProductOrServiceAxis,goog:AdvertisingMember,,False,us-gaap:IncomeStatementLocationAxis,Revenues,"FY2014 10-K tags total revenues with AdvertisingMember (66,001 for 2014); shares the Revenues label with the line above"

@@ -1,5 +1,5 @@
 .PHONY: help install format lint test clean db-init db-reset db-status \
-	ingest refresh refresh-snapshot refresh-compare parser-snapshot parser-compare overrides-load overrides-check psql diagnose
+	ingest refresh refresh-snapshot refresh-compare chart-audit parser-snapshot parser-compare overrides-load overrides-check psql diagnose
 
 # Connection string used by the psql-based targets below. Override per-invocation
 # with `make psql DATABASE_URL=...`.
@@ -36,11 +36,12 @@ help:
 	@echo "  refresh         - Recompute normalized/quarterly/yearly financials (COMPANY_IDS=1,2 STAGES=...)"
 	@echo "  refresh-snapshot - Save derived tables and diagnostics counts (OUT=dir)"
 	@echo "  refresh-compare - Diff two snapshots (BASE=dir NEW=dir)"
+	@echo "  chart-audit     - Run the UI's stacking rules over every split (TICKERS=, UI_DIR=, OUT=, BASE=)"
 	@echo "  parser-snapshot - Parse a fixed sample of filings (OUT=dir, SAMPLE=file optional)"
 	@echo "  parser-compare  - Diff two parser snapshots (BASE=dir NEW=dir)"
 	@echo "  overrides-load  - Sync migrations/data/*.csv overrides into the database"
 	@echo "  overrides-check - Show what overrides-load would change (dry run)"
-	@echo "  diagnose        - Run the data-quality queries in sql/diagnostics"
+	@echo "  diagnose        - Run the data-quality queries in sql/diagnostics (COMPANY_IDS=, FILES=)"
 	@echo "  psql            - Open an interactive psql shell"
 	@echo ""
 	@echo "Docker commands:"
@@ -171,12 +172,24 @@ overrides-check:
 	@echo "🔎 Checking override CSVs (dry run)..."
 	python -m filings.scripts.seed_overrides --dry-run
 
+chart-audit:
+	node filings/scripts/chart_audit.mjs \
+		$(if $(UI_DIR),--ui $(UI_DIR)) \
+		$(if $(TICKERS),--tickers $(TICKERS)) \
+		--out $(or $(OUT),chart_audit.jsonl) \
+		$(if $(BASE),--base $(BASE))
+
 diagnose:
+ifdef COMPANY_IDS
+	python -m filings.refresh.parity.diagnose --companies $(COMPANY_IDS) \
+		$(if $(FILES),--files $(FILES))
+else
 	@for f in sql/diagnostics/*.sql; do \
 		echo ""; \
 		echo "=== $$f ==="; \
 		psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f "$$f" || exit 1; \
 	done
+endif
 
 psql:
 	psql "$(DATABASE_URL)"
