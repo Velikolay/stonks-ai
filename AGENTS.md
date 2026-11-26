@@ -319,7 +319,11 @@ does not, so the later split wins wherever both apply. The test is per view:
 Microsoft's fiscal 2025 product lines continue its fiscal 2018-2021 and older
 product lines, while product and service revenue, current since fiscal 2018,
 takes only the sets that began before 2018. A stopped set that began with
-every current set stays a view. `make chart-audit` prints each view's exact
+every current set stays a view. Before a view's first period that adds up,
+a period that none of its earlier presentations closes draws the metric bar
+alone, not the view's members that happen to share a name with an older
+split: Microsoft's fiscal 2017 quarters exist on product lines only as the
+ASC 606 restatement in the fiscal 2018 10-Qs, 7% above the revenue filed. `make chart-audit` prints each view's exact
 periods for the key lines (`views` in the JSONL), since the best view can add
 up everywhere while the one a reader picks does not. The API leaves out a set when fewer than two of its members exist
 at the requested granularity, so a split reported only in the 10-K is absent
