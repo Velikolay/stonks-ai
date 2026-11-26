@@ -127,7 +127,8 @@ def without_finer_cuts(facts: pl.DataFrame, dimensions: pl.DataFrame) -> pl.Data
     and, with ``IncomeStatementLocationAxis`` = impairment, integration and
     restructuring, as 0; the conflict dropped the segment amount. When facts
     of one filing share a stored slot, those with more real (non-default)
-    coordinates than the fewest are a finer cut and are dropped.
+    coordinates than the fewest are a finer cut and are dropped. A fact
+    without stored coordinates is compared with nothing.
     """
     if dimensions.is_empty() or facts.is_empty():
         return facts
@@ -145,12 +146,12 @@ def without_finer_cuts(facts: pl.DataFrame, dimensions: pl.DataFrame) -> pl.Data
         "period_end",
         "period",
     ]
-    counted = facts.join(
-        real, left_on="id", right_on="fact_id", how="left"
-    ).with_columns(pl.col("coordinates").fill_null(0))
-    finest = pl.col("coordinates") > pl.col("coordinates").min().over(slot)
+    counted = facts.join(real, left_on="id", right_on="fact_id", how="left")
+    finer = (pl.col("coordinates") > pl.col("coordinates").min().over(slot)).fill_null(
+        False
+    )
     dimensioned = pl.col("axis").fill_null("") != ""
-    return counted.filter(~(dimensioned & finest)).drop("coordinates")
+    return counted.filter(~(dimensioned & finer)).drop("coordinates")
 
 
 class ConflictRule(Enum):

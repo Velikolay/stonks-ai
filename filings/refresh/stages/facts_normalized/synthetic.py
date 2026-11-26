@@ -14,6 +14,7 @@ from decimal import Decimal
 import polars as pl
 
 from ...io.schemas import dtypes_of
+from ...rules import ordering
 from .resolve import RESOLVED, company_override_unit, tree_pointers, with_tree_overrides
 
 ZERO = pl.lit(Decimal(0), dtype=pl.Decimal(38, 10))
@@ -94,12 +95,25 @@ def with_synthetic_rows(
     concept_overrides: pl.DataFrame,
     hierarchy: pl.DataFrame,
 ) -> pl.DataFrame:
-    """``rows`` plus every synthetic ancestor they need, distinct rows only."""
+    """``rows`` plus every synthetic ancestor they need, distinct rows only.
+
+    A synthetic row's id names its statement, concept and filing, so children
+    that differ in their period or comparative period would make one id
+    twice; the latest is kept, the same on every refresh. (A filing that
+    prints one subtotal for two period ends, rare, loses the earlier one.)
+    """
     result = rows.unique()
     frontier = result
     while frontier.height:
-        new = synthetic_parents(frontier, facts, concept_overrides, hierarchy).unique()
-        new = new.join(result, on=RESOLVED, how="anti", nulls_equal=True)
+        new = ordering.distinct_on(
+            synthetic_parents(frontier, facts, concept_overrides, hierarchy),
+            ["id"],
+            [
+                ordering.desc("period_end"),
+                ordering.desc("comparative_period_end", nulls_last=True),
+            ],
+        )
+        new = new.join(result.select("id"), on="id", how="anti")
         result = pl.concat([result, new])
         frontier = new
     return result

@@ -146,9 +146,9 @@ class BreakdownResponse(BaseModel):
 
     axis: str
     members: List[str]
-    #: 10-K years the members add up in. Sets on one axis that share no year
-    #: with the latest set are earlier presentations; the chart fills years
-    #: the latest set does not cover from them.
+    #: 10-K years the members add up in. The chart reads them to tell an
+    #: earlier presentation, which only fills the years a later split does
+    #: not cover, from an alternative view.
     fiscal_years: List[int] = []
 
 

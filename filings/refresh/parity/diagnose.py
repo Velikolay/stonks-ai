@@ -72,9 +72,11 @@ async def run(
 
 
 def _plain(value):
-    """Decimals, dates and arrays as text so one frame holds any column."""
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value if not isinstance(value, bool) else str(value)
+    """Every value but numbers and NULL as text, so a column has one type."""
+    if value is None or (
+        isinstance(value, (int, float)) and not isinstance(value, bool)
+    ):
+        return value
     if isinstance(value, (list, tuple)):
         return "; ".join(str(v) for v in value)
     return str(value)

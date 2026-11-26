@@ -182,7 +182,7 @@ def _splits(rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFrame:
         [*SPLIT, "filing_id", "member"],
         ["id"],
     )
-    splits = (
+    return (
         members.group_by(
             [*SPLIT, "filing_id", "is_own", "is_annual", "fiscal_year", "filing_date"]
         )
@@ -193,7 +193,6 @@ def _splits(rows: pl.DataFrame, filings: pl.DataFrame) -> pl.DataFrame:
         )
         .join(lines, on=[*line_keys, "filing_id"], how="left")
     )
-    return splits
 
 
 def restating_filings(
@@ -216,9 +215,10 @@ def restating_filings(
     recast it, keeps every member it had and adds up to the quarter's line
     where the quarter has one. If any quarter with a split cannot follow,
     the whole year stays as filed, so a year is never shown half on one
-    basis (Q4 is the 10-K minus the first three quarters). The earliest such filing wins; it is the one next year's
-    10-Qs, which restate the quarters, belong with. A year whose annual split
-    adds up, or that no later split fixes, stays as filed, recast or not.
+    basis (Q4 is the 10-K minus the first three quarters). The earliest such
+    filing wins; it is the one next year's 10-Qs, which restate the quarters,
+    belong with. A year whose annual split adds up, or that no later split
+    fixes, stays as filed, recast or not.
     """
     splits = _splits(rows, filings)
     # One filing of the period, no amendment beside it.

@@ -126,7 +126,11 @@ flagged AS (
            ) AS missing,
            ARRAY(
                SELECT unnest(present) EXCEPT SELECT unnest(present_before)
-           ) AS added
+           ) AS added,
+           -- A segment can lose money; a revenue or cost member cannot.
+           negatives IS NOT NULL
+               AND normalized_label !~* 'income|profit|loss|margin|earnings|tax'
+               AS turned_negative
     FROM neighbours nb
     WHERE before IS NOT NULL
       -- Neighbours without members are a sparse series, not a stable cover.
@@ -138,11 +142,6 @@ flagged AS (
       AND ABS(COALESCE(after, before_2) - before) <= 0.02
       AND (after IS NOT NULL
            OR ABS(coverage - before) > 3 * ABS(before - before_2))
-      -- Partial disclosures wobble with rounding; a defect changes the members,
-      -- or turns a revenue or cost member negative (a segment can lose money).
-      AND ((negatives IS NOT NULL
-            AND normalized_label !~* 'income|profit|loss|margin|earnings|tax')
-           OR present_before IS DISTINCT FROM present)
 )
 SELECT
     company_id,
@@ -160,16 +159,16 @@ SELECT
     array_to_string(added, '; ') AS new_members,
     array_to_string(negatives, '; ') AS negative_members
 FROM flagged f
--- A later filing that reprinted the period on a new presentation adds its
--- members beside the period's own: one filing printed every new member, and
--- its members on their own cover the line as the neighbours do. The chart
--- draws one presentation (later split wins), so that is no break (Microsoft's
--- fiscal 2027 first-quarter 10-Q reprinting September 2025 on new segments
--- and product lines).
-WHERE cardinality(f.missing) > 0
-   OR (negatives IS NOT NULL
-       AND normalized_label !~* 'income|profit|loss|margin|earnings|tax')
-   OR NOT EXISTS (
+-- Partial disclosures wobble with rounding; a defect turns a revenue or cost
+-- member negative or changes the members. Members only added are a later
+-- filing's new presentation beside the period's own when one filing printed
+-- every new member and its members alone cover the line as the neighbours
+-- do. The chart draws one presentation (later split wins), so that is no
+-- break (Microsoft's fiscal 2027 first-quarter 10-Q reprinting September 2025
+-- on new segments and product lines).
+WHERE f.turned_negative
+   OR cardinality(f.missing) > 0
+   OR (cardinality(f.added) > 0 AND NOT EXISTS (
       SELECT 1
       FROM (
           SELECT DISTINCT n.filing_id, n.period, n.member, n.value
@@ -184,7 +183,7 @@ WHERE cardinality(f.missing) > 0
       GROUP BY printed.filing_id, printed.period
       HAVING f.added <@ array_agg(printed.member)
          AND ABS(SUM(printed.value) / f.line_value - f.before) <= 0.01
-  )
+   ))
 ORDER BY company_id, statement, normalized_label, axis, granularity, period_end
 LIMIT 50;
 

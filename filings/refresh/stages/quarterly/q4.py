@@ -31,11 +31,7 @@ import polars as pl
 from ...records import ROW, frame_of, grouped, numbered, records
 from ...rules import ordering
 from ...rules.periods import ANNUAL_FORMS, QUARTERLY_FORMS, quarter_apart
-from ...rules.rounding import (
-    decimal,
-    differs_beyond_reprint,
-    reprint_tolerance_of,
-)
+from ...rules.rounding import decimal, differs_beyond_reprint, reprint_tolerance_of
 from .rows import SERIES, WEIGHTED_AVERAGE_SHARES, is_per_share
 
 AXIS_YEAR = ["company_id", "statement", "normalized_label", "axis", "fiscal_tag"]
@@ -337,6 +333,24 @@ def introduced(annual: Filing, quarters: dict[str, FirstThree]) -> frozenset[str
     )
 
 
+def recast_without_nine_months(
+    annual: Filing,
+    quarters: dict[str, FirstThree],
+    paired: frozenset[int],
+    covered: frozenset[str],
+) -> bool:
+    """The 10-K moved amounts onto members its quarters lack, and no 10-Q pairs it.
+
+    Subtracting the quarters would put the move into Q4. ``covered`` are the
+    members some paired 10-K's nine months print: Microsoft's fiscal 2023
+    10-K split Dynamics out of Office and Other, and only the fiscal 2024
+    10-K and its third-quarter 10-Q print fiscal 2023 on one split.
+    """
+    return annual.filing_id not in paired and bool(
+        introduced(annual, quarters) & covered
+    )
+
+
 def on_quarter_split(annual: Filing, quarters: dict[str, FirstThree]) -> bool:
     """Every member has quarters (or is zero), and every member with quarters is in it.
 
@@ -379,21 +393,15 @@ def rank_annual_filings(
         after = quarters_filed is not None and a.filing_date >= quarters_filed
         # A later 10-K that restated the year replaced every member of the
         # year's own 10-K (see facts_normalized.dedup.restating_filings).
-        restated = a.filing_id == fiscal_tag and shown and a.filing_id not in shown
-        # The year's own 10-K moved amounts onto members its quarters do not
-        # have, and no 10-Q printed the nine months on them, so subtracting
-        # the quarters puts the move into Q4. A later 10-K paired with a
-        # 10-Q on its members goes first: Microsoft's fiscal 2023 10-K split
-        # Dynamics out of Office and Other, and only the fiscal 2024 10-K and
-        # its third-quarter 10-Q print fiscal 2023 on one split.
-        unpaired_recast = (
-            a.filing_id == fiscal_tag
-            and a.filing_id not in paired
-            and bool(introduced(a, quarters) & covered)
+        own = a.filing_id == fiscal_tag
+        restated = own and bool(shown) and a.filing_id not in shown
+        # A later 10-K paired with a 10-Q on its members goes first.
+        unpaired_recast = own and recast_without_nine_months(
+            a, quarters, paired, covered
         )
         return (
             not a.is_amendment,
-            bool(restated),
+            restated,
             unpaired_recast,
             a.filing_id != fiscal_tag,
             not on_quarter_split(a, quarters),
@@ -548,13 +556,14 @@ def q4_sources(
             axis_year[-1], annuals, year_quarters, paired, covered
         )
         own = next((a for a in annuals if a.filing_id == axis_year[-1]), None)
+        # The first-ranked 10-K took over from a recasting own 10-K: the
+        # others are on another split, so it fills no member from them.
         alone = (
             own is not None
             and ranked[0] is not own
             and not ranked[0].is_amendment
-            and own.filing_id not in paired
             and ranked[0].filing_id in paired
-            and bool(introduced(own, year_quarters) & ranked[0].members)
+            and recast_without_nine_months(own, year_quarters, paired, covered)
         )
         out[axis_year] = [
             Q4Source(a, rank, nine_of[a.filing_id], alone and rank == 1)

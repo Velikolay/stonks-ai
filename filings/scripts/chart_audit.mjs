@@ -128,27 +128,38 @@ async function auditAxis(ticker, granularity, label, statement, axis) {
   const byMember = new Map(series.map(s => [s.name, new Map(s.data.map(p => [p.date, p.value]))]));
   const memberDates = [...new Set(series.flatMap(s => s.data.map(p => p.date)))].sort();
   const cuts = stack.cuts.length ? stack.cuts : [{ label: "", periods: stack.periods }];
+  // The metric's own bar ("Revenue", "Revenue (remainder of ...)") is gray.
+  const isGray = leaf => leaf.name === label || leaf.name.startsWith(`${label} (`);
+  const drawnOn = (cut, date) => {
+    const leaves = cut.periods[date] ?? [];
+    const members = leaves.filter(l => !isGray(l));
+    return {
+      gray: leaves.find(isGray)?.value ?? 0,
+      remainders: members.filter(l => l.name.endsWith("(remainder)")).map(l => l.name),
+      leaves: members.map(l => [l.name, l.value]),
+    };
+  };
+  const isExact = (view, value) =>
+    view.leaves.length > 0 && view.gray <= tolerance(value) && view.remainders.length === 0;
+  const views = stack.cuts.map(cut => ({ label: cut.label, exact: 0, drawn: 0, periods: 0 }));
   const periods = [];
-  for (const point of total?.data ?? []) {
-    const { date, value } = point;
-    const views = cuts.map(cut => {
-      const leaves = cut.periods[date] ?? [];
-      const isGray = l => l.name === label || l.name.startsWith(`${label} (`);
-      return {
-        drawn: leaves.filter(l => !isGray(l)).length,
-        gray: leaves.find(isGray)?.value ?? 0,
-        remainders: leaves.filter(l => l.name.endsWith("(remainder)")).map(l => l.name),
-        leaves: leaves.filter(l => !isGray(l)).map(l => [l.name, l.value]),
-      };
+  for (const { date, value } of total?.data ?? []) {
+    const drawn = cuts.map(cut => drawnOn(cut, date));
+    drawn.forEach((view, i) => {
+      if (!views[i]) return;
+      views[i].periods += 1;
+      if (view.leaves.length) views[i].drawn += 1;
+      if (isExact(view, value)) views[i].exact += 1;
     });
-    const best = views.reduce(
-      (a, b) => (b.drawn > 0 && (a.drawn === 0 || b.gray < a.gray) ? b : a),
-      views[0]
+    // The view a reader sees first: something drawn, the least gray.
+    const best = drawn.reduce(
+      (a, b) => (b.leaves.length > 0 && (a.leaves.length === 0 || b.gray < a.gray) ? b : a),
+      drawn[0]
     );
     const present = series.filter(s => byMember.get(s.name).has(date)).length;
     let status;
     if (splits.length === 0) status = present ? "no_breakdown" : "no_members";
-    else if (best.drawn === 0) {
+    else if (best.leaves.length === 0) {
       if (!present) {
         const inside = date > memberDates[0] && date < memberDates.at(-1);
         status = inside ? "gap_inside" : "no_members";
@@ -167,23 +178,9 @@ async function auditAxis(ticker, granularity, label, statement, axis) {
       status,
       grayPct: value ? +((100 * best.gray) / Math.abs(value)).toFixed(2) : null,
       remainders: best.remainders,
-      leaves: best.leaves ?? [],
+      leaves: best.leaves,
     });
   }
-  // Each view the chart offers, with the periods it draws exactly: the best
-  // view can be exact everywhere while another the reader picks is not.
-  const views = stack.cuts.map(cut => {
-    let exact = 0, drawn = 0;
-    for (const point of total?.data ?? []) {
-      const leaves = cut.periods[point.date] ?? [];
-      const isGray = l => l.name === label || l.name.startsWith(`${label} (`);
-      if (!leaves.some(l => !isGray(l))) continue;
-      drawn += 1;
-      const gray = leaves.find(isGray)?.value ?? 0;
-      if (gray <= tolerance(point.value) && !leaves.some(l => l.name.endsWith("(remainder)"))) exact += 1;
-    }
-    return { label: cut.label, exact, drawn, periods: (total?.data ?? []).length };
-  });
   return { ticker, granularity, label, statement, axis, members: series.map(s => s.name), splits: splits.map(s => s.members), periods, views, breaks: CHARTED_AXIS(axis) ? breaks(periods, label) : [] };
 }
 

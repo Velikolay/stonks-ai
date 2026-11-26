@@ -15,10 +15,7 @@ from filings.parsers.sec_xbrl import (
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
 from filings.parsers.sec_xbrl.facts import face_fact
-from filings.parsers.sec_xbrl.segments import (
-    disclosure_notes,
-    segment_disclosure_facts,
-)
+from filings.parsers.sec_xbrl.segments import disclosure_notes, segment_disclosure_facts
 from filings.parsers.sec_xbrl.statement import parse_statement
 
 
