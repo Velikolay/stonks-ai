@@ -308,14 +308,20 @@ total in thousands, may miss it by half a unit each, up to 0.1%.
 Diagnostic 14 finds those years by comparing the members to
 `yearly_financials`: at least two members present, none negative, and short of
 a positive parent. The shortfall is unallocated. Several breakdowns of one
-parent are alternatives when they begin together. A set that began before
-every set reaching the axis's latest year, and stops before that year, is an
-earlier presentation, even when it overlaps them for a year or two (Alphabet's
-U.S., U.K. and rest of the world, reported beside its 2015 regions through
-2016). The API sends every set with its `fiscal_years`; the chart does not
-offer an earlier presentation as a view but draws a period on the most recent
-one that adds up when the current view does not, so the later split wins
-wherever both apply. The API leaves out a set when fewer than two of its members exist
+parent are alternatives when they begin together. A set that stops before the
+axis's latest year and began before a set reaching that year is an earlier
+presentation of that set, even when it overlaps it for a year or two
+(Alphabet's U.S., U.K. and rest of the world, reported beside its 2015 regions
+through 2016). The API sends every set with its `fiscal_years`; the chart does
+not offer an earlier presentation as a view but draws a period of a view on
+the most recent of the view's earlier presentations that adds up when the view
+does not, so the later split wins wherever both apply. The test is per view:
+Microsoft's fiscal 2025 product lines continue its fiscal 2018-2021 and older
+product lines, while product and service revenue, current since fiscal 2018,
+takes only the sets that began before 2018. A stopped set that began with
+every current set stays a view. `make chart-audit` prints each view's exact
+periods for the key lines (`views` in the JSONL), since the best view can add
+up everywhere while the one a reader picks does not. The API leaves out a set when fewer than two of its members exist
 at the requested granularity, so a split reported only in the 10-K is absent
 from a quarterly response. With `breakdowns=true`, the API returns
 `breakdowns` once on the series: each

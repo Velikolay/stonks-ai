@@ -116,30 +116,31 @@ ORDER BY rows DESC, company_id
 LIMIT 50;
 
 \echo '--- Breakdowns that are earlier presentations ---'
--- Sets that share no year with the sets reaching the axis's latest year. The
--- chart draws their years on them when the current split does not add up
--- (see Breakdowns in AGENTS.md). Informational: check that each one is a
--- real older structure (AMD's Computing and Graphics, NVIDIA's GPU and
--- Tegra), not a split that only stopped adding up.
+-- Mirrors presentations() in stonks-ui's dimension-stack.ts: a set that stops
+-- before the axis's latest year and began before some set reaching that year
+-- is an earlier presentation of every such set it began before. The chart
+-- draws its years on it where the view does not add up (see Breakdowns in
+-- AGENTS.md). Informational: check that each one is a real older structure
+-- (AMD's Computing and Graphics, NVIDIA's GPU and Tegra), not a split that
+-- only stopped adding up.
 WITH sets AS (
-    SELECT company_id, statement, normalized_label, axis, members, fiscal_years
+    SELECT company_id, statement, normalized_label, axis, members, fiscal_years,
+           (SELECT MIN(y) FROM unnest(fiscal_years) AS y) AS first_year,
+           (SELECT MAX(y) FROM unnest(fiscal_years) AS y) AS last_year
     FROM dimension_breakdowns
-    WHERE parent_member = ''
+    WHERE parent_member = '' AND cardinality(fiscal_years) > 0
 ),
 latest AS (
     SELECT company_id, statement, normalized_label, axis,
-           MAX(y) AS latest_year
-    FROM sets, unnest(fiscal_years) AS y
+           MAX(last_year) AS latest_year
+    FROM sets
     GROUP BY company_id, statement, normalized_label, axis
 ),
-current_years AS (
-    SELECT s.company_id, s.statement, s.normalized_label, s.axis,
-           array_agg(DISTINCT y) AS years
+views AS (
+    SELECT s.*
     FROM sets s
     JOIN latest l USING (company_id, statement, normalized_label, axis)
-    CROSS JOIN unnest(s.fiscal_years) AS y
-    WHERE l.latest_year = ANY (s.fiscal_years)
-    GROUP BY s.company_id, s.statement, s.normalized_label, s.axis
+    WHERE s.last_year = l.latest_year
 )
 SELECT
     s.company_id,
@@ -147,9 +148,19 @@ SELECT
     s.normalized_label,
     s.axis,
     s.members,
-    s.fiscal_years AS hidden_years
+    s.fiscal_years AS hidden_years,
+    array_agg(array_to_string(v.members, '; ') ORDER BY v.first_year)
+        AS fills_views
 FROM sets s
-JOIN current_years c USING (company_id, statement, normalized_label, axis)
-WHERE NOT (s.fiscal_years && c.years)
+JOIN latest l USING (company_id, statement, normalized_label, axis)
+JOIN views v
+    ON v.company_id = s.company_id
+    AND v.statement = s.statement
+    AND v.normalized_label = s.normalized_label
+    AND v.axis = s.axis
+    AND s.first_year < v.first_year
+WHERE s.last_year < l.latest_year
+GROUP BY s.company_id, s.statement, s.normalized_label, s.axis, s.members,
+         s.fiscal_years
 ORDER BY s.company_id, s.statement, s.normalized_label, s.axis
 LIMIT 50;

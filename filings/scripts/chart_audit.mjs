@@ -32,6 +32,9 @@
 // Only Product, Geographical and segment, product or region axes are read,
 // as in 16_chart_breaks.sql.
 // Breaks are printed per ticker and kept on each JSONL row under "breaks".
+// Each row also keeps "views": every view the chart offers on the axis, with
+// the periods it draws and the periods it draws exactly. With --tickers, the
+// key lines' views are printed.
 //
 // Usage (the API must be running, Node 22.6+ for TypeScript type stripping):
 //   node filings/scripts/chart_audit.mjs [--ui ../stonks-ui] [--tickers AAPL,MSFT]
@@ -167,7 +170,21 @@ async function auditAxis(ticker, granularity, label, statement, axis) {
       leaves: best.leaves ?? [],
     });
   }
-  return { ticker, granularity, label, statement, axis, members: series.map(s => s.name), splits: splits.map(s => s.members), periods, breaks: CHARTED_AXIS(axis) ? breaks(periods, label) : [] };
+  // Each view the chart offers, with the periods it draws exactly: the best
+  // view can be exact everywhere while another the reader picks is not.
+  const views = stack.cuts.map(cut => {
+    let exact = 0, drawn = 0;
+    for (const point of total?.data ?? []) {
+      const leaves = cut.periods[point.date] ?? [];
+      const isGray = l => l.name === label || l.name.startsWith(`${label} (`);
+      if (!leaves.some(l => !isGray(l))) continue;
+      drawn += 1;
+      const gray = leaves.find(isGray)?.value ?? 0;
+      if (gray <= tolerance(point.value) && !leaves.some(l => l.name.endsWith("(remainder)"))) exact += 1;
+    }
+    return { label: cut.label, exact, drawn, periods: (total?.data ?? []).length };
+  });
+  return { ticker, granularity, label, statement, axis, members: series.map(s => s.name), splits: splits.map(s => s.members), periods, views, breaks: CHARTED_AXIS(axis) ? breaks(periods, label) : [] };
 }
 
 const ADDS_UP = new Set(["exact", "no_breakdown", "no_members"]);
@@ -271,4 +288,12 @@ console.log(`\nbreaks: ${broken.reduce((n, r) => n + r.breaks.length, 0)} period
 for (const r of broken.sort((a, b) => a.company_id - b.company_id || a.label.localeCompare(b.label) || a.axis.localeCompare(b.axis))) {
   for (const b of r.breaks)
     console.log(`${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ${b.date} ${b.kind}: ${b.detail}`);
+}
+
+if (only) {
+  console.log("\nviews: periods drawn exactly / drawn / periods of the line");
+  for (const r of rows.filter(r => KEY.includes(r.label) && r.views?.length > 1)) {
+    for (const v of r.views)
+      console.log(`${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ${v.exact}/${v.drawn}/${v.periods} ${v.label.slice(0, 90)}`);
+  }
 }
