@@ -10,6 +10,7 @@ from edgar import Filing
 
 from ...models import FinancialFactCreate
 from .context import FilingContext, fiscal_focus
+from .frame_cache import filing_frames
 from .measures import segment_measures
 from .segments import disclosure_notes, segment_disclosure_facts
 from .statement import parse_statement, statement_frame
@@ -60,6 +61,10 @@ class SECXBRLParser:
         statements (a Part III 10-K/A) has no facts.
         """
         accession = getattr(filing, "accession_number", "")
+        with filing_frames(accession):
+            return self._parse_filing(filing, accession)
+
+    def _parse_filing(self, filing: Filing, accession: str) -> ParsedFiling:
         try:
             xbrl = filing.xbrl()
         except Exception:
