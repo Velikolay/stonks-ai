@@ -22,7 +22,7 @@ from filings.parsers.sec_xbrl.segments import (
     disclosure_notes,
     segment_disclosure_facts,
 )
-from filings.parsers.sec_xbrl.statement import parse_statement
+from filings.parsers.sec_xbrl.statement import parse_statement, with_own_weights
 
 
 class TestSECXBRLParser:
@@ -1700,3 +1700,81 @@ def test_columns_skip_a_trailing_twelve_months_beside_the_quarter():
         }
     )
     assert _Columns(second).latest == "2010-06-30 (YTD)"
+
+
+class TestOwnWeights:
+    """A concept takes its weight from the statement's own calculation role."""
+
+    @staticmethod
+    def _statement(nodes: dict) -> Mock:
+        tree = Mock()
+        tree.all_nodes = {k: Mock(weight=w) for k, w in nodes.items()}
+        statement = Mock(canonical_type="CashFlowStatement")
+        statement.xbrl.find_statement.return_value = (
+            [],
+            "role/cashflow",
+            "CashFlowStatement",
+        )
+        statement.xbrl.calculation_trees = {"role/cashflow": tree}
+        return statement
+
+    def test_cash_flow_weight_replaces_the_income_statement_weight(self):
+        # SoFi's provision: subtracted on the statement of operations, added
+        # back on the cash flow; edgartools gives both statements -1.
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Provision", "us-gaap_Provision", "us-gaap_Other"],
+                "weight": [-1.0, -1.0, -1.0],
+            }
+        )
+        statement = self._statement({"us-gaap_Provision": 1.0})
+
+        result = with_own_weights(frame, statement)
+
+        assert result["weight"].tolist() == [1.0, 1.0, -1.0]
+        assert frame["weight"].tolist() == [-1.0, -1.0, -1.0]
+
+    def test_no_calculation_role_keeps_the_frame(self):
+        frame = pd.DataFrame({"concept": ["us-gaap_Provision"], "weight": [-1.0]})
+        statement = self._statement({})
+        statement.xbrl.calculation_trees = {}
+
+        assert with_own_weights(frame, statement) is frame
+
+
+class TestFaceWeights:
+    """A note's amount takes the weight of the face line it joins."""
+
+    @staticmethod
+    def _fact(statement: str, axis: str, weight: str) -> FinancialFactCreate:
+        return FinancialFactCreate(
+            company_id=21,
+            filing_id=1,
+            form_type="10-Q",
+            concept="us-gaap:DepreciationDepletionAndAmortization",
+            label="Depreciation and amortization",
+            period_end=date(2026, 9, 30),
+            is_abstract=False,
+            value=Decimal("81251000"),
+            weight=Decimal(weight),
+            axis=axis or None,
+            member="us-gaap:CorporateNonSegmentMember" if axis else None,
+            statement=statement,
+            period=PeriodType.YTD,
+            key=f"{statement}|{axis}",
+        )
+
+    def test_segment_amount_on_the_cash_flow_takes_the_cash_flow_weight(self):
+        from filings.parsers.sec_xbrl.parser import with_face_weights
+
+        # SoFi's segment note subtracts D&A on the way to pre-tax income; on
+        # the cash flow it is added back.
+        face = [self._fact("Cash Flow Statement", "", "1")]
+        note = [
+            self._fact("Cash Flow Statement", "srt:ConsolidationItemsAxis", "-1"),
+            self._fact("Income Statement", "srt:ConsolidationItemsAxis", "-1"),
+        ]
+
+        with_face_weights(note, face)
+
+        assert [f.weight for f in note] == [Decimal("1"), Decimal("-1")]

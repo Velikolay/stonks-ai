@@ -46,6 +46,46 @@ def statement_frame(statement: object, with_dimensions: bool = True) -> pd.DataF
     return cached_frame(statement, variant, build)
 
 
+def with_own_weights(frame: pd.DataFrame, statement: object) -> pd.DataFrame:
+    """Take each concept's weight from this statement's calculation role.
+
+    edgartools gives a concept one weight, from the first statement that
+    presents it, so a concept on the income statement and the cash flow
+    carries the income statement's weight in both: SoFi's provision for
+    credit losses is subtracted on its statement of operations and added
+    back on its cash flow, and was stored on the cash flow at -1. A concept
+    this statement's calculation tree lacks keeps edgartools' weight.
+    """
+    if frame is None or frame.empty or "weight" not in frame.columns:
+        return frame
+    try:
+        xbrl = statement.xbrl  # type: ignore[attr-defined]
+        statement_id = (
+            statement.canonical_type or statement.role_or_type  # type: ignore[attr-defined]
+        )
+        _, role, _ = xbrl.find_statement(statement_id)
+        tree = (getattr(xbrl, "calculation_trees", None) or {}).get(role)
+    except Exception:
+        logger.exception("Could not read the statement's calculation role")
+        return frame
+    if tree is None:
+        return frame
+    own = {
+        concept: node.weight
+        for concept in frame["concept"].dropna().unique()
+        if (node := tree.all_nodes.get(str(concept).replace(":", "_"))) is not None
+        and node.weight is not None
+    }
+    if not own:
+        return frame
+    frame = frame.copy()
+    frame["weight"] = [
+        own.get(concept, weight)
+        for concept, weight in zip(frame["concept"], frame["weight"])
+    ]
+    return frame
+
+
 def attach_dimension_metadata(frame: pd.DataFrame, statement: object) -> pd.DataFrame:
     """Copy dimension coordinates from the raw statement rows onto the grid.
 

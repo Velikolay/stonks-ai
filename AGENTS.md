@@ -1247,7 +1247,15 @@ period column comes back nearly empty, `facts._display_member` strips a
 duplicated member-label prefix, and `statement._Columns` takes the same-date
 year-to-date column as the filing's period even when edgartools gives it no
 "(YTD)" token (Costco's second-quarter 10-Qs, whose 24 weeks were never
-stored, so every line's Q3 and Q4 were wrong). A same-date "(FY)" column is a
+stored, so every line's Q3 and Q4 were wrong), and
+`statement.with_own_weights` takes a concept's weight from the statement's own
+calculation role: edgartools gives a concept the weight of the first statement
+that presents it, so SoFi's provision for credit losses, subtracted on its
+statement of operations, was stored as subtracted on its cash flow too. It runs
+on the cached table, never inside it, so the cache keeps edgartools' output. A
+segment amount from a note takes the weight of the face line it joins
+(`parser.with_face_weights`), not the note's: SoFi's segment note subtracts
+depreciation on the way to pre-tax income. A same-date "(FY)" column is a
 trailing twelve months, not the year to date (Amazon's 10-Q cash flows; taking
 it stored Q1 2010 net income as 1,024 instead of 299), and so a change here
 needs every company's 10-Qs re-ingested and their cash flow and equity

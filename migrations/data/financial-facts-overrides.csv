@@ -105,10 +105,7 @@ id,company_id,concept,statement,axis,member,label,form_type,from_period,to_perio
 107,13,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,srt:ConsolidationItemsAxis,Recurring variable,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ConsolidationItemsAxis,Intersegment Elimination - Recurring variable,Intersegment Elimination - Recurring variable,,False,,,
 108,13,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,srt:ConsolidationItemsAxis,Recurring variable revenue,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ConsolidationItemsAxis,Intersegment Elimination - Recurring variable revenue,Intersegment Elimination - Recurring variable revenue,,False,,,
 109,13,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,Income Statement,srt:ConsolidationItemsAxis,Other revenue,,,,,us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax,srt:ConsolidationItemsAxis,Intersegment Elimination - Other revenue,Intersegment Elimination - Other revenue,,False,,,
-110,14,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,Cash Flow Statement,,,,10-K,2014-11-02,2019-11-03,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,,,,-1,False,,,
-114,14,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,Cash Flow Statement,,,,10-Q,2014-08-03,2014-08-03,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,,,,-1,False,,,
-115,14,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,Cash Flow Statement,,,,10-Q,2015-08-02,2015-08-02,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,,,,-1,False,,,
-116,14,us-gaap:OperatingExpenses,Income Statement,,,,10-K,2017-10-29,2017-10-29,us-gaap:OperatingExpenses,,,,-1,False,,,
+110,14,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,Cash Flow Statement,,,,10-K,,,us-gaap:PaymentsToAcquireBusinessesNetOfCashAcquired,,,,-1,False,,2017-10-29,2017-10-29
 111,14,us-gaap:NetIncomeLoss,Income Statement,__EMPTY__,__EMPTY__,,,2016-05-01,2018-02-04,avgo:NetIncomeAttributableToOrdinaryShares,,,,,False,,,
 112,14,us-gaap:NetIncomeLoss,Income Statement,__EMPTY__,__EMPTY__,,,2018-05-06,2019-08-04,avgo:NetIncomeAttributableToCommonStock,,,,,False,,,
 113,14,us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic,Income Statement,__EMPTY__,__EMPTY__,,,2016-07-31,2017-10-29,avgo:NetIncomeAvailableToCommonStockholders,,,,,False,,,
@@ -192,4 +189,3 @@ id,company_id,concept,statement,axis,member,label,form_type,from_period,to_perio
 194,21,us-gaap:IncomeTaxExpenseBenefit,Income Statement,__EMPTY__,__EMPTY__,,10-K,,,us-gaap:IncomeTaxExpenseBenefit,,,,-1,False,,2022-12-31,2022-12-31
 195,21,us-gaap:NoninterestExpense,Income Statement,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,,,,us-gaap:NoninterestIncome,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,Corporate/Other,-1,False,,,
 196,21,sofi:ProceedsFromSaleFinancingReceivableHeldForInvestment,Cash Flow Statement,,,,10-K,,,sofi:ProceedsFromSaleFinancingReceivableHeldForInvestment,,,,1,False,,2024-12-31,2024-12-31
-197,21,us-gaap:FinancingReceivableExcludingAccruedInterestCreditLossExpenseReversal,Cash Flow Statement,,,,,,,us-gaap:FinancingReceivableExcludingAccruedInterestCreditLossExpenseReversal,,,,1,False,,2025-03-31,
