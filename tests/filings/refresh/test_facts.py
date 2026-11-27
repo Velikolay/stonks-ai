@@ -819,21 +819,6 @@ def test_child_of_a_dropped_twin_points_at_the_kept_one() -> None:
                 "parent_id": 80,
                 "is_duplicate": False,
             },
-            # Only the dropped copy carries the parent: the kept one takes it.
-            {
-                **base,
-                "id": 100,
-                "concept": "us-gaap:RestrictedCash",
-                "parent_id": None,
-                "is_duplicate": False,
-            },
-            {
-                **base,
-                "id": 110,
-                "concept": "us-gaap:RestrictedCash",
-                "parent_id": 20,
-                "is_duplicate": True,
-            },
         ],
         schema_overrides={"parent_id": pl.Int64, "abstract_id": pl.Int64},
     )
@@ -848,7 +833,5 @@ def test_child_of_a_dropped_twin_points_at_the_kept_one() -> None:
         None,
         None,
         80,
-        10,
-        10,
     ]
     assert out.columns == rows.columns

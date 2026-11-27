@@ -91,17 +91,9 @@ class SECXBRLParser:
             facts = self._parse(statement, spec, context, accession)
             parsed.facts.extend(facts)
             if spec.with_dimensions:
-                parsed.facts.extend(
-                    with_face_weights(
-                        segment_disclosure_facts(notes, facts, context), facts
-                    )
-                )
+                parsed.facts.extend(segment_disclosure_facts(notes, facts, context))
         if found:
-            parsed.facts.extend(
-                with_face_weights(
-                    segment_measures(notes, parsed.facts, context), parsed.facts
-                )
-            )
+            parsed.facts.extend(segment_measures(notes, parsed.facts, context))
             link_published_quarters(parsed.facts)
 
         if found == 0:
@@ -133,29 +125,6 @@ class SECXBRLParser:
             logger.exception("Could not read %s for %s", spec.name, accession)
             return []
         return parse_statement(frame, spec.name, spec.with_dimensions, context)
-
-
-def with_face_weights(
-    note_facts: list[FinancialFactCreate], face_facts: list[FinancialFactCreate]
-) -> list[FinancialFactCreate]:
-    """Give a note's amount the weight of the face line it joins.
-
-    A note's table carries the note's own calculation: SoFi's segment note
-    subtracts depreciation to reach pre-tax income, while the cash flow the
-    segment amounts join adds it back. A fact whose statement prints the
-    concept as a line takes that line's weight; one with no such line keeps
-    its own.
-    """
-    face = {
-        (f.statement, f.concept): f.weight
-        for f in face_facts
-        if not f.axis and f.weight is not None
-    }
-    for f in note_facts:
-        weight = face.get((f.statement, f.concept))
-        if weight is not None:
-            f.weight = weight
-    return note_facts
 
 
 def link_published_quarters(facts: list[FinancialFactCreate]) -> None:

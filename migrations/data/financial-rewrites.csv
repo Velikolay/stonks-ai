@@ -6,11 +6,3 @@ company_id,statement,normalized_label,axis,member,period_end,granularity,action,
 13,Income Statement,Depreciation,,,2012-03-31,quarterly,set,22000000
 13,Income Statement,Depreciation,,,2012-09-30,quarterly,set,24000000
 10,Income Statement,Revenue,Product,All Other,2013-12-28,quarterly,add,2000000
-21,Income Statement,Total noninterest expense,,,2024-03-31,quarterly,set,543587000
-21,Income Statement,Total noninterest expense,,,2024-06-30,quarterly,set,571638000
-21,Income Statement,Total noninterest expense,,,2024-09-30,quarterly,set,627253000
-21,Income Statement,Total noninterest expense,,,2024-12-31,quarterly,set,667324000
-21,Comprehensive Income,Total noninterest expense,,,2024-03-31,quarterly,set,543587000
-21,Comprehensive Income,Total noninterest expense,,,2024-06-30,quarterly,set,571638000
-21,Comprehensive Income,Total noninterest expense,,,2024-09-30,quarterly,set,627253000
-21,Comprehensive Income,Total noninterest expense,,,2024-12-31,quarterly,set,667324000

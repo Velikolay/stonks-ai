@@ -419,16 +419,10 @@ A row that rounds to the
 winner's value, within 0.1%, beats it, so a later reprint in millions does not
 replace the original's digits. A filing that prints a line twice in one statement (SoFi's FY2022 10-K
 repeats Total assets, Total liabilities and five lines beside them in its
-block of consolidated VIE amounts) gives the copies one key. A child points
-at the nearest copy printed after it, since a total follows its parts, and a
-header at the nearest one before it (`copy_for` in
-[financial_facts.py](filings/db/financial_facts.py)): SoFi's cash flow prints
-cash at the beginning and end of the period and again as the total of its
-cash reconciliation, and the reconciliation's lines belong to the last. Dedup
-may still keep another copy. After dedup a pointer at a
-dropped twin (same filing, concept, cut, period and value) moves to the kept
-one, and a kept copy without a parent takes its twin's
-(`with_parents_on_kept_twins` in
+block of consolidated VIE amounts) gives the copies one key, and children
+point at the last copy while dedup may keep another. After dedup a pointer at
+a dropped twin (same filing, concept, cut, period and value) moves to the
+kept one (`with_parents_on_kept_twins` in
 [dedup.py](filings/refresh/stages/facts_normalized/dedup.py)). Losers get `is_duplicate = true`, and both `yearly_financials` and
 `quarterly_financials` filter them out. If a value vanishes from the
 presentation layer, this is usually why — check `financial_facts_normalized`
@@ -1253,9 +1247,7 @@ calculation role: edgartools gives a concept the weight of the first statement
 that presents it, so SoFi's provision for credit losses, subtracted on its
 statement of operations, was stored as subtracted on its cash flow too. It runs
 on the cached table, never inside it, so the cache keeps edgartools' output. A
-segment amount from a note takes the weight of the face line it joins
-(`parser.with_face_weights`), not the note's: SoFi's segment note subtracts
-depreciation on the way to pre-tax income. A same-date "(FY)" column is a
+same-date "(FY)" column is a
 trailing twelve months, not the year to date (Amazon's 10-Q cash flows; taking
 it stored Q1 2010 net income as 1,024 instead of 299), and so a change here
 needs every company's 10-Qs re-ingested and their cash flow and equity

@@ -414,11 +414,9 @@ def with_parents_on_kept_twins(marked: pl.DataFrame) -> pl.DataFrame:
     A filing can print a line twice in one statement: SoFi's FY2022 10-K
     repeats Total assets, Total liabilities and five lines beside them in
     the block of consolidated VIE amounts below its balance sheet. Children
-    point at one copy and only one copy carries the parent, and dedup can
-    keep the other. A twin is the same concept, cut, period and value in the
-    same filing. A pointer at a dropped twin moves to the kept one, unless
-    that is the row itself, and a kept row without a parent or header takes
-    its dropped twin's.
+    point at the last copy, and dedup can keep another. A twin is the same
+    concept, cut, period and value in the same filing. A pointer at a dropped
+    twin moves to the kept one, unless that is the row itself.
     """
     dropped = marked.filter(pl.col("is_duplicate"))
     kept = (
@@ -429,18 +427,6 @@ def with_parents_on_kept_twins(marked: pl.DataFrame) -> pl.DataFrame:
     moved = dropped.select("id", *TWIN).join(kept, on=TWIN, nulls_equal=True)
     if moved.is_empty():
         return marked
-    for column in ("parent_id", "abstract_id"):
-        inherited = (
-            moved.join(dropped.select("id", column), on="id")
-            .filter(pl.col(column).is_not_null())
-            .group_by("kept_id")
-            .agg(pl.col(column).min().alias("_inherited"))
-        )
-        marked = (
-            marked.join(inherited, left_on="id", right_on="kept_id", how="left")
-            .with_columns(pl.coalesce(column, "_inherited").alias(column))
-            .drop("_inherited")
-        )
     return _repoint(marked, moved)
 
 
