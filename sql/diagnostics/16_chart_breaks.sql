@@ -348,7 +348,9 @@ merged AS (
     FROM printed
     GROUP BY company_id, statement, normalized_label, axis, member, period_end,
              period, filing_id
-    HAVING COUNT(DISTINCT qname) > 1 AND COUNT(DISTINCT value) > 1
+    -- Values a reprint's rounding explains (70,308 beside 70,307) are one member.
+    HAVING COUNT(DISTINCT qname) > 1
+       AND MAX(value) - MIN(value) > GREATEST(1, ABS(MAX(value)) * 0.001)
 )
 SELECT
     company_id,

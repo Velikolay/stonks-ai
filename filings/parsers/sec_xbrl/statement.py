@@ -2,8 +2,8 @@
 
 Face rows keep the filing's latest column, with the closest earlier column
 of the same shape as the comparative; the quarterly stage reduces a
-year-to-date total. Revenue totals and per-share amounts also keep the
-printed quarter beside that total. Dimension rows keep every column of the
+year-to-date total. Income Statement lines and per-share amounts also keep
+the printed quarter beside that total. Dimension rows keep every column of the
 current period's shape, including prior years, and the year-to-date column
 of the same date.
 """
@@ -17,7 +17,7 @@ import pandas as pd
 
 from ...models import FinancialFactCreate, PeriodType
 from . import columns as cols
-from .concepts import TOTAL_REVENUE_CONCEPTS, is_per_share
+from .concepts import is_per_share
 from .context import FilingContext
 from .facts import dimension_fact, face_fact
 from .values import cell_text, flag, sec_member
@@ -84,14 +84,15 @@ def attach_dimension_metadata(frame: pd.DataFrame, statement: object) -> pd.Data
 def keeps_published_quarter(fact: FinancialFactCreate) -> bool:
     """The face row also stores its printed quarter beside the year-to-date total.
 
-    Revenue totals keep it so a dimension split can match the printed total
-    after a restatement. Per-share amounts keep it because they are not
-    additive: subtracting year-to-date totals invents a false quarter after a
-    stock split.
+    Every Income Statement line keeps it. Subtracting the previous 10-Q's
+    year to date invents a false quarter when this 10-Q restated it: S&P
+    Global's third-quarter 2026 10-Q took Mobility out of the first half, so
+    its operating income came out at 1,813 against the 1,956 printed, which
+    its segments add up to. Per-share amounts keep it on any statement
+    because they are not additive: subtracting year-to-date totals invents a
+    false quarter after a stock split.
     """
-    return fact.concept in TOTAL_REVENUE_CONCEPTS or is_per_share(
-        fact.concept, fact.unit
-    )
+    return fact.statement == "Income Statement" or is_per_share(fact.concept, fact.unit)
 
 
 def collapsed_dimension_members(dimensions: pd.DataFrame) -> tuple[set[str], set[str]]:
@@ -140,11 +141,15 @@ class _Columns:
         self.all = cols.period_columns(frame)
         if not self.all:
             return
-        self.latest = sorted(self.all)[-1]
-        self.latest_comparative = cols.prior_column(self.all, self.latest)
         self.quarter = cols.current_column(self.all)
         self.quarter_comparative = cols.prior_column(self.all, self.quarter)
         self.ytd = cols.same_date_ytd_column(self.all, self.quarter)
+        # The year to date is the filing's period whatever edgartools names
+        # it: Costco's second-quarter 10-Qs print "2025-02-16" beside
+        # "2025-02-16 (Q2)", and the quarter sorted last, so the 24 weeks
+        # were never stored. Without a same-date one, the latest column.
+        self.latest = self.ytd or sorted(self.all)[-1]
+        self.latest_comparative = cols.prior_column(self.all, self.latest)
 
 
 def parse_statement(

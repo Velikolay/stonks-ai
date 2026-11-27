@@ -47,6 +47,30 @@ SLICE_AXES = frozenset(
 }
 
 
+#: Raw segment axes, shown as :data:`SEGMENT_AXIS_LABEL` once grouping has
+#: run. The name is given after grouping, not by an axis override, because an
+#: override's axis label keeps a member out of the group of its twin on
+#: Product or Geographical (Apple's Americas segment beside the Americas
+#: region).
+SEGMENT_AXES = frozenset(
+    {
+        "us-gaap:StatementBusinessSegmentsAxis",
+        "srt:StatementBusinessSegmentsAxis",
+        "ifrs-full:SegmentsAxis",
+    }
+)
+SEGMENT_AXIS_LABEL = "Business Segment"
+
+
+def display_axis(axis: pl.Expr) -> pl.Expr:
+    """The normalized axis, with a raw segment axis named ``Business Segment``."""
+    return (
+        pl.when(axis.is_in(list(SEGMENT_AXES)))
+        .then(pl.lit(SEGMENT_AXIS_LABEL))
+        .otherwise(axis)
+    )
+
+
 def on_real_slice(facts: pl.DataFrame, dimensions: pl.DataFrame) -> pl.DataFrame:
     """Show a fact filed under an axis total on its one real slice.
 

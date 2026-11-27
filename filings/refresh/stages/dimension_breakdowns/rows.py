@@ -1,4 +1,7 @@
-"""The 10-K amounts a breakdown is searched over, and the tolerance it must meet.
+"""The amounts a breakdown is searched over, and the tolerance it must meet.
+
+10-K and 20-F amounts, and the printed quarters of 10-Qs filed since the
+latest annual report (:func:`interim_rows`).
 
 Only rows that survive dedup take part, so a breakdown holds on the values
 the presentation tables show. Per-share amounts are not additive.
@@ -11,7 +14,12 @@ from decimal import Decimal
 import polars as pl
 
 from ...inputs import CompanyData
-from ...rules.periods import ANNUAL_FORMS, FOREIGN_ANNUAL_FORMS, fiscal_year_of
+from ...rules.periods import (
+    ANNUAL_FORMS,
+    FOREIGN_ANNUAL_FORMS,
+    QUARTERLY_FORMS,
+    fiscal_year_of,
+)
 from ...rules.rounding import is_multiple_of
 
 PERIOD = ["company_id", "statement", "normalized_label", "period_end"]
@@ -88,21 +96,19 @@ def within_tolerance_expr(
     )
 
 
-def breakdown_rows(data: CompanyData) -> pl.DataFrame:
-    """Non-duplicate, non-per-share 10-K and 20-F amounts with their fiscal year."""
-    filings = data.table("filings").select(
-        pl.col("id").alias("fiscal_filing_id"),
-        pl.col("fiscal_year").alias("filing_fiscal_year"),
-        pl.col("fiscal_period_end").alias("filing_period_end"),
-    )
-    rows = data.table("financial_facts_normalized").filter(
-        pl.col("form_type").is_in([*ANNUAL_FORMS, *FOREIGN_ANNUAL_FORMS])
-        & ~pl.col("is_duplicate")
+def _amounts() -> pl.Expr:
+    """Shown, non-per-share amounts: the rows a breakdown can add up."""
+    return (
+        ~pl.col("is_duplicate")
         & ~pl.col("is_abstract")
         & pl.col("value").is_not_null()
         & ~pl.col("unit").fill_null("").str.to_lowercase().str.contains("pershare")
     )
-    return rows.join(filings, on="fiscal_filing_id", how="inner").select(
+
+
+def _with_fiscal_year(rows: pl.DataFrame) -> pl.DataFrame:
+    """The breakdown columns, with each row's fiscal year from its filing's."""
+    return rows.select(
         "id",
         "company_id",
         "statement",
@@ -117,6 +123,50 @@ def breakdown_rows(data: CompanyData) -> pl.DataFrame:
         ).alias("fiscal_year"),
         "value",
         rounding(pl.col("value")).alias("rounding"),
+    )
+
+
+def _filing_years(filings: pl.DataFrame, key: str) -> pl.DataFrame:
+    return filings.select(
+        pl.col("id").alias(key),
+        pl.col("fiscal_year").alias("filing_fiscal_year"),
+        pl.col("fiscal_period_end").alias("filing_period_end"),
+    )
+
+
+def breakdown_rows(data: CompanyData) -> pl.DataFrame:
+    """Non-duplicate, non-per-share 10-K and 20-F amounts with their fiscal year."""
+    rows = data.table("financial_facts_normalized").filter(
+        pl.col("form_type").is_in([*ANNUAL_FORMS, *FOREIGN_ANNUAL_FORMS]) & _amounts()
+    )
+    filings = _filing_years(data.table("filings"), "fiscal_filing_id")
+    return _with_fiscal_year(rows.join(filings, on="fiscal_filing_id", how="inner"))
+
+
+def interim_rows(data: CompanyData) -> pl.DataFrame:
+    """Printed quarters of the 10-Qs filed after the latest annual report.
+
+    A filer that moves to new segments in a 10-Q has no 10-K on them until
+    the year ends, so until then the quarter and the prior-year quarter it
+    reprints on the new split are the only years that split holds in.
+    Microsoft's fiscal 2027 first-quarter 10-Q: Agents and Infra and Devices
+    and Consumer, 23,887 + 5,833 = 29,720 of cost of revenue.
+    """
+    filings = data.table("filings")
+    annual = filings.filter(
+        pl.col("form_type").is_in([*ANNUAL_FORMS, *FOREIGN_ANNUAL_FORMS])
+    )
+    if annual.is_empty():
+        return breakdown_rows(data).clear()
+    pending = filings.filter(
+        pl.col("form_type").is_in(QUARTERLY_FORMS)
+        & (pl.col("fiscal_period_end") > annual["fiscal_period_end"].max())
+    )
+    rows = data.table("financial_facts_normalized").filter(
+        (pl.col("period") == "Q") & _amounts()
+    )
+    return _with_fiscal_year(
+        rows.join(_filing_years(pending, "filing_id"), on="filing_id", how="inner")
     )
 
 

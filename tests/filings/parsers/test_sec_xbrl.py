@@ -1196,6 +1196,41 @@ class TestSECXBRLParser:
         assert by_period[PeriodType.YTD].value == Decimal("289007.0")
         assert by_period[PeriodType.Q].key != by_period[PeriodType.YTD].key
 
+    def test_every_income_statement_line_keeps_the_published_quarter(self):
+        """Operating income keeps its printed quarter; a balance sheet line does not.
+
+        S&P Global's third-quarter 2026 10-Q restated the half year without
+        Mobility, so the printed quarter is not the year to date less the
+        previous 10-Q's.
+        """
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_OperatingIncomeLoss"],
+                "label": ["Operating profit"],
+                "abstract": [False],
+                "dimension": [False],
+                "parent_concept": [None],
+                "parent_abstract_concept": [None],
+                "unit": ["usd"],
+                "weight": [1.0],
+                "preferred_sign": [1.0],
+                "point_in_time": [False],
+                "2026-09-30 (Q3)": [1956.0],
+                "2026-09-30 (YTD)": [5627.0],
+            }
+        )
+
+        income = {
+            f.period: f.value for f in parse_statement(frame, "Income Statement", False)
+        }
+        cash = {f.period for f in parse_statement(frame, "Cash Flow Statement", False)}
+
+        assert income == {
+            PeriodType.Q: Decimal("1956.0"),
+            PeriodType.YTD: Decimal("5627.0"),
+        }
+        assert cash == {PeriodType.YTD}
+
     def test_face_eps_keeps_the_published_quarter(self):
         """A printed per-share quarter is stored beside the year-to-date total."""
         frame = pd.DataFrame(
@@ -1593,3 +1628,53 @@ def test_member_label_drops_the_taxonomy_member_suffix():
     assert plain_member_label("Wafer [Member]") == "Wafer"
     assert plain_member_label("Products") == "Products"
     assert plain_member_label(None) is None
+
+
+def test_columns_take_the_same_date_year_to_date_without_a_ytd_token():
+    """Costco's Q2 10-Qs print the 24 weeks as a bare date beside "(Q2)"."""
+    from filings.parsers.sec_xbrl.statement import _Columns
+
+    frame = pd.DataFrame(
+        {
+            "concept": ["us-gaap_OperatingIncomeLoss"],
+            "2025-02-16 (Q2)": [2316.0],
+            "2025-02-16": [4512.0],
+            "2024-02-18 (Q2)": [2068.0],
+            "2024-02-18": [4086.0],
+        }
+    )
+    columns = _Columns(frame)
+    assert columns.latest == "2025-02-16"
+    assert columns.quarter == "2025-02-16 (Q2)"
+    assert columns.latest_comparative == "2024-02-18"
+
+
+def test_columns_skip_a_trailing_twelve_months_beside_the_quarter():
+    """Amazon's 10-Q cash flows print twelve months, which edgartools calls FY.
+
+    In a first quarter that column is the only other one of the date; the
+    filing's period is the quarter, not the twelve months.
+    """
+    from filings.parsers.sec_xbrl.statement import _Columns
+
+    first = pd.DataFrame(
+        {
+            "concept": ["us-gaap_NetIncomeLoss"],
+            "2010-03-31 (Q1)": [299.0],
+            "2009-03-31 (Q1)": [177.0],
+            "2010-03-31 (FY)": [1024.0],
+            "2009-03-31 (FY)": [679.0],
+        }
+    )
+    assert _Columns(first).latest == "2010-03-31 (Q1)"
+
+    second = pd.DataFrame(
+        {
+            "concept": ["us-gaap_NetIncomeLoss"],
+            "2010-06-30 (Q2)": [207.0],
+            "2009-06-30 (Q2)": [142.0],
+            "2010-06-30 (FY)": [1089.0],
+            "2010-06-30 (YTD)": [505.0],
+        }
+    )
+    assert _Columns(second).latest == "2010-06-30 (YTD)"

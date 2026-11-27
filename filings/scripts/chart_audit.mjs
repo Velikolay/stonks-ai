@@ -310,12 +310,16 @@ if (only) {
 // periods gray or unsplit; each is a finding until fixed or explained. A
 // gray under 0.5% (a member reprinted coarser) is left out.
 const fine = p => p.status === "exact" || (p.status === "short" && p.grayPct < 0.5);
-function runs(periods) {
+function runs(periods, all) {
+  // A run is consecutive periods of the line with one status.
+  const index = new Map(all.map((p, i) => [p.date, i]));
   const out = [];
   for (const p of periods) {
     const last = out.at(-1);
-    if (last && last.status === p.status) last.to = p.date;
-    else out.push({ status: p.status, from: p.date, to: p.date });
+    if (last && last.status === p.status && index.get(p.date) === last.at + 1) {
+      last.to = p.date;
+      last.at += 1;
+    } else out.push({ status: p.status, from: p.date, to: p.date, at: index.get(p.date) });
   }
   return out.map(r => `${r.from.slice(0, 7)}${r.to !== r.from ? ".." + r.to.slice(0, 7) : ""} ${r.status}`);
 }
@@ -329,7 +333,7 @@ const gaps = rows
   .sort((a, b) => a.r.company_id - b.r.company_id || a.r.label.localeCompare(b.r.label) || a.r.axis.localeCompare(b.r.axis) || a.r.granularity.localeCompare(b.r.granularity));
 console.log(`\naxes that do not add up: ${gaps.length} line/axis/granularity series (exact / periods with members)`);
 for (const { r, withMembers, bad } of gaps) {
-  const shown = runs(bad);
+  const shown = runs(bad, r.periods);
   console.log(
     `${String(r.company_id).padStart(2)} ${r.ticker.padEnd(6)} ${r.granularity.padEnd(9)} ${r.label} | ${r.axis} | ` +
       `${withMembers.length - bad.length}/${withMembers.length} | ${shown.slice(0, 4).join("; ")}${shown.length > 4 ? ` (+${shown.length - 4})` : ""}`

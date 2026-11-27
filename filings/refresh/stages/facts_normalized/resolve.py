@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import polars as pl
 
+from ...rules.facts import display_axis
 from ...rules.ids import abs_hash_expr
 from ...rules.overrides import best_concept_override
 from ...rules.units import is_currency, is_per_share_concept
@@ -54,9 +55,27 @@ def company_override_unit() -> pl.Expr:
     )
 
 
-def synthetic_id(statement: pl.Expr, concept: pl.Expr) -> pl.Expr:
-    """Id of the row standing in for ``concept`` in a filing that never tagged it."""
-    return abs_hash_expr(statement, concept, pl.col("filing_id"), pl.col("company_id"))
+def synthetic_id(
+    statement: pl.Expr, concept: pl.Expr, by_period: bool = False
+) -> pl.Expr:
+    """Id of the row standing in for ``concept`` in a filing that never tagged it.
+
+    With ``by_period``, a printed quarter's parent is its own row: a 10-Q
+    prints the quarter beside the year to date, and one subtotal for both
+    would add them together. The year to date keeps the plain id.
+    """
+    plain = abs_hash_expr(statement, concept, pl.col("filing_id"), pl.col("company_id"))
+    if not by_period:
+        return plain
+    quarter = abs_hash_expr(
+        statement, concept, pl.col("filing_id"), pl.col("company_id"), "Q"
+    )
+    return pl.when(is_printed_quarter()).then(quarter).otherwise(plain)
+
+
+def is_printed_quarter() -> pl.Expr:
+    """The row is a 10-Q's printed quarter, not the year to date beside it."""
+    return (pl.col("period") == "Q").fill_null(False)
 
 
 def with_tree_overrides(
@@ -85,21 +104,35 @@ def with_tree_overrides(
         how="left",
     )
     # A parent or header is a line, never one member of it.
-    by_concept = facts.filter(pl.col("axis").fill_null("") == "").select(
+    lines = facts.filter(pl.col("axis").fill_null("") == "")
+    by_concept = lines.select(
         "company_id",
         "filing_id",
         "statement",
         "concept",
         pl.col("id").alias("found_id"),
     )
+    # A printed quarter adds up to the printed quarter of its parent, and the
+    # year to date to the year to date.
+    by_period = lines.select(
+        "company_id",
+        "filing_id",
+        "statement",
+        pl.col("concept").alias("_parent"),
+        is_printed_quarter().alias("_quarter"),
+        pl.col("id").alias("parent_fact_id"),
+    )
     parent = pl.coalesce("cno_parent_concept", "hn_parent_concept")
     joined = (
-        joined.with_columns(parent.alias("_parent"))
+        joined.with_columns(
+            parent.alias("_parent"), is_printed_quarter().alias("_quarter")
+        )
         .join(
-            by_concept.rename({"concept": "_parent", "found_id": "parent_fact_id"}),
-            on=["company_id", "filing_id", "statement", "_parent"],
+            by_period,
+            on=["company_id", "filing_id", "statement", "_parent", "_quarter"],
             how="left",
         )
+        .drop("_quarter")
         .join(
             by_concept.rename(
                 {"concept": "cno_abstract_concept", "found_id": "abstract_fact_id"}
@@ -131,7 +164,7 @@ def tree_pointers(own_parent: pl.Expr, own_abstract: pl.Expr) -> list[pl.Expr]:
         pl.when(parent.is_not_null() & pl.col("parent_fact_id").is_not_null())
         .then(pl.col("parent_fact_id"))
         .when(parent_missing)
-        .then(synthetic_id(pl.col("statement"), synthetic_parent))
+        .then(synthetic_id(pl.col("statement"), synthetic_parent, by_period=True))
         .otherwise(own_parent)
         .alias("parent_id"),
         pl.when(parent_missing).then(synthetic_parent).alias("parent_concept"),
@@ -230,7 +263,7 @@ def resolve_facts(
         # A company override replaces the unit; a global one keeps the fact's
         # currency, and a per-share concept keeps that shape.
         unit.alias("unit"),
-        pl.coalesce("dn_axis", "axis").alias("axis"),
+        display_axis(pl.coalesce("dn_axis", "axis")).alias("axis"),
         pl.coalesce("dn_member", "member_label").alias("member"),
         "statement",
         "period_end",

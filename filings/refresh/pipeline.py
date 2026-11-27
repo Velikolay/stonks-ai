@@ -102,7 +102,7 @@ STAGES: tuple[Stage, ...] = (
     Stage(
         "quarterly_financials",
         s.QUARTERLY_FINANCIALS,
-        ("financial_facts_normalized", "filings"),
+        ("financial_facts_normalized", "filings", "dimension_breakdowns"),
         quarterly.run,
     ),
     Stage(

@@ -349,10 +349,22 @@ from a quarterly response. With `breakdowns=true`, the API returns
 `breakdowns` once on the series: each
 entry is an axis and its members. Show one at a time. For a
 period, sum the members that have a value; a shortfall is unallocated and a
-sum past the line means that split does not apply there. Members reprinted
-coarser than the total, such as millions beside an exact dollar total, may
-overshoot by half a rounding unit each, up to 0.1%. That split still applies
-and the bars stay at the filed values. Drill down through a
+sum past the line means that split does not apply there. Members rounded no
+finer than the line may miss it either way by half a rounding unit each, up to
+0.1% (`roundingAllowance` in the UI's `dimension-stack.ts`): millions beside a
+total in thousands, which is the rule the refresh stores a year by (S&P
+Global's FY2009 segments, 5,951.0 beside 5,951.782), segments summing to 704
+beside an operating income of 703, and a calculated Q4 that subtracts nine
+months rounded member by member (S&P Global's Q4 2012, 1,226 beside 1,227).
+Any overshoot up to 0.01% of the line is rounding as well (Tesla's Q4 2018
+cost of revenue, a year and nine months rounded differently). That split still
+applies and the bars stay at the filed values; the cap keeps any missing
+member larger than 0.1% from passing. A view missing one of its own members
+in a period draws that period on an earlier presentation that adds up, even
+when other series would fill the view's gap: Microsoft's fiscal 2027 segments
+share the Devices and Consumer name with its fiscal 2013-2015 segment, and
+filling December 2014 with Commercial and Corporate and Other kept Commercial
+from opening into its split. Drill down through a
 member's own `breakdowns`. A member in no breakdown is not additive. A flat
 axis wider than 16 members is skipped, and so are per-share amounts. A fact with several stored XBRL dimensions is not part of that flat list,
 unless every extra dimension is the axis default or a member carried by every
@@ -404,8 +416,14 @@ before assuming ingestion dropped it.
 the previous quarter when that quarter ended 80 to 100 days earlier, or that
 quarter's year-to-date total when it was published beside it. A statement
 header on the same label is not that previous quarter. A dimension
-column marked as a quarter is stored as that quarter, and its year-to-date
-total is kept only so Q4 can subtract the nine-month figure. Q4 is
+column marked as a quarter is stored as that quarter, and so is the printed
+quarter of every undimensioned Income Statement line; the year-to-date total
+beside it is kept only so Q4 can subtract the nine-month figure. Subtraction
+alone invents a false quarter when a 10-Q restated the previous one: S&P
+Global's third-quarter 2026 10-Q took Mobility out of the half year, so
+operating income came out at 1,813 against the 1,956 its segments add up
+to. A printed quarter rolls up to its parent's printed quarter, never to the
+year to date beside it, and a synthetic subtotal has one row for each. Q4 is
 derived as annual minus Q1–Q3 and marked `source_type = 'calculated'`, but only
 when all three earlier quarters already exist for that series (label + axis +
 member). A YTD with no earlier quarter in the series is not a quarter and is
@@ -417,7 +435,14 @@ first three quarters overshoot its 10-K by more than 5% and the next year's
 quarterly comparatives still fit under that 10-K, those comparatives replace
 the three quarters and Q4 is the 10-K minus them. Other undimensioned income
 statement lines of that year follow when the next year's annual comparative
-still equals this 10-K, so a subtotal stays on the same basis. Per-share
+still equals this 10-K, so a subtotal stays on the same basis. Its members
+follow axis by axis: a moved quarter takes the members next year's 10-Q
+reprinted for it when they, or a stored breakdown of them, add up to the
+restated quarter, and Q4 is the 10-K's members less those three quarters
+(S&P Global's 2012 segments without McGraw-Hill Education, Netflix's 2018
+costs by product; `with_restated_members` in
+[restatement.py](filings/refresh/stages/quarterly/restatement.py)). A quarter
+whose reprint does not add up keeps its filed members. Per-share
 amounts and share counts stay on the filed quarters. A reversal smaller than
 5%, or comparatives that overshoot the same way, stays as filed. Q4 is otherwise the annual
 figure of that same member minus the nine-month YTD on the quarter before the
@@ -572,7 +597,7 @@ is semicolon-separated.
 0,us-gaap:StatementBusinessSegmentsAxis,,Japan,True,Geographical,Japan,
 0,srt:ProductOrServiceAxis,,,True,Product,,
 6,us-gaap:StatementBusinessSegmentsAxis,uber:RidesMember,,False,Product,Mobility,
-8,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,us-gaap:StatementBusinessSegmentsAxis,All Other,
+8,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Business Segment,All Other,
 ```
 
 The first maps one company's segment member. The second matches any company that
@@ -584,7 +609,19 @@ income and the ASU 2023-07 segment expenses all arrive on
 every line on revenue's axis, and a legacy qname (Rides) joins its successor.
 Grouping is per metric, so inference will not pull OI onto Product by itself.
 The fifth puts the corporate member beside the segments so they add up to the
-line. Key these rows on the qname: a row on `ConsolidationItemsAxis` with a
+line.
+
+A raw segment axis (`us-gaap:StatementBusinessSegmentsAxis`,
+`srt:StatementBusinessSegmentsAxis`, `ifrs-full:SegmentsAxis`) is shown as
+`Business Segment` (`display_axis` in
+[rules/facts.py](filings/refresh/rules/facts.py)), so a row that keeps a member
+on the segment cut writes `Business Segment`. The name is given after
+grouping, not by a global axis row, because an axis label keeps a member out
+of the group of its twin on another axis: a global row put Apple's Americas
+segment on `Business Segment` beside the Americas region instead of joining it
+on `Geographical`.
+
+Key these rows on the qname: a row on `ConsolidationItemsAxis` with a
 label such as `Operating Segments - X` only matches facts the refresh could
 not move (see `15`). `13_dimension_axis_splits.sql` and
 `15_segment_alignment.sql` flag these splits.
@@ -975,12 +1012,13 @@ reads a saved run instead of the API, so an earlier run can be read again.
    breakdowns. Segments go on `Product` beside product lines when the filer
    has no separate segment cut (Google, Amazon, AMD, Uber), on
    `Geographical` when the segments are regions (Apple, Costco), or stay on
-   `us-gaap:StatementBusinessSegmentsAxis` when revenue already splits there
-   (Microsoft, NVIDIA, S&P Global).
+   `Business Segment` when revenue already splits there (Microsoft, NVIDIA, S&P
+   Global).
 2. Run `15`. Its first query lists segment members a line reports on another
    axis than revenue. Map each qname on the axis the fact is read on
    (usually `us-gaap:StatementBusinessSegmentsAxis`) to revenue's axis and
-   label, one row per qname, legacy names included.
+   label, one row per qname, legacy names included. A segment that stays on
+   the segment axis names it `Business Segment`.
 3. Its second query lists profit and cost lines with segment members but no
    breakdown. Add the reconciling member to the same axis: corporate
    (`CorporateNonSegmentMember`, a filer's `AllOtherMember`), unallocated
@@ -1067,6 +1105,32 @@ way before it becomes an explanation.
 | One quarter `unsplit` in an otherwise exact run | `16` and the breaks | See [One period that looks wrong](#one-period-that-looks-wrong) |
 | `short` under 1% for years a member is rounded coarser (Netflix's DVD to $100 million) | the members' values | Explained |
 
+### Profit and cost lines
+
+Revenue usually splits by itself; the lines below it need the reconciling
+pieces and the ASU 2023-07 disclosures brought onto revenue's axis. The
+patterns found so far, each with the company it was fixed at:
+
+| What shows | Cause | Fix |
+| --- | --- | --- |
+| Operating income by segment `over` or `no_breakdown` every year | The corporate, unallocated or elimination member stays on `ConsolidationItemsAxis` (Alphabet 2011-2013, S&P Global, Walmart FY2010-2013) | A dimension row per qname onto revenue's axis, legacy qnames included (`UnallocatedAmountToSegmentMember`, `MaterialReconcilingItemsMember`, a filer's `OtherUnallocatedMember`) |
+| The split misses by a reconciling amount in some years only | The filer flipped its sign (S&P Global tags corporate expense positive from FY2024), or a non-segment item sits inside the line (S&P's equity income from 2022) | `to_weight` -1 bounded by filing period with a company concept row of weight 1; a clone of the item onto the axis |
+| Segment cost, R&D or SG&A by segment that never joins the face line | The filer tagged each segment's amount as its own concept (Broadcom's `avgo:InfrastructureSoftwareCostOfRevenue`) | Rewrite the concept to the face concept, keeping the dimensions |
+| A single-segment filer's ASU 2023-07 expenses as separate one-member lines | They split one face line by nature (Mastercard's G&A: personnel, data processing, fees, other, FX) | Rewrite them onto that line on one named axis; check signs (`to_weight`) |
+| A line labelled after a segment column ("Operating segments - Graphics") | `SegmentReportingOtherItemAmount` had no concept override | The global "Other segment items" row; a company row where the amount means more (Palantir's segment expenses) |
+| Operating income members far above the line | A non-GAAP segment measure tagged as operating income (Uber's segment Adjusted EBITDA in its 2019 and 2026 filings) | Rewrite those filings' facts onto the measure's own concept |
+| A cost member missing for years | A component tagged under another concept or member (Tesla's energy and development services cost) | Rewrite it onto the line's product member, with the line's sign |
+| One period whose segment split overshoots after a recast | A later filing's reprint changed a shared reconciling member and was hidden, so the quarter keeps a split its own filing never completed (AMD's Q1 2022 after Xilinx) | Give the original member its own qname, bounded to its filing, so the reprint extends the quarter (as Uber's Other Bets) |
+
+Breakdowns are inferred and declared from 10-K years, with one exception: a
+flat set that the 10-Qs filed since the latest 10-K add up to, in the quarter
+and the prior-year quarter they reprint on it, is stored with `source =
+'interim'` until a 10-K prints it (Microsoft's fiscal 2027 first-quarter
+10-Q moving to Agents and Infra and Devices and Consumer; `interim_rows` in
+[rows.py](filings/refresh/stages/dimension_breakdowns/rows.py)). `14`'s
+yearly check skips those. A split that older 10-Qs alone tag never draws, so
+Microsoft's FY2013-2014 quarterly segment operating expenses stay unsplit.
+
 ### What stays unsplit, and why
 
 - **Segment profit before unallocated costs.** Apple before FY2023, Amazon
@@ -1074,6 +1138,11 @@ way before it becomes an explanation.
   R&D, stock compensation or corporate expense, and tag those only as
   reconciling items of another concept. The members overshoot the line
   (`over`) and the chart draws the gray bar. Do not invent the missing piece.
+  Broadcom since its FY2025 10-K tags unallocated expenses only as their
+  undimensioned parts (stock compensation, amortization, restructuring:
+  2,019 + 2,006 + 115 = 4,140 in Q3 FY2026), so its operating income from
+  Q4 FY2025 and its segment cost of revenue, which excludes them in every
+  year, stay unsplit too.
 - **Earlier presentations.** After a re-segmentation (AMD's Computing and
   Graphics, NVIDIA's GPU and Tegra, Alphabet's old regions) the chart draws
   the older years on the older split, one chart per axis, as described under
@@ -1152,8 +1221,15 @@ on `filings` links to. Fix the parser and re-ingest so the fact is stored
 with the rest of the filing. The parser is the package
 [filings/parsers/sec_xbrl/](filings/parsers/sec_xbrl/), and there is precedent
 in it: `columns.is_mostly_empty` works around edgartools issue 408, where a
-period column comes back nearly empty, and `facts._display_member` strips a
-duplicated member-label prefix. Segment members tagged only in a note are
+period column comes back nearly empty, `facts._display_member` strips a
+duplicated member-label prefix, and `statement._Columns` takes the same-date
+year-to-date column as the filing's period even when edgartools gives it no
+"(YTD)" token (Costco's second-quarter 10-Qs, whose 24 weeks were never
+stored, so every line's Q3 and Q4 were wrong). A same-date "(FY)" column is a
+trailing twelve months, not the year to date (Amazon's 10-Q cash flows; taking
+it stored Q1 2010 net income as 1,024 instead of 299), and so a change here
+needs every company's 10-Qs re-ingested and their cash flow and equity
+quarters compared, not only the filer that prompted it. Segment members tagged only in a note are
 added by `segments.py`. Parser fixes belong there. To check a parser change,
 parse a fixed set of cached filings before and after and diff the facts; a
 change to the comparative-column rules in `columns.py` shows up on 10-Q

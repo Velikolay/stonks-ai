@@ -185,6 +185,70 @@ def test_missing_parent_becomes_a_synthetic_rollup() -> None:
     assert set(rows.filter(~pl.col("is_synthetic"))["parent_id"]) == {subtotal["id"]}
 
 
+def test_a_printed_quarter_rolls_up_apart_from_the_year_to_date() -> None:
+    """A 10-Q prints each line's quarter beside its year to date.
+
+    Each has its own parent: the quarter's subtotal adds the quarters, the
+    year to date's adds the years to date, and a tagged parent is matched
+    the same way.
+    """
+    rnd = "us-gaap:ResearchAndDevelopmentExpense"
+    sga = "us-gaap:SellingGeneralAndAdministrativeExpense"
+    opex = "us-gaap:OperatingExpenses"
+    costs = "us-gaap:CostsAndExpenses"
+    overrides = [
+        {
+            "company_id": 1,
+            "concept": concept,
+            "statement": "Income Statement",
+            "normalized_label": concept.split(":")[1],
+            "parent_concept": parent,
+            "weight": 1,
+            "is_abstract": False,
+        }
+        for concept, parent in [(rnd, opex), (sga, opex), (opex, costs), (costs, None)]
+    ]
+
+    def line(id: int, concept: str, period: str, value: int) -> dict:
+        return fact(
+            id,
+            1,
+            "2026-09-30",
+            value,
+            concept=concept,
+            period=period,
+            form_type="10-Q",
+            statement="Income Statement",
+        )
+
+    data = company(
+        financial_facts=[
+            line(1, rnd, "YTD", 30),
+            line(2, rnd, "Q", 10),
+            line(3, sga, "YTD", 60),
+            line(4, sga, "Q", 20),
+            line(5, costs, "YTD", 95),
+            line(6, costs, "Q", 32),
+        ],
+        filings=[filing(1, "10-Q", "2026-09-30", "2026-10-30", 2026)],
+        concept_normalization_overrides=overrides,
+    )
+    rows = normalized(data)
+    subtotals = {
+        r["period"]: r
+        for r in rows.filter(pl.col("is_synthetic")).iter_rows(named=True)
+    }
+    assert {p: r["value"] for p, r in subtotals.items()} == {"YTD": D(90), "Q": D(30)}
+    parents = {
+        (r["concept"], r["period"]): r["parent_id"]
+        for r in rows.filter(~pl.col("is_synthetic")).iter_rows(named=True)
+    }
+    assert parents[(rnd, "Q")] == subtotals["Q"]["id"]
+    assert parents[(sga, "YTD")] == subtotals["YTD"]["id"]
+    assert subtotals["Q"]["parent_id"] == 6
+    assert subtotals["YTD"]["parent_id"] == 5
+
+
 def test_segment_rows_split_their_line_and_stay_out_of_the_tree() -> None:
     """Goodwill and assets by segment do not roll into the subtotals.
 

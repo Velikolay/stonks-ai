@@ -327,3 +327,65 @@ def test_declared_breakdown_replaces_inference_for_its_parent() -> None:
     assert out.select("members", "source").rows() == [
         (["Products", "Services"], "override")
     ]
+
+
+def test_new_segments_in_a_10q_after_the_latest_10k_are_an_interim_split() -> None:
+    """Microsoft's fiscal 2027 first-quarter 10-Q moves to two new segments.
+
+    No 10-K prints them yet. The quarter and the prior-year quarter it
+    reprints on them are two fiscal years, so the split is kept as interim.
+    The prior-year line comes from that quarter's own 10-Q.
+    """
+    years = {
+        2024: {"": 100, "Old A": 60, "Old B": 40},
+        2025: {"": 120, "Old A": 70, "Old B": 50},
+    }
+    rows = revenue_rows(years)
+
+    def quarter(id: int, filing: int, end: str, member: str, value: int) -> dict:
+        return {
+            "id": id,
+            "filing_id": filing,
+            "fiscal_filing_id": filing,
+            "form_type": "10-Q",
+            "concept": "us-gaap:Revenues",
+            "label": "Revenue",
+            "normalized_label": "Revenue",
+            "value": value,
+            "axis": "Product" if member else "",
+            "member": member,
+            "period_end": end,
+            "period": "Q",
+        }
+
+    rows += [
+        quarter(1, 3, "2025-03-31", "", 30),
+        quarter(2, 3, "2025-03-31", "Old A", 18),
+        quarter(3, 3, "2025-03-31", "Old B", 12),
+        quarter(4, 4, "2026-03-31", "", 35),
+        quarter(5, 4, "2026-03-31", "New X", 25),
+        quarter(6, 4, "2026-03-31", "New Y", 10),
+        quarter(7, 4, "2025-03-31", "New X", 21),
+        quarter(8, 4, "2025-03-31", "New Y", 9),
+    ]
+    q = lambda id, end, year: {  # noqa: E731
+        **filing(id, year),
+        "form_type": "10-Q",
+        "fiscal_period_end": end,
+        "fiscal_quarter": 1,
+    }
+    data = company(
+        filings=[
+            filing(2024, 2024),
+            filing(2025, 2025),
+            q(3, "2025-03-31", 2025),
+            q(4, "2026-03-31", 2026),
+        ],
+        financial_facts_normalized=rows,
+    )
+    out = dimension_breakdowns.run(data)
+    got = sorted(out.select("members", "fiscal_years", "source").rows())
+    assert got == [
+        (["New X", "New Y"], [2025, 2026], "interim"),
+        (["Old A", "Old B"], [2024, 2025], "inferred"),
+    ]

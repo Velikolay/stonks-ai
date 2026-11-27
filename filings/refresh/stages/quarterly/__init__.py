@@ -6,7 +6,8 @@ writes ``quarterly_financials``.
 1. :mod:`.rows`: 10-K and 10-Q rows tagged with the 10-K closing their year.
 2. :mod:`.ytd`: year-to-date totals reduced to discrete quarters, per series.
 3. :mod:`.restatement`: a year whose quarters overshoot its 10-K moves onto
-   next year's comparatives, per line and year.
+   next year's comparatives, per line and year, and its members follow onto
+   next year's reprint of them where that adds up.
 4. :mod:`.q4`: Q4 as the 10-K minus Q1-Q3, one 10-K per axis and year.
 
 Frames gather and filter the rows and assemble the output. The decisions in
@@ -33,7 +34,12 @@ from .q4 import (
     quarters_by_year,
     sources_frame,
 )
-from .restatement import moved_frame, restated_years, with_restated_values
+from .restatement import (
+    moved_frame,
+    restated_years,
+    with_restated_members,
+    with_restated_values,
+)
 from .rows import (
     WEIGHTED_AVERAGE_SHARES,
     annual_rows,
@@ -97,7 +103,13 @@ def run(data: CompanyData) -> pl.DataFrame:
     )
     moved = restated_years(quarters, discrete, tagged)
     moved_years = data.keep("restated_years", moved_frame(moved))
-    restated = with_restated_values(discrete, moved)
+    restated = with_restated_members(
+        with_restated_values(discrete, moved),
+        moved,
+        normalized,
+        filings,
+        data.table("dimension_breakdowns"),
+    )
 
     by_year = quarters_by_year(restated, filings)
     by_year_rows = data.keep("quarters_by_year", by_year_frame(by_year))
