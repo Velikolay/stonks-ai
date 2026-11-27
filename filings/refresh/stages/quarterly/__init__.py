@@ -15,7 +15,10 @@ steps 2-4 walk one series, line or axis-year at a time in plain Python, with
 the records in :mod:`filings.refresh.records`.
 
 Balance-sheet lines, share counts and other point-in-time amounts come from
-the 10-K as Q4 instead of being summed. Quarterly rewrites apply last.
+the 10-K as Q4 instead of being summed. A period before the company's first
+filing (see :mod:`...rules.prior_periods`) is kept only where its series
+reaches the first filing without a missing quarter. Quarterly rewrites apply
+last.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import polars as pl
 
 from ...inputs import CompanyData
 from ...io.schemas import QUARTERLY_FINANCIALS
+from ...rules.prior_periods import attached_early_quarters, filings_with_prior
 from ...rules.rewrites import apply_rewrites
 from .q4 import (
     annual_members,
@@ -41,6 +45,7 @@ from .restatement import (
     with_restated_values,
 )
 from .rows import (
+    SERIES,
     WEIGHTED_AVERAGE_SHARES,
     annual_rows,
     fiscal_tags,
@@ -90,8 +95,8 @@ def point_in_time(annual: pl.DataFrame) -> pl.DataFrame:
 
 
 def run(data: CompanyData) -> pl.DataFrame:
-    filings = data.table("filings")
     normalized = data.table("financial_facts_normalized")
+    filings = filings_with_prior(data)
     tags = fiscal_tags(filings)
     tagged = tagged_rows(data, tags)
     quarters = quarter_rows(tagged)
@@ -124,7 +129,11 @@ def run(data: CompanyData) -> pl.DataFrame:
         member_rows,
         line_q4(annual, by_year_rows),
     ]
-    result = pl.concat([QUARTERLY_FINANCIALS.conform(f) for f in frames])
+    result = attached_early_quarters(
+        pl.concat([QUARTERLY_FINANCIALS.conform(f) for f in frames]),
+        filings,
+        [*SERIES, "is_abstract"],
+    )
     return apply_rewrites(
         result, data.table("financial_rewrites"), "quarterly", data.company_id
     )

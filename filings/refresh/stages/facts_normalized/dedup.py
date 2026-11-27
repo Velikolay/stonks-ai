@@ -294,9 +294,14 @@ def restating_filings(
 
 
 def rank(
-    rows: pl.DataFrame, filings: pl.DataFrame, sizes: pl.DataFrame
+    rows: pl.DataFrame, filings: pl.DataFrame, sizes: pl.DataFrame, ties: pl.DataFrame
 ) -> pl.DataFrame:
-    """Each row's rank in its slot, the slot winner's value and the recast flag."""
+    """Each row's rank in its slot, the slot winner's value and the recast flag.
+
+    ``ties`` maps a prior period's copy (``id``) to its source fact
+    (``tie_id``), whose id breaks the copy's last tie, so it ranks as its
+    source did.
+    """
     filed = filings.select(
         pl.col("id").alias("filing_id"),
         pl.col("fiscal_period_end").alias("filed_period_end"),
@@ -307,6 +312,7 @@ def rank(
     restated = restating_filings(rows, filings, recast)
     ranked = (
         rows.join(sizes, on="id", how="left")
+        .join(ties, on="id", how="left")
         .join(filed, on="filing_id", how="left")
         .join(
             recast,
@@ -361,6 +367,7 @@ def rank(
             # the same quarter): every row comes from the same one, so a
             # statement never mixes them. Synthetic ids are hashes.
             ordering.asc("filing_id"),
+            ordering.asc(pl.coalesce("tie_id", "id")),
             ordering.asc("id"),
             # One fact under two expanded parents appears twice; the copy
             # pointing at a real parent beats the one that needs a synthetic.

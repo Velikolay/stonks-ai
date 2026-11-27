@@ -51,6 +51,7 @@ def amount(row: int, end: date, period: str, value: int, **extra: Any) -> Amount
         annual_period_end=FY,
         is_non_additive=False,
         is_per_share=False,
+        is_prior=False,
     )
     fields.update(extra)
     return Amount(**fields)
@@ -114,6 +115,7 @@ def quarter(fq: int, value: Optional[int], **extra: Any) -> Quarter:
         member_year=(*SERIES, 10),
         filing_date=date(2023, 1, 1),
         is_comparative_backfill=False,
+        is_prior=False,
         fiscal_quarter=fq,
         value=None if value is None else D(value),
         restated_value=None,

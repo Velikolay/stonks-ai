@@ -32,6 +32,7 @@ from ...rules.periods import (
     days_between,
     within,
 )
+from ...rules.prior_periods import is_prior_filing
 from ...rules.rounding import reprint_tolerance_of
 from .rows import is_per_share
 
@@ -506,6 +507,7 @@ def with_restated_members(
             pl.lit(None, DECIMAL).alias("anchor_value"),
             pl.lit(False).alias("is_non_additive"),
             pl.lit(False).alias("is_per_share"),
+            is_prior_filing(pl.col("filing_id")).alias("is_prior"),
             pl.lit(False).alias("drop_ytd"),
             pl.lit(None, DECIMAL).alias("q3_ytd"),
             pl.lit(False).alias("prefer_ytd_anchor"),

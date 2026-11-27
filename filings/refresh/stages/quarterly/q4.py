@@ -57,6 +57,7 @@ class Quarter:
     member_year: tuple
     filing_date: date
     is_comparative_backfill: bool
+    is_prior: bool
     fiscal_quarter: Optional[int]
     value: Optional[Decimal]
     restated_value: Optional[Decimal]
@@ -70,8 +71,8 @@ class FirstThree:
     """Q1-Q3 of one member-year as one amount to subtract from the 10-K."""
 
     value: Optional[Decimal]
-    #: When the quarters were filed. A backfilled comparative was printed a
-    #: year later, so it does not count.
+    #: When the quarters were filed. A backfilled comparative or a prior
+    #: filing's quarter was printed a year later, so it does not count.
     filed: Optional[date]
 
 
@@ -84,7 +85,11 @@ def first_three_quarters(quarters: Sequence[Quarter]) -> FirstThree:
     is used.
     """
     filed = max(
-        (q.filing_date for q in quarters if not q.is_comparative_backfill),
+        (
+            q.filing_date
+            for q in quarters
+            if not (q.is_comparative_backfill or q.is_prior)
+        ),
         default=None,
     )
     restated = [q.restated_value for q in quarters if q.restated_value is not None]
