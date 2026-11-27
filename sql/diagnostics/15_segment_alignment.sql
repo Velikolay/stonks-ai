@@ -189,6 +189,7 @@ two_way AS (
     WHERE ff.statement = 'Income Statement'
       AND ff.concept ~* 'revenue|sales'
       AND ff.value IS NOT NULL
+      AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
       AND (SELECT COUNT(*) FROM financial_fact_dimensions x
            WHERE x.fact_id = ff.id AND NOT x.is_default) = 2
 )

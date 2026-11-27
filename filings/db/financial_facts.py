@@ -133,9 +133,8 @@ class FinancialFactOperationsAsync:
                             ],
                         )
 
-                for fact in facts:
+                for fact, id_val in zip(facts, fact_ids):
                     if fact.abstract_key or fact.parent_key:
-                        id_val = key_id_map.get(fact.key)
                         parent_id = key_id_map.get(fact.parent_key)
                         abstract_id = key_id_map.get(fact.abstract_key)
 

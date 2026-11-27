@@ -162,6 +162,16 @@ is already stored is skipped before its XBRL is downloaded, and skipped filings
 do not count against the limit, so a re-run costs one database lookup per filing
 and ingests only what is new. Prefer plain `make ingest` for both cases.
 
+A filing whose cover declares a shell company (`dei:EntityShellCompany` true)
+is stored with `filings.is_shell` and never read by the refresh: a SPAC files
+as a shell until its merger closes, and the operating company then reports
+under the SPAC's CIK. SoFi's CIK 1818874 carries Social Capital Hedosophia
+V's 10-Q for Q3 2020, its FY2020 10-K and 10-K/A, and its Q1 2021 10-Q, whose
+Total Assets of $806 million are the trust account; SoFi's own history starts
+with its Q2 2021 10-Q. Diagnostics skip those filings too, and `01` lists
+them. A filing stored before the flag existed reads false, so re-ingest a
+de-SPAC with `--override` once.
+
 EDGAR only carries XBRL from roughly 2009 onward, so "everything available" means
 everything tagged, not the company's entire filing history. Confirm what actually
 landed with `sql/diagnostics/01_coverage.sql`, which lists filings per fiscal year
@@ -407,7 +417,13 @@ its FY2016 10-K restated it to 1,425 + (699) + 1,507 = 2,233, and the 2016
 10-Qs restated the quarters. The undimensioned line always stays as filed.
 A row that rounds to the
 winner's value, within 0.1%, beats it, so a later reprint in millions does not
-replace the original's digits. Losers get `is_duplicate = true`, and both `yearly_financials` and
+replace the original's digits. A filing that prints a line twice in one statement (SoFi's FY2022 10-K
+repeats Total assets, Total liabilities and five lines beside them in its
+block of consolidated VIE amounts) gives the copies one key, and children
+point at the last copy while dedup may keep another. After dedup a pointer at
+a dropped twin (same filing, concept, cut, period and value) moves to the
+kept one (`with_parents_on_kept_twins` in
+[dedup.py](filings/refresh/stages/facts_normalized/dedup.py)). Losers get `is_duplicate = true`, and both `yearly_financials` and
 `quarterly_financials` filter them out. If a value vanishes from the
 presentation layer, this is usually why — check `financial_facts_normalized`
 before assuming ingestion dropped it.
@@ -1225,7 +1241,13 @@ period column comes back nearly empty, `facts._display_member` strips a
 duplicated member-label prefix, and `statement._Columns` takes the same-date
 year-to-date column as the filing's period even when edgartools gives it no
 "(YTD)" token (Costco's second-quarter 10-Qs, whose 24 weeks were never
-stored, so every line's Q3 and Q4 were wrong). A same-date "(FY)" column is a
+stored, so every line's Q3 and Q4 were wrong), and
+`statement.with_own_weights` takes a concept's weight from the statement's own
+calculation role: edgartools gives a concept the weight of the first statement
+that presents it, so SoFi's provision for credit losses, subtracted on its
+statement of operations, was stored as subtracted on its cash flow too. It runs
+on the cached table, never inside it, so the cache keeps edgartools' output. A
+same-date "(FY)" column is a
 trailing twelve months, not the year to date (Amazon's 10-Q cash flows; taking
 it stored Q1 2010 net income as 1,024 instead of 299), and so a change here
 needs every company's 10-Qs re-ingested and their cash flow and equity

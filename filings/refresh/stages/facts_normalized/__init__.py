@@ -6,7 +6,8 @@ filings; writes ``financial_facts_normalized``. In order:
 1. :mod:`.resolve`: label, sign, unit, dimensions and tree pointers per fact.
 2. :mod:`.synthetic`: invented subtotals and headers, and their rolled-up values.
 3. :mod:`.chains`: comparative-value chain sizes, a dedup tie-breaker.
-4. :mod:`.dedup`: one winner per series and period.
+4. :mod:`.dedup`: one winner per series and period, with pointers at a
+   dropped twin moved to the kept one.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from ...io.schemas import FINANCIAL_FACTS_NORMALIZED
 from ...rules.facts import ConflictRule, drop_conflicting, with_fact_overrides
 from ...rules.units import canonical_unit, filing_currency
 from .chains import chain_sizes
-from .dedup import mark_duplicates, rank
+from .dedup import mark_duplicates, rank, with_parents_on_kept_twins
 from .resolve import resolve_facts
 from .synthetic import rolled_up, with_synthetic_rows
 
@@ -53,7 +54,7 @@ def run(data: CompanyData) -> pl.DataFrame:
     sizes = data.keep("chain_sizes", chain_sizes(rolled))
     ranked = data.keep("ranked", rank(rolled, data.table("filings"), sizes))
     return (
-        mark_duplicates(ranked)
+        with_parents_on_kept_twins(mark_duplicates(ranked))
         .select(FINANCIAL_FACTS_NORMALIZED.columns)
         .cast(FINANCIAL_FACTS_NORMALIZED.dtypes)
     )

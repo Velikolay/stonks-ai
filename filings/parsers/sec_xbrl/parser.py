@@ -9,11 +9,11 @@ from typing import Callable, Optional
 from edgar import Filing
 
 from ...models import FinancialFactCreate
-from .context import FilingContext, fiscal_focus
+from .context import FilingContext, fiscal_focus, is_shell_company
 from .frame_cache import filing_frames
 from .measures import segment_measures
 from .segments import disclosure_notes, segment_disclosure_facts
-from .statement import parse_statement, statement_frame
+from .statement import parse_statement, statement_frame, with_own_weights
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,8 @@ class ParsedFiling:
     facts: list[FinancialFactCreate] = field(default_factory=list)
     #: Fiscal year and quarter from the cover; either is None when absent.
     fiscal_focus: tuple[Optional[int], Optional[int]] = (None, None)
+    #: The cover declares a shell company (a SPAC before its merger).
+    is_shell: bool = False
 
 
 class SECXBRLParser:
@@ -75,7 +77,8 @@ class SECXBRLParser:
             return ParsedFiling()
 
         parsed = ParsedFiling(
-            fiscal_focus=fiscal_focus(getattr(xbrl, "entity_info", None))
+            fiscal_focus=fiscal_focus(getattr(xbrl, "entity_info", None)),
+            is_shell=is_shell_company(xbrl),
         )
         context = FilingContext.of(xbrl, accession)
         notes = disclosure_notes(xbrl)
@@ -116,6 +119,8 @@ class SECXBRLParser:
     ) -> list[FinancialFactCreate]:
         try:
             frame = statement_frame(statement, with_dimensions=spec.with_dimensions)
+            # Our rule, applied to the cached edgartools table, not stored in it.
+            frame = with_own_weights(frame, statement)
         except Exception:
             logger.exception("Could not read %s for %s", spec.name, accession)
             return []

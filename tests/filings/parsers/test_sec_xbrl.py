@@ -15,13 +15,14 @@ from filings.parsers.sec_xbrl import (
     reporting_currency_amounts,
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
+from filings.parsers.sec_xbrl.context import is_shell_company
 from filings.parsers.sec_xbrl.facts import face_fact
 from filings.parsers.sec_xbrl.segments import (
     SegmentSupplement,
     disclosure_notes,
     segment_disclosure_facts,
 )
-from filings.parsers.sec_xbrl.statement import parse_statement
+from filings.parsers.sec_xbrl.statement import parse_statement, with_own_weights
 
 
 class TestSECXBRLParser:
@@ -39,6 +40,27 @@ class TestSECXBRLParser:
         assert fiscal_focus({}) == (None, None)
         assert fiscal_focus({"fiscal_year": "2025"}) == (2025, None)
         assert fiscal_focus({"fiscal_period": "H1"}) == (None, None)
+
+    @staticmethod
+    def _xbrl_with_shell_flag(values):
+        xbrl = Mock()
+        query = xbrl.facts.query.return_value.by_concept.return_value
+        query.to_dataframe.return_value = pd.DataFrame(
+            {"concept": ["dei:EntityShellCompany"] * len(values), "value": values}
+        )
+        return xbrl
+
+    def test_shell_company_reads_the_cover_flag(self):
+        """A SPAC's cover declares a shell; the merged company's does not."""
+        assert is_shell_company(self._xbrl_with_shell_flag(["true"])) is True
+        assert is_shell_company(self._xbrl_with_shell_flag(["false"])) is False
+
+    def test_shell_company_without_the_tag_is_not_a_shell(self):
+        """A cover that omits the flag, or an instance that fails, is not a shell."""
+        assert is_shell_company(self._xbrl_with_shell_flag([])) is False
+        broken = Mock()
+        broken.facts.query.side_effect = RuntimeError("no facts")
+        assert is_shell_company(broken) is False
 
     def test_create_financial_fact_with_hierarchy_requires_period(self):
         """Test that _create_financial_fact_with_hierarchy includes period field."""
@@ -1678,3 +1700,43 @@ def test_columns_skip_a_trailing_twelve_months_beside_the_quarter():
         }
     )
     assert _Columns(second).latest == "2010-06-30 (YTD)"
+
+
+class TestOwnWeights:
+    """A concept takes its weight from the statement's own calculation role."""
+
+    @staticmethod
+    def _statement(nodes: dict) -> Mock:
+        tree = Mock()
+        tree.all_nodes = {k: Mock(weight=w) for k, w in nodes.items()}
+        statement = Mock(canonical_type="CashFlowStatement")
+        statement.xbrl.find_statement.return_value = (
+            [],
+            "role/cashflow",
+            "CashFlowStatement",
+        )
+        statement.xbrl.calculation_trees = {"role/cashflow": tree}
+        return statement
+
+    def test_cash_flow_weight_replaces_the_income_statement_weight(self):
+        # SoFi's provision: subtracted on the statement of operations, added
+        # back on the cash flow; edgartools gives both statements -1.
+        frame = pd.DataFrame(
+            {
+                "concept": ["us-gaap_Provision", "us-gaap_Provision", "us-gaap_Other"],
+                "weight": [-1.0, -1.0, -1.0],
+            }
+        )
+        statement = self._statement({"us-gaap_Provision": 1.0})
+
+        result = with_own_weights(frame, statement)
+
+        assert result["weight"].tolist() == [1.0, 1.0, -1.0]
+        assert frame["weight"].tolist() == [-1.0, -1.0, -1.0]
+
+    def test_no_calculation_role_keeps_the_frame(self):
+        frame = pd.DataFrame({"concept": ["us-gaap_Provision"], "weight": [-1.0]})
+        statement = self._statement({})
+        statement.xbrl.calculation_trees = {}
+
+        assert with_own_weights(frame, statement) is frame

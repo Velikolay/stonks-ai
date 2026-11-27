@@ -26,6 +26,7 @@ WITH base AS (
     LEFT JOIN financial_facts_overridden ffo
         ON ffo.id = ff.id
         AND ffo.company_id = ff.company_id
+    WHERE ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
 )
 SELECT
     company_id,
@@ -80,6 +81,7 @@ LEFT JOIN coordinates c ON c.fact_id = ff.id
 WHERE NOT EXISTS (
     SELECT 1 FROM financial_facts_normalized n WHERE n.id = ff.id
 )
+  AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
   AND NOT EXISTS (
     SELECT 1
     FROM financial_facts twin

@@ -392,3 +392,59 @@ def mark_duplicates(ranked: pl.DataFrame) -> pl.DataFrame:
     )
     # A row repeated under several parents keeps the copy that won.
     return ordering.distinct_on(marked, ["id"], ["is_duplicate"])
+
+
+#: One fact printed twice in one filing's statement: the same concept, cut,
+#: period and value on two rows.
+TWIN = [
+    "filing_id",
+    "statement",
+    "concept",
+    "axis",
+    "member",
+    "period_end",
+    "period",
+    "value",
+]
+
+
+def with_parents_on_kept_twins(marked: pl.DataFrame) -> pl.DataFrame:
+    """Keep a line's place in the tree when dedup keeps another copy of it.
+
+    A filing can print a line twice in one statement: SoFi's FY2022 10-K
+    repeats Total assets, Total liabilities and five lines beside them in
+    the block of consolidated VIE amounts below its balance sheet. Children
+    point at the last copy, and dedup can keep another. A twin is the same
+    concept, cut, period and value in the same filing. A pointer at a dropped
+    twin moves to the kept one, unless that is the row itself.
+    """
+    dropped = marked.filter(pl.col("is_duplicate"))
+    kept = (
+        marked.filter(~pl.col("is_duplicate"))
+        .group_by(TWIN)
+        .agg(pl.col("id").min().alias("kept_id"))
+    )
+    moved = dropped.select("id", *TWIN).join(kept, on=TWIN, nulls_equal=True)
+    if moved.is_empty():
+        return marked
+    return _repoint(marked, moved)
+
+
+def _repoint(marked: pl.DataFrame, moved: pl.DataFrame) -> pl.DataFrame:
+    """Pointers at a dropped twin name the kept one, unless that is the row."""
+    target = moved.select(pl.col("id").alias("_dropped"), "kept_id")
+    for column in ("parent_id", "abstract_id"):
+        marked = (
+            marked.join(target, left_on=column, right_on="_dropped", how="left")
+            .with_columns(
+                pl.when(
+                    pl.col("kept_id").is_not_null()
+                    & (pl.col("kept_id") != pl.col("id"))
+                )
+                .then(pl.col("kept_id"))
+                .otherwise(pl.col(column))
+                .alias(column)
+            )
+            .drop("kept_id")
+        )
+    return marked

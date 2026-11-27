@@ -693,7 +693,13 @@ class SECXBRLFilingsLoader:
                 fiscal_year=fiscal_year,
                 fiscal_quarter=fiscal_quarter,
                 public_url=filing.url,
+                is_shell=parsed.is_shell,
             )
+            if parsed.is_shell:
+                logger.info(
+                    "Filing %s declares a shell company; the refresh skips it",
+                    filing.accession_number,
+                )
 
             filing_id = await self.database.filings.insert_filing(filing_data)
 

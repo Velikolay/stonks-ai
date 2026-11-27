@@ -16,6 +16,7 @@ LEFT JOIN concept_normalization cn
     AND cn.concept = ff.concept
 WHERE cn.concept IS NULL
   AND NOT ff.is_abstract
+  AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
 GROUP BY ff.company_id, ff.statement, ff.concept
 ORDER BY facts DESC
 LIMIT 50;
@@ -29,6 +30,7 @@ SELECT
     array_agg(DISTINCT label) AS labels
 FROM financial_facts
 WHERE axis = ''
+  AND filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
 GROUP BY company_id, statement, concept
 HAVING COUNT(DISTINCT label) > 1
 ORDER BY distinct_labels DESC
@@ -78,6 +80,7 @@ shown AS (
                 AND tw.value IS DISTINCT FROM ff.value)
     ) mv ON true
     WHERE ff.axis <> ''
+      AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
 )
 SELECT
     sh.company_id,

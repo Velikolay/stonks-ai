@@ -733,3 +733,105 @@ def test_restated_split_with_a_subtotal_replaces_one_that_does_not_add_up() -> N
     )
     shown = {id for id, _ in winners(normalized(data))}
     assert {5, 6, 7, 8, 9} <= shown and not {2, 3} & shown
+
+
+def test_child_of_a_dropped_twin_points_at_the_kept_one() -> None:
+    """A line printed twice in one statement keeps its children (SoFi's VIE block)."""
+    from filings.refresh.stages.facts_normalized.dedup import (
+        with_parents_on_kept_twins,
+    )
+
+    base = {
+        "filing_id": 1,
+        "statement": "Balance Sheet",
+        "axis": "",
+        "member": "",
+        "period_end": "2022-12-31",
+        "period": "YTD",
+        "value": 5,
+        "abstract_id": None,
+    }
+    rows = pl.DataFrame(
+        [
+            {
+                **base,
+                "id": 10,
+                "concept": "us-gaap:Assets",
+                "parent_id": None,
+                "is_duplicate": False,
+            },
+            {
+                **base,
+                "id": 20,
+                "concept": "us-gaap:Assets",
+                "parent_id": None,
+                "is_duplicate": True,
+            },
+            {
+                **base,
+                "id": 30,
+                "concept": "us-gaap:Cash",
+                "parent_id": 20,
+                "is_duplicate": False,
+            },
+            {
+                **base,
+                "id": 40,
+                "concept": "us-gaap:Goodwill",
+                "parent_id": 10,
+                "is_duplicate": False,
+            },
+            # The kept twin of row 50's parent is row 50 itself: it keeps its pointer.
+            {
+                **base,
+                "id": 50,
+                "concept": "us-gaap:Revenues",
+                "parent_id": 60,
+                "is_duplicate": False,
+            },
+            {
+                **base,
+                "id": 60,
+                "concept": "us-gaap:Revenues",
+                "parent_id": None,
+                "is_duplicate": True,
+            },
+            # Same concept at another value is not a twin.
+            {
+                **base,
+                "id": 70,
+                "concept": "us-gaap:Debt",
+                "parent_id": None,
+                "is_duplicate": False,
+            },
+            {
+                **base,
+                "id": 80,
+                "concept": "us-gaap:Debt",
+                "value": 9,
+                "parent_id": None,
+                "is_duplicate": True,
+            },
+            {
+                **base,
+                "id": 90,
+                "concept": "us-gaap:Loans",
+                "parent_id": 80,
+                "is_duplicate": False,
+            },
+        ],
+        schema_overrides={"parent_id": pl.Int64, "abstract_id": pl.Int64},
+    )
+    out = with_parents_on_kept_twins(rows).sort("id")
+    assert out["parent_id"].to_list() == [
+        None,
+        None,
+        10,
+        10,
+        60,
+        None,
+        None,
+        None,
+        80,
+    ]
+    assert out.columns == rows.columns

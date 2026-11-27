@@ -97,6 +97,7 @@ WITH base AS (
     FROM financial_facts ff
     WHERE ff.axis = ''
       AND NOT ff.is_abstract
+      AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
       AND NOT EXISTS (
           SELECT 1
           FROM financial_facts_overridden ffo
@@ -119,6 +120,7 @@ WITH base AS (
         AND ffo.company_id = ff.company_id
     WHERE COALESCE(ffo.axis, ff.axis) = ''
       AND NOT ff.is_abstract
+      AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
 ),
 bridge AS (
     SELECT *
@@ -300,6 +302,7 @@ WITH dims AS (
     FROM financial_facts ff
     WHERE ff.axis <> ''
       AND ff.form_type IN ('10-K', '20-F')
+      AND ff.filing_id NOT IN (SELECT id FROM filings WHERE is_shell)
     GROUP BY ff.company_id, ff.statement, ff.axis, ff.member, ff.member_label
 ),
 labeled AS (

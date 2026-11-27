@@ -345,3 +345,4 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 15,us-gaap:StatementBusinessSegmentsAxis,us-gaap:OtherMember,,False,Product,Corporate and support,"FY2012 10-Qs label the unallocated line Other (Q3 FY2011: 367 + 1,223 + 4,399 - 378 = 5,611)"
 15,us-gaap:SegmentReportingInformationBySegmentAxis,us-gaap:OtherMember,,False,Product,Corporate and support,"FY2012 10-Qs label the unallocated line Other (Q3 FY2011: 367 + 1,223 + 4,399 - 378 = 5,611)"
 15,us-gaap:SegmentReportingInformationBySegmentAxis,wmt:OtherSegmentsMember,,False,Product,Corporate and support,"FY2011 10-Qs' qname for the same unallocated line"
+21,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Business Segment,Corporate/Other,

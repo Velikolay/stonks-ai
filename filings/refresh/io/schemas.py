@@ -26,13 +26,15 @@ class Table:
     """A table's schema and how to scope it to one company.
 
     ``company_column`` filters directly; ``company_filter`` is a SQL
-    condition on ``$1`` for a table without one.
+    condition on ``$1`` for a table without one. ``scope`` is a condition
+    every load applies, with or without a company.
     """
 
     name: str
     schema: pl.Schema
     company_column: Optional[str] = "company_id"
     company_filter: Optional[str] = None
+    scope: Optional[str] = None
 
     @property
     def columns(self) -> list[str]:
@@ -59,9 +61,17 @@ def _table(
     table_name: str,
     /,
     company_column: Optional[str] = "company_id",
+    scope: Optional[str] = None,
     **cols: pl.DataType,
 ) -> Table:
-    return Table(table_name, pl.Schema(cols), company_column)
+    return Table(table_name, pl.Schema(cols), company_column, scope=scope)
+
+
+#: Shell-company filings (a SPAC before its merger) are stored but never
+#: read: they describe the trust, not the business that later files under
+#: the same CIK. Every raw table keyed by filing drops them on load.
+NOT_SHELL = "NOT is_shell"
+NOT_SHELL_FACT = "filing_id NOT IN (SELECT id FROM filings WHERE is_shell)"
 
 
 # --- Raw inputs -------------------------------------------------------------
@@ -70,6 +80,7 @@ COMPANIES = _table("companies", company_column="id", id=INT, name=STR, industry=
 
 FILINGS = _table(
     "filings",
+    scope=NOT_SHELL,
     id=INT,
     company_id=INT,
     filing_entity_id=INT,
@@ -81,10 +92,12 @@ FILINGS = _table(
     fiscal_year=INT,
     fiscal_quarter=INT,
     public_url=STR,
+    is_shell=BOOL,
 )
 
 FINANCIAL_FACTS = _table(
     "financial_facts",
+    scope=NOT_SHELL_FACT,
     id=BIGINT,
     filing_id=INT,
     company_id=INT,
@@ -123,6 +136,7 @@ FINANCIAL_FACT_DIMENSIONS = Table(
     ),
     company_column=None,
     company_filter="fact_id IN (SELECT id FROM financial_facts WHERE company_id = $1)",
+    scope=("fact_id IN (SELECT id FROM financial_facts WHERE " + NOT_SHELL_FACT + ")"),
 )
 
 # --- Overrides (global and company rows; loaded once per run) ---------------

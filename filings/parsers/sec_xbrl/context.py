@@ -46,6 +46,29 @@ def fiscal_focus(entity_info: Optional[dict]) -> tuple[Optional[int], Optional[i
     return year, _FOCUS_QUARTER.get(period)
 
 
+def is_shell_company(xbrl: object) -> bool:
+    """Whether the cover declares the registrant a shell company.
+
+    A SPAC files as a shell (``dei:EntityShellCompany`` true) until its
+    merger closes, and the operating company then reports under the SPAC's
+    CIK: SoFi's CIK 1818874 carries Social Capital Hedosophia V's filings
+    through the first quarter of 2021. Those filings describe the trust,
+    not the business, so the refresh leaves them out. A cover without the
+    tag is not a shell.
+    """
+    try:
+        found = (
+            xbrl.facts.query()  # type: ignore[attr-defined]
+            .by_concept("dei:EntityShellCompany", exact=True)
+            .to_dataframe()
+        )
+    except Exception:
+        return False
+    if found is None or found.empty or "value" not in found:
+        return False
+    return any(str(v).strip().lower() == "true" for v in found["value"])
+
+
 def _reporting_unit(currency: str, unit_ref: object) -> str:
     code = currency.lower()
     ref = str(unit_ref or "").lower()

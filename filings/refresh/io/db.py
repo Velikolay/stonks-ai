@@ -66,6 +66,8 @@ async def load(
     elif company_id is not None and table.company_filter:
         clauses.append(table.company_filter)
         args.append(company_id)
+    if table.scope:
+        clauses.append(table.scope)
     if where:
         clauses.append(where)
     if clauses:

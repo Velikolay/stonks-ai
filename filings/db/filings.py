@@ -37,6 +37,7 @@ class FilingOperationsAsync:
                         fiscal_year=filing.fiscal_year,
                         fiscal_quarter=filing.fiscal_quarter,
                         public_url=filing.public_url,
+                        is_shell=filing.is_shell,
                     )
                     .returning(self.filings_table.c.id)
                 )
@@ -73,6 +74,7 @@ class FilingOperationsAsync:
                         fiscal_year=row.fiscal_year,
                         fiscal_quarter=row.fiscal_quarter,
                         public_url=row.public_url,
+                        is_shell=row.is_shell,
                     )
                 return None
         except SQLAlchemyError as e:
@@ -104,6 +106,7 @@ class FilingOperationsAsync:
                         fiscal_year=row.fiscal_year,
                         fiscal_quarter=row.fiscal_quarter,
                         public_url=row.public_url,
+                        is_shell=row.is_shell,
                     )
                 return None
         except SQLAlchemyError as e:
@@ -196,6 +199,7 @@ class FilingOperationsAsync:
                             fiscal_year=row.fiscal_year,
                             fiscal_quarter=row.fiscal_quarter,
                             public_url=row.public_url,
+                            is_shell=row.is_shell,
                         )
                     )
                 return filings

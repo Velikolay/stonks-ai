@@ -19,6 +19,8 @@ class FilingBase(BaseModel):
     fiscal_year: int
     fiscal_quarter: int
     public_url: Optional[str] = None
+    #: The cover declares a shell company; the refresh leaves the filing out.
+    is_shell: bool = False
 
 
 class FilingCreate(FilingBase):
