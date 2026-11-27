@@ -20,19 +20,30 @@ from . import columns as cols
 from .concepts import is_per_share
 from .context import FilingContext
 from .facts import dimension_fact, face_fact
+from .frame_cache import cached_frame
 from .values import cell_text, flag, sec_member
 
 logger = logging.getLogger(__name__)
 
 
 def statement_frame(statement: object, with_dimensions: bool = True) -> pd.DataFrame:
-    """The statement grid; with dimensions, each row's XBRL coordinates attached."""
-    frame = statement.to_dataframe(  # type: ignore[attr-defined]
-        include_unit=True,
-        include_point_in_time=True,
-        presentation=False,
-    )
-    return attach_dimension_metadata(frame, statement) if with_dimensions else frame
+    """The statement grid; with dimensions, each row's XBRL coordinates attached.
+
+    Read from the filing's frame cache when one is open (see
+    :mod:`.frame_cache`); a change to what this returns bumps its
+    ``FRAME_VERSION``.
+    """
+
+    def build() -> pd.DataFrame:
+        frame = statement.to_dataframe(  # type: ignore[attr-defined]
+            include_unit=True,
+            include_point_in_time=True,
+            presentation=False,
+        )
+        return attach_dimension_metadata(frame, statement) if with_dimensions else frame
+
+    variant = "dimensions" if with_dimensions else "plain"
+    return cached_frame(statement, variant, build)
 
 
 def attach_dimension_metadata(frame: pd.DataFrame, statement: object) -> pd.DataFrame:
