@@ -141,6 +141,8 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 10,srt:StatementGeographicalAxis,country:CN,,False,Geographical,China,"FY2024-2025 10-Ks label it CHINA"
 10,srt:StatementGeographicalAxis,country:SG,,False,Geographical,Singapore,"FY2025 10-K labels it SINGAPORE"
 10,srt:StatementGeographicalAxis,country:TW,,False,Geographical,Taiwan,"FY2025 10-K labels it TAIWAN"
+10,us-gaap:StatementBusinessSegmentsAxis,amd:FoundryMember,,False,Product,Foundry,"2009 segment (GLOBALFOUNDRIES, consolidated until March 2009) in the FY2011 10-K. 2009 operating income 968 + 142 + 35 + (433) + (48) = 664; revenue 66 + 4,170 + 1,167 + 1,101 + (1,101) = 5,403"
+10,us-gaap:StatementBusinessSegmentsAxis,amd:IntersegmentEliminationsMember,,False,Product,Intersegment Eliminations,"Eliminates 2009 Foundry sales to AMD; see amd:FoundryMember"
 1,us-gaap:StatementBusinessSegmentsAxis,,iPhone and related products and services,False,Product,iPhone,AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,iPad and related products and services,False,Product,iPad,AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,iPod,False,Product,iPod,AAPL 2010-2014 product line
@@ -148,8 +150,9 @@ company_id,axis,member,member_label,is_global,normalized_axis_label,normalized_m
 1,us-gaap:StatementBusinessSegmentsAxis,,Peripherals and Other Hardware,False,Product,Peripherals and Other Hardware,AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,"Software, service and other net sales",False,Product,"Software, service and other net sales",AAPL 2010-2012 product line
 1,us-gaap:StatementBusinessSegmentsAxis,,Accessories,False,Product,Accessories,AAPL 2013-2014 product line
-1,us-gaap:StatementBusinessSegmentsAxis,,Desktops,False,Business Segment,Desktops,Part of Total Mac net sales
-1,us-gaap:StatementBusinessSegmentsAxis,,Mac desktops,False,Business Segment,Mac desktops,Part of Total Mac net sales
+1,us-gaap:StatementBusinessSegmentsAxis,aapl:TotalMacsMember,,False,Product,Mac,"AAPL 2008-2012 Mac line, which the FY2013 10-K tags as aapl:AppleMacMember. FY2012 10-K: 80,477 + 32,424 + 5,615 + 8,534 + 2,778 + 3,459 + 23,221 = 156,508"
+1,us-gaap:StatementBusinessSegmentsAxis,aapl:DesktopsMember,,False,Product,Mac desktops,"Part of Mac, FY2010-2012 10-Ks: 6,040 + 17,181 = 23,221 in FY2012"
+1,us-gaap:StatementBusinessSegmentsAxis,aapl:PortablesMember,,False,Product,Mac portables,Part of Mac; see aapl:DesktopsMember
 1,srt:ConsolidationItemsAxis,us-gaap:CorporateNonSegmentMember,,False,Geographical,Corporate non-segment,"R&D and corporate costs beside the five regional segments, so segment operating income and expenses add up to the line (FY2025 10-K: 175,677 - 42,627 = 133,050)"
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveSegmentMember,,False,Business Segment,Automotive segment,Reportable segment; includes services and other
 5,us-gaap:StatementBusinessSegmentsAxis,tsla:AutomotiveMember,,False,Business Segment,Automotive segment,2016-2017 segment member

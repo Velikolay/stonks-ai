@@ -33,6 +33,7 @@ stages, each one reads its upstream tables from the database.
 | `rules/` | Logic shared by several stages: fact overrides and conflicts, override precedence, rounding (including Decimal helpers), units, periods, rewrites, connected components |
 | `rules/ordering.py` | Sorts that pick a winner: null placement, text order (case-insensitive, then lowercase first), first row per key, row numbers |
 | `rules/ids.py` | Stable ids hashed from a row's identity (BLAKE2b), and `md5` group ids |
+| `rules/prior_periods.py` | Prior filings for periods before a company's first filing, built from its earliest comparatives, and the quarterly gap filter for them |
 | `stages/` | One module (or package) per stage. Each is a pure `run(data) -> DataFrame` |
 | `parity/` | Snapshot and diff tools for checking a change against a baseline |
 

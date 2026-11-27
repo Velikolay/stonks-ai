@@ -10,6 +10,14 @@ A series that opens on such a YTD can still start with a quarter: when next
 year's filing prints the missing quarter as a comparative, that comparative
 is added as a backfill row, the opening YTD reduces against it, and the
 backfill itself is not shown.
+
+A prior filing's quarter (see :mod:`...rules.prior_periods`) in the year of
+the company's first 10-Q was printed a year later, possibly on another
+basis than the year's own filings: Amazon's first-quarter 2010 10-Q
+reprinted 2009's operating expenses with cost of sales inside them, 4,645
+against the 905 its second-quarter 10-Q implies. Such a quarter is only
+kept when its year adds up to the year to date printed beside a later
+quarter (:func:`on_own_basis`).
 """
 
 from __future__ import annotations
@@ -24,6 +32,8 @@ import polars as pl
 from ...records import ROW, frame_of, grouped, numbered, records
 from ...rules.ids import abs_hash_expr
 from ...rules.periods import consecutive_quarters
+from ...rules.prior_periods import is_prior_filing
+from ...rules.rounding import reprint_tolerance_of
 from .rows import SERIES, is_non_additive, is_per_share
 
 DECIMAL = pl.Decimal(38, 10)
@@ -44,16 +54,30 @@ class Opening:
     is_abstract: bool
     has_comparative: bool
     comparative_period_end: Optional[date]
+    is_prior: bool = False
 
 
 def opening_comparative(rows: Sequence[Opening]) -> Optional[tuple[int, int]]:
     """``(opening row, source row)`` when a comparative fills the quarter before.
 
-    The series must open on a YTD. The source is the earliest row whose
-    comparative ended one quarter before that opening.
+    The series must open on a YTD among the company's own filings. The source
+    is the earliest row whose comparative ended one quarter before that
+    opening. A prior filing's quarter already there needs no backfill; one
+    further back does not open the series (Mastercard's 2009 comprehensive
+    income: the first quarter is a prior one, the second-quarter 10-Q left
+    it out, and the nine months still reduce against next year's reprint
+    of the half year).
     """
-    opening = min(rows, key=lambda r: (r.period_end, r.is_abstract, r.id))
+    own = [r for r in rows if not r.is_prior]
+    if not own:
+        return None
+    opening = min(own, key=lambda r: (r.period_end, r.is_abstract, r.id))
     if opening.period != "YTD":
+        return None
+    if any(
+        r.is_prior and consecutive_quarters(opening.period_end, r.period_end)
+        for r in rows
+    ):
         return None
     sources = [
         r
@@ -71,7 +95,8 @@ def opening_comparative(rows: Sequence[Opening]) -> Optional[tuple[int, int]]:
 def comparative_backfill(quarters: pl.DataFrame) -> pl.DataFrame:
     """Backfill rows: the opening row, moved to its source's comparative."""
     rows = numbered(quarters).with_columns(
-        pl.col("comparative_value").is_not_null().alias("has_comparative")
+        pl.col("comparative_value").is_not_null().alias("has_comparative"),
+        is_prior_filing(pl.col("filing_id")).alias("is_prior"),
     )
     by_series = grouped(records(rows, Opening, key=SERIES), lambda r: r.series)
     found = [p for rs in by_series.values() if (p := opening_comparative(rs))]
@@ -130,6 +155,8 @@ class Amount:
     annual_period_end: Optional[date]
     is_non_additive: bool
     is_per_share: bool
+    #: From a prior filing: a comparative printed a year later.
+    is_prior: bool
 
     @property
     def amount_to_subtract(self) -> Optional[Decimal]:
@@ -163,10 +190,102 @@ class Reduced:
     prefer_ytd_anchor: bool
 
 
+def on_own_basis(ordered: Sequence[Amount]) -> tuple[set[int], dict[int, Decimal]]:
+    """Prior quarters to hide because their year does not add up, and new values.
+
+    A prior quarter was printed a year later than the quarters beside it,
+    possibly on another basis. Every published quarter printed beside its
+    year to date is a checkpoint: the year's earlier quarters must total
+    that YTD minus the quarter, within rounding, since Q4 subtracts the
+    nine months the same way. When a checkpoint's earlier quarters include a
+    prior one and are incomplete or do not add up, one side was restated or
+    the line is not additive (Meta's 2012 income allocated to participating
+    securities), neither can be told right, and those prior quarters are
+    hidden. Uber's 2019 third-quarter 10-Q restated 2018's segments: its
+    nine months less the quarter are 448, the first two quarters as the
+    earlier 10-Qs reprinted them 748. Per-share amounts and share counts do
+    not add up; those that share a year with an own quarter are hidden,
+    since a split between the filings puts them on another share basis, and
+    a year of prior quarters keeps them as printed. A year-to-date series
+    needs no check, since each YTD subtracts the quarters before it.
+
+    A year that adds up with a single prior quarter before its last
+    checkpoint gives that quarter the exact difference, so a reprint
+    rounded coarser keeps the year's digits: Mastercard's first-quarter 2010
+    10-Q, in millions, reprinted the 2009 quarter's investment income as
+    17,000 thousand, which its 2009 10-Qs give as 31,031 - 13,630 = 17,401.
+    """
+    hidden: set[int] = set()
+    exact: dict[int, Decimal] = {}
+    years = grouped(
+        [a for a in ordered if a.annual_period_end is not None],
+        lambda a: a.annual_period_end,
+    )
+    for year in years.values():
+        priors = [a.row_nr for a in year if a.is_prior]
+        if not priors:
+            continue
+        if any(a.is_per_share or (a.is_non_additive and a.period) for a in year):
+            if len(priors) < len(year):
+                hidden.update(priors)
+            continue
+        last: Optional[tuple[Decimal, list[Amount]]] = None
+        for checkpoint in year:
+            before = _before_checkpoint(checkpoint)
+            earlier = [a for a in year if a.period_end < checkpoint.period_end]
+            if before is None or not any(a.is_prior for a in earlier):
+                continue
+            if not _adds_up(earlier, checkpoint, before):
+                hidden.update(a.row_nr for a in earlier if a.is_prior)
+            last = (before, earlier)
+        if last is None:
+            continue
+        before, earlier = last
+        unknown = [a.row_nr for a in earlier if a.is_prior]
+        if len(unknown) == 1 and unknown[0] not in hidden:
+            own = (a.value for a in earlier if not a.is_prior and a.value is not None)
+            exact[unknown[0]] = before - sum(own, Decimal(0))
+    return hidden, exact
+
+
+def _before_checkpoint(amount: Amount) -> Optional[Decimal]:
+    """A published quarter's YTD less the quarter: the year's earlier quarters."""
+    if (
+        amount.period != "Q"
+        or amount.anchor_value is None
+        or amount.value is None
+        or amount.fiscal_quarter is None
+    ):
+        return None
+    return amount.anchor_value - amount.value
+
+
+def _adds_up(earlier: Sequence[Amount], checkpoint: Amount, before: Decimal) -> bool:
+    """One quarter each before the checkpoint, totalling ``before`` within rounding."""
+    values = [a.value for a in earlier if a.value is not None]
+    if (
+        len(values) != len(earlier)
+        or len({a.fiscal_quarter for a in earlier}) != len(earlier)
+        or len(earlier) != (checkpoint.fiscal_quarter or 0) - 1
+    ):
+        return False
+    printed = [*values, checkpoint.anchor_value, checkpoint.value]
+    unit = sum((reprint_tolerance_of(v) for v in printed if v is not None), Decimal(0))
+    return abs(sum(values, Decimal(0)) - before) <= max(unit, abs(before) / 1000)
+
+
 def reduce_series(amounts: Sequence[Amount]) -> Iterator[Reduced]:
     """Every amount of one series as a discrete quarter, in period order."""
     previous: Optional[Amount] = None
-    for amount in sorted(amounts, key=lambda a: a.period_end):
+    ordered = sorted(amounts, key=lambda a: a.period_end)
+    hidden, exact = on_own_basis(ordered)
+    for amount in ordered:
+        if amount.row_nr in hidden:
+            yield Reduced(amount.row_nr, amount.value, True, None, False)
+            previous = amount
+            continue
+        if amount.row_nr in exact:
+            amount.value = exact[amount.row_nr]
         prior = None
         if previous is not None and consecutive_quarters(
             amount.period_end, previous.period_end
@@ -233,6 +352,7 @@ def discrete_quarters(
         .with_columns(
             is_non_additive().alias("is_non_additive"),
             is_per_share(pl.col("unit")).alias("is_per_share"),
+            is_prior_filing(pl.col("filing_id")).alias("is_prior"),
         )
     )
     amounts = numbered(amounts)
@@ -252,6 +372,7 @@ def discrete_quarters(
         pl.lit(None, pl.Date).alias("annual_period_end"),
         pl.lit(False).alias("is_non_additive"),
         pl.lit(False).alias("is_per_share"),
+        is_prior_filing(pl.col("filing_id")).alias("is_prior"),
         pl.lit(False).alias("drop_ytd"),
         pl.lit(None, DECIMAL).alias("q3_ytd"),
         pl.lit(False).alias("prefer_ytd_anchor"),

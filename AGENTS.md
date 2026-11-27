@@ -175,7 +175,9 @@ de-SPAC with `--override` once.
 EDGAR only carries XBRL from roughly 2009 onward, so "everything available" means
 everything tagged, not the company's entire filing history. Confirm what actually
 landed with `sql/diagnostics/01_coverage.sql`, which lists filings per fiscal year
-and flags missing 10-K years.
+and flags missing 10-K years. The refresh adds the year before the first 10-K,
+and the quarters before the first 10-Q where they add up, from those filings'
+comparatives (see Prior periods under [Stage reference](#stage-reference)).
 
 The script is sequential with a delay between loads, because edgartools performs
 blocking HTTP calls. A failure on one ticker is logged and the run continues; the
@@ -427,6 +429,58 @@ kept one (`with_parents_on_kept_twins` in
 `quarterly_financials` filter them out. If a value vanishes from the
 presentation layer, this is usually why — check `financial_facts_normalized`
 before assuming ingestion dropped it.
+
+**Prior periods.** A company's first filings print the year before as
+comparatives: the first 10-K the prior fiscal year on every statement, each
+10-Q the same quarter a year back. A period before the company's first
+filing, printed exactly a year back, gets a prior filing
+([prior_periods.py](filings/refresh/rules/prior_periods.py)): id is the
+source filing's id negated, fiscal year one before the source's, and its rows
+are copies of the source's face rows carrying `comparative_value`, with the
+tree copied, plus the source's own dimension columns for that period. Each
+period has one source, the amendment first, so Apple's FY2008 comes from its
+restating FY2009 10-K/A. Copies keep their source's overrides, chain size and
+tie-break, so a label clash keeps the same winner and no later period
+changes. Yearly gains the first 10-K's prior year (Microsoft's FY2009, Uber's
+2018). Quarterly is stricter, because a prior quarter was printed a year
+after the quarters beside it and may be on another basis:
+
+- A prior quarter is kept only when its year adds up: at every quarter
+  printed beside its year to date, the earlier quarters, prior ones
+  included, must total that YTD minus the quarter within rounding, or the
+  prior ones are hidden (`on_own_basis` in
+  [ytd.py](filings/refresh/stages/quarterly/ytd.py)). Amazon's Q1 2010
+  10-Q reprinted 2009's operating expenses with cost of sales inside, 4,645
+  against the 905 its Q2 2009 10-Q implies. A lone prior quarter that passes
+  takes the exact difference, so a reprint in millions keeps the year's
+  digits (Mastercard's Q1 2009 investment income, 17,401 not 17,000).
+- Per-share amounts and share counts in a year with an own quarter are
+  hidden: a split between the filings changes their basis.
+- A prior year whose 10-K source restated it (a 10-K and its 10-K/A print it
+  differently) keeps no quarter printed before the restatement.
+- Every quarter before the first filing must reach the series' first own
+  quarter without a missing fiscal quarter (`attached_early_quarters`). So no
+  series gains a gap. Each line is judged on its own: Amazon's Q1 2010
+  10-Q, the only print of Q1 2009, has no gross profit line, so gross
+  profit's 2008 quarters stand apart while revenue's run on, and their
+  pointer at the missing subtotal is cleared. A Q2-first filer's prior year
+  starts at Q3: no XBRL filing dates its Q1, so its Q2 cannot be checked
+  against the nine months (Alphabet's 2008). Its balance sheet gains
+  nothing, since no 10-Q prints the prior Q1. A Q1-first filer gains the
+  whole year (Microsoft's fiscal 2009, Costco's).
+
+The API sends a breakdown's `fiscal_years` from the first annual report on
+(`filed_years` in [dimension_breakdowns.py](filings/db/dimension_breakdowns.py)),
+because the chart dates a split by its first year: Apple's regional
+segments reach FY2008 through the FY2009 10-K's comparative while its U.S.,
+China and other countries split starts in FY2009, and counting FY2008 made
+the regions an earlier presentation drawn inside that view.
+
+Only the comparative a filing stores is available: a face line the first
+10-K prints for the prior year alone (AMD's 2009 GLOBALFOUNDRIES financing,
+Tesla's 2010 `PaymentsToAcquireAssetsInvestingActivities`) is not stored,
+so that prior year's parent misses it in `05`. A second year back would need
+the parser to keep the first 10-K's third column on face rows.
 
 **Quarterly derivation.** A `YTD` fact becomes a discrete quarter by subtracting
 the previous quarter when that quarter ended 80 to 100 days earlier, or that

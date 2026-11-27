@@ -96,3 +96,16 @@ def _step(frontier: pl.DataFrame, targets: pl.DataFrame) -> pl.DataFrame:
         ]
     )
     return stepped.unique()
+
+
+def chain_sizes_with_copies(rows: pl.DataFrame, ties: pl.DataFrame) -> pl.DataFrame:
+    """:func:`chain_sizes` of the filed rows, and each prior copy its source's.
+
+    A copy is its source's comparative (see :mod:`...rules.prior_periods`),
+    so as a chain target it would lengthen the chains of later periods and
+    could change which of two concepts sharing a label wins there. ``ties``
+    maps a copy's ``id`` to its source's ``tie_id``.
+    """
+    sizes = chain_sizes(rows.join(ties, on="id", how="anti"))
+    copied = ties.join(sizes, left_on="tie_id", right_on="id", how="inner")
+    return pl.concat([sizes, copied.select(sizes.columns)])

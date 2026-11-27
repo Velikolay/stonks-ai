@@ -20,6 +20,7 @@ from ...rules.periods import (
     QUARTERLY_FORMS,
     fiscal_year_of,
 )
+from ...rules.prior_periods import filings_with_prior
 from ...rules.rounding import is_multiple_of
 
 PERIOD = ["company_id", "statement", "normalized_label", "period_end"]
@@ -139,7 +140,7 @@ def breakdown_rows(data: CompanyData) -> pl.DataFrame:
     rows = data.table("financial_facts_normalized").filter(
         pl.col("form_type").is_in([*ANNUAL_FORMS, *FOREIGN_ANNUAL_FORMS]) & _amounts()
     )
-    filings = _filing_years(data.table("filings"), "fiscal_filing_id")
+    filings = _filing_years(filings_with_prior(data), "fiscal_filing_id")
     return _with_fiscal_year(rows.join(filings, on="fiscal_filing_id", how="inner"))
 
 
