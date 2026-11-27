@@ -4,7 +4,7 @@
 -- Weighted-average share counts are duration but non-additive, so listed
 -- explicitly. EPS stays in this check (YTD-differenced for quarterly presentation).
 --
--- Tolerance is 0.5% of the annual value.
+-- Tolerance is 0.5% of the annual value, or three rounding units.
 
 \echo '--- Fiscal years where four quarters do not sum to the 10-K figure ---'
 WITH quarters AS (
@@ -48,7 +48,16 @@ JOIN quarters q
 WHERE NOT y.is_abstract
   AND y.value IS NOT NULL
   AND q.quarter_count = 4
-  AND ABS(y.value - q.quarterly_total) > GREATEST(ABS(y.value) * 0.005, 1)
+  -- Each printed quarter is rounded on its own, so Q1-Q3 and a Q4 taken
+  -- from the nine months may miss the 10-K by a rounding unit apiece.
+  AND ABS(y.value - q.quarterly_total) > GREATEST(
+      ABS(y.value) * 0.005,
+      3 * CASE
+          WHEN y.value % 1000000 = 0 THEN 1000000
+          WHEN y.value % 1000 = 0 THEN 1000
+          ELSE 1
+      END
+  )
 ORDER BY ABS(y.value - q.quarterly_total) DESC
 LIMIT 50;
 

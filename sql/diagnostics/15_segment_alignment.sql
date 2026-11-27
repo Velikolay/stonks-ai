@@ -21,7 +21,7 @@ WITH dimmed AS (
     FROM yearly_financials
     WHERE statement = 'Income Statement' AND axis <> '' AND member <> ''
       AND (
-          axis IN ('Product', 'Geographical', 'Segment')
+          axis IN ('Product', 'Geographical', 'Business Segment')
           OR axis ~* '(BusinessSegments|ConsolidationItems|ProductOrService|Geographical|SegmentsAxis)'
       )
 ),
@@ -60,7 +60,7 @@ WITH revenue_axes AS (
     WHERE statement = 'Income Statement' AND normalized_label = 'Revenue'
       AND parent_member = ''
       AND (
-          axis IN ('Product', 'Geographical', 'Segment')
+          axis IN ('Product', 'Geographical', 'Business Segment')
           OR axis ~* '(BusinessSegments|ConsolidationItems|ProductOrService|Geographical|SegmentsAxis)'
       )
 ),

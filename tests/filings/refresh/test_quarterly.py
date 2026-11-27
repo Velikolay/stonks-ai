@@ -190,6 +190,75 @@ def test_overshooting_quarters_move_onto_next_years_comparatives() -> None:
     assert values["2023-12-31"] == (D(400), "calculated")
 
 
+def test_members_follow_a_moved_year_onto_the_reprint_that_adds_up() -> None:
+    """The line's 2023 quarters move onto 2024's comparatives; so do its segments.
+
+    The filed segments include a business the 10-K later discontinued (Old,
+    200 a quarter). Next year's 10-Qs reprint each 2023 quarter without it,
+    A 120 + B 80 = 200, the restated line, so those members replace the
+    filed ones, and Q4 is the 10-K's members less the three restated quarters.
+    """
+    seg = {"axis": "Segment"}
+    rows = [
+        row(1, 2023, 1, 400, period="Q"),
+        row(2, 2023, 2, 400, period="Q"),
+        row(3, 2023, 3, 400, period="Q"),
+        row(4, 2023, 4, 1000),
+        row(5, 2023, 4, 600, member="A", **seg),
+        row(6, 2023, 4, 400, member="B", **seg),
+    ]
+    for q in (1, 2, 3):
+        end = f"2023-{QUARTER_ENDS[q]}"
+        rows += [
+            row(10 + q, 2023, q, 120, period="Q", member="A", **seg),
+            row(20 + q, 2023, q, 80, period="Q", member="B", **seg),
+            row(30 + q, 2023, q, 200, period="Q", member="Old", **seg),
+            row(
+                40 + q,
+                2024,
+                q,
+                300,
+                period="Q",
+                comparative_value=200,
+                comparative_period_end=end,
+            ),
+            row(
+                50 + q,
+                2023,
+                q,
+                120,
+                period="Q",
+                member="A",
+                filed_in=(2024, q),
+                is_duplicate=True,
+                **seg,
+            ),
+            row(
+                60 + q,
+                2023,
+                q,
+                80,
+                period="Q",
+                member="B",
+                filed_in=(2024, q),
+                is_duplicate=True,
+                **seg,
+            ),
+        ]
+    data = company(filings=filings(2023, 2024), financial_facts_normalized=rows)
+    out = quarterly.run(data).filter(pl.col("axis") == "Segment")
+    got = {
+        (r["member"], str(r["period_end"])): r["value"]
+        for r in out.iter_rows(named=True)
+        if str(r["period_end"]).startswith("2023")
+    }
+    assert ("Old", "2023-03-31") not in got
+    assert got[("A", "2023-06-30")] == D(120)
+    assert got[("B", "2023-09-30")] == D(80)
+    assert got[("A", "2023-12-31")] == D(600 - 360)
+    assert got[("B", "2023-12-31")] == D(400 - 240)
+
+
 def test_quarterly_rewrites_delete_set_and_add() -> None:
     member = {"axis": "Geographical"}
     data = company(

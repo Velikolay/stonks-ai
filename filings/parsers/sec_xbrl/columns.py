@@ -123,11 +123,18 @@ def current_column(columns: list[str]) -> str:
 
 
 def same_date_ytd_column(columns: list[str], quarter_column: str) -> Optional[str]:
-    """The year-to-date column ending on the quarter column's date, if any."""
+    """The year-to-date column ending on the quarter column's date, if any.
+
+    That is a ``(YTD)`` column or a bare date (Costco's 24 weeks). A ``(FY)``
+    column beside a quarter is a trailing twelve months, which Amazon's 10-Q
+    cash flow statements print, and not the year to date.
+    """
     if not is_quarter_column(quarter_column):
         return None
     end = column_end(quarter_column)
-    ytd = [c for c in columns if column_end(c) == end and not is_quarter_column(c)]
+    ytd = [
+        c for c in columns if column_end(c) == end and column_shape(c) in ("(ytd)", "")
+    ]
     return sorted(ytd)[-1] if ytd else None
 
 

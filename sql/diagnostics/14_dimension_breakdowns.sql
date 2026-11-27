@@ -14,10 +14,13 @@
 -- replace what was inferred for it. Confirm in the filing first.
 
 \echo '--- Exact breakdown years that do not add up in yearly_financials (should be empty) ---'
+-- An interim breakdown holds in 10-Q quarters filed since the latest 10-K,
+-- which yearly_financials does not have yet.
 WITH breakdown_years AS (
     SELECT b.*, fy AS fiscal_year
     FROM dimension_breakdowns b
     CROSS JOIN LATERAL unnest(b.fiscal_years) AS fy
+    WHERE b.source <> 'interim'
 ),
 rounded AS (
     SELECT

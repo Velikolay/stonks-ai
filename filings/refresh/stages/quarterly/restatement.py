@@ -6,7 +6,9 @@ quarters still fit under the 10-K, they replace the three quarters and Q4
 becomes the 10-K minus them. Other undimensioned income-statement lines of
 that year follow when next year's 10-K reprinted this year's figure
 unchanged, so subtotals stay on one basis. Per-share amounts and share
-counts stay on the filed quarters.
+counts stay on the filed quarters. A moved quarter's members follow axis by
+axis onto next year's reprint of them when it adds up to the restated
+quarter (:func:`with_restated_members`).
 
 Each line is read on its own (:func:`line_years`); only the decision to
 follow looks across the lines of a statement and year (:func:`moved_years`).
@@ -22,6 +24,7 @@ from typing import Iterable, Iterator, Optional, Sequence
 import polars as pl
 
 from ...records import frame_of, grouped, records
+from ...rules import ordering
 from ...rules.periods import (
     ANNUAL_FORMS,
     YEAR_GAP_DAYS,
@@ -29,6 +32,7 @@ from ...rules.periods import (
     days_between,
     within,
 )
+from ...rules.rounding import reprint_tolerance_of
 from .rows import is_per_share
 
 LINE = ["company_id", "statement", "normalized_label"]
@@ -332,3 +336,185 @@ def with_restated_values(
     return joined.with_columns(
         pl.when(eligible).then(pl.col("restated")).alias("restated_value")
     ).drop("restated")
+
+
+# --- Members follow a moved line-year ------------------------------------------
+
+#: The 10-Q that reprints a quarter a year later ends this many days after it.
+_REPRINT_DAYS = (340, 380)
+
+
+def reprint_adds_up(
+    members: dict[str, Decimal], restated: Decimal, splits: Sequence[Sequence[str]]
+) -> bool:
+    """The reprinted members, or one known split of them, add up to the restated line.
+
+    Rounded members may miss it by half a unit each, up to 0.1%. An axis that
+    holds a subtotal beside its parts only adds up through a split.
+    """
+
+    def close(values: list[Decimal]) -> bool:
+        if len(values) < 2:
+            return False
+        gap = abs(sum(values, Decimal(0)) - restated)
+        unit = max(reprint_tolerance_of(v) for v in values)
+        return gap <= min(unit * len(values), abs(restated) / 1000)
+
+    if close(list(members.values())):
+        return True
+    return any(
+        all(m in members for m in split) and close([members[m] for m in split])
+        for split in splits
+    )
+
+
+def following_members(
+    moved: Sequence[YearBasis],
+    normalized: pl.DataFrame,
+    filings: pl.DataFrame,
+    breakdowns: pl.DataFrame,
+) -> pl.DataFrame:
+    """Next year's reprint of each moved quarter, axis by axis, where it adds up.
+
+    A line-year that moved onto next year's comparatives leaves its members
+    on the filed basis, so they no longer add up to the line: S&P Global's
+    2012 quarters moved off McGraw-Hill Education when the FY2012 10-K put it
+    in discontinued operations, while the segments kept it. The reprint that
+    restated the line printed the members too (dedup hid them as a recast);
+    they replace the quarter's members on that axis when they add up to the
+    restated quarter. The earliest such 10-Q wins.
+    """
+    replaced = frame_of(
+        (
+            (*y.line, y.fiscal_tag, period_end, value)
+            for y in moved
+            for period_end, value in y.replacements.items()
+        ),
+        {
+            "company_id": pl.Int32,
+            "statement": pl.String,
+            "normalized_label": pl.String,
+            "fiscal_tag": pl.Int32,
+            "period_end": pl.Date,
+            "restated": DECIMAL,
+        },
+    )
+    if replaced.is_empty():
+        return normalized.clear()
+    later = filings.select(
+        pl.col("id").alias("filing_id"),
+        "filing_date",
+        pl.col("fiscal_period_end").alias("reprint_period_end"),
+    )
+    candidates = (
+        normalized.filter(
+            (pl.col("form_type") == "10-Q")
+            & (pl.col("period") == "Q")
+            & (pl.col("axis") != "")
+            & ~pl.col("is_abstract")
+            & pl.col("value").is_not_null()
+        )
+        .join(replaced, on=[*LINE, "period_end"], how="inner")
+        .join(later, on="filing_id", how="inner")
+        .filter(
+            within(
+                days_between(pl.col("reprint_period_end"), pl.col("period_end")),
+                _REPRINT_DAYS,
+            )
+        )
+    )
+    if candidates.is_empty():
+        return normalized.clear()
+    # One row per member of a filing; a slot tagged twice keeps the first.
+    candidates = ordering.distinct_on(
+        candidates,
+        [*LINE, "axis", "member", "period_end", "filing_id"],
+        ["is_duplicate", "id"],
+    )
+    splits = grouped(
+        breakdowns.filter(pl.col("parent_member") == "").iter_rows(named=True),
+        lambda b: (b["company_id"], b["statement"], b["normalized_label"], b["axis"]),
+    )
+    slot = [*LINE, "axis", "period_end"]
+    chosen: list[tuple] = []
+    for key, rows in candidates.group_by([*slot, "restated"], maintain_order=True):
+        restated = key[-1]
+        by_filing = grouped(rows.iter_rows(named=True), lambda r: r["filing_id"])
+        axis_splits = [b["members"] for b in splits.get(key[:4], [])]
+        for filing_id, members in sorted(
+            by_filing.items(), key=lambda f: (f[1][0]["filing_date"], f[0])
+        ):
+            values = {m["member"]: m["value"] for m in members}
+            if reprint_adds_up(values, restated, axis_splits):
+                chosen.append((*key[:-1], filing_id))
+                break
+    picked = frame_of(
+        chosen,
+        {
+            "company_id": pl.Int32,
+            "statement": pl.String,
+            "normalized_label": pl.String,
+            "axis": pl.String,
+            "period_end": pl.Date,
+            "filing_id": pl.Int32,
+        },
+    )
+    return candidates.join(picked, on=[*slot, "filing_id"], how="semi")
+
+
+def with_restated_members(
+    restated: pl.DataFrame,
+    moved: Sequence[YearBasis],
+    normalized: pl.DataFrame,
+    filings: pl.DataFrame,
+    breakdowns: pl.DataFrame,
+) -> pl.DataFrame:
+    """``restated`` with each followed quarter's members swapped for the reprint.
+
+    The reprint rows take the moved quarter's fiscal tag and quarter from its
+    line, and their value as ``restated_value``, so Q4 subtracts the three
+    restated quarters on that axis.
+    """
+    reprints = following_members(moved, normalized, filings, breakdowns)
+    if reprints.is_empty():
+        return restated
+    slot = [*LINE, "axis", "period_end"]
+    line = restated.filter(
+        (pl.col("axis") == "") & pl.col("restated_value").is_not_null()
+    )
+    line_cols = [
+        "fiscal_filing_id",
+        "filing_period_end",
+        "filing_fiscal_year",
+        "fiscal_quarter",
+        "filing_fiscal_tag",
+        "fiscal_year",
+        "fiscal_tag",
+        "annual_period_end",
+    ]
+    context = ordering.distinct_on(
+        line.select(*LINE, "period_end", *line_cols),
+        [*LINE, "period_end"],
+        ["fiscal_tag"],
+    )
+    added = (
+        reprints.drop([c for c in line_cols if c in reprints.columns], strict=False)
+        .join(context, on=[*LINE, "period_end"], how="inner")
+        .with_columns(
+            pl.lit("calculated").alias("source_type"),
+            pl.lit(False).alias("is_comparative_backfill"),
+            pl.lit(None, DECIMAL).alias("anchor_value"),
+            pl.lit(False).alias("is_non_additive"),
+            pl.lit(False).alias("is_per_share"),
+            pl.lit(False).alias("drop_ytd"),
+            pl.lit(None, DECIMAL).alias("q3_ytd"),
+            pl.lit(False).alias("prefer_ytd_anchor"),
+            pl.lit(False).alias("is_duplicate"),
+            pl.col("value").alias("restated_value"),
+        )
+    )
+    kept = restated.join(added.select(slot).unique(), on=slot, how="anti")
+    return pl.concat(
+        [kept, added.select(restated.columns).cast(restated.schema)],
+        how="vertical",
+    )
