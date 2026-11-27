@@ -15,6 +15,7 @@ from filings.parsers.sec_xbrl import (
     reporting_currency_amounts,
 )
 from filings.parsers.sec_xbrl.columns import is_mostly_empty, period_type
+from filings.parsers.sec_xbrl.context import is_shell_company
 from filings.parsers.sec_xbrl.facts import face_fact
 from filings.parsers.sec_xbrl.segments import (
     SegmentSupplement,
@@ -39,6 +40,27 @@ class TestSECXBRLParser:
         assert fiscal_focus({}) == (None, None)
         assert fiscal_focus({"fiscal_year": "2025"}) == (2025, None)
         assert fiscal_focus({"fiscal_period": "H1"}) == (None, None)
+
+    @staticmethod
+    def _xbrl_with_shell_flag(values):
+        xbrl = Mock()
+        query = xbrl.facts.query.return_value.by_concept.return_value
+        query.to_dataframe.return_value = pd.DataFrame(
+            {"concept": ["dei:EntityShellCompany"] * len(values), "value": values}
+        )
+        return xbrl
+
+    def test_shell_company_reads_the_cover_flag(self):
+        """A SPAC's cover declares a shell; the merged company's does not."""
+        assert is_shell_company(self._xbrl_with_shell_flag(["true"])) is True
+        assert is_shell_company(self._xbrl_with_shell_flag(["false"])) is False
+
+    def test_shell_company_without_the_tag_is_not_a_shell(self):
+        """A cover that omits the flag, or an instance that fails, is not a shell."""
+        assert is_shell_company(self._xbrl_with_shell_flag([])) is False
+        broken = Mock()
+        broken.facts.query.side_effect = RuntimeError("no facts")
+        assert is_shell_company(broken) is False
 
     def test_create_financial_fact_with_hierarchy_requires_period(self):
         """Test that _create_financial_fact_with_hierarchy includes period field."""

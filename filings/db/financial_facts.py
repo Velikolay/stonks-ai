@@ -11,6 +11,33 @@ from filings.models import FinancialFact, FinancialFactCreate, PeriodType
 
 logger = logging.getLogger(__name__)
 
+#: The ``(position, id)`` of every copy of one key, in insertion order.
+Copies = list[tuple[Optional[int], int]]
+
+
+def copy_for(
+    copies: Optional[Copies], position: Optional[int], *, header: bool = False
+) -> Optional[int]:
+    """The copy of a key that a fact at ``position`` points at.
+
+    A line printed more than once in one statement shares one key: cash at
+    the beginning and end of the period beside the total of the cash
+    reconciliation (SoFi), or Total assets repeated in a block of VIE
+    amounts. A total follows its parts, so a parent is the nearest copy at or
+    after the fact, and otherwise the last one; a header precedes its lines,
+    so it is the nearest copy before the fact, and otherwise the first.
+    """
+    if not copies:
+        return None
+    if position is None or len(copies) == 1:
+        return copies[-1][1] if not header else copies[0][1]
+    placed = [(p, i) for p, i in copies if p is not None]
+    if header:
+        before = [i for p, i in placed if p <= position]
+        return before[-1] if before else copies[0][1]
+    after = [i for p, i in placed if p >= position]
+    return after[0] if after else copies[-1][1]
+
 
 class FinancialFactOperationsAsync:
     """Async financial facts database operations."""
@@ -77,7 +104,7 @@ class FinancialFactOperationsAsync:
         try:
             async with self.engine.connect() as conn:
                 fact_ids = []
-                key_id_map = {}
+                key_id_map: dict[str, Copies] = {}
                 for fact in facts:
                     stmt = (
                         insert(self.financial_facts_table)
@@ -116,7 +143,7 @@ class FinancialFactOperationsAsync:
                     result = await conn.execute(stmt)
                     fact_id = result.scalar()
                     fact_ids.append(fact_id)
-                    key_id_map[fact.key] = fact_id
+                    key_id_map.setdefault(fact.key, []).append((fact.position, fact_id))
                     if fact.dimensions:
                         await conn.execute(
                             insert(self.dimensions_table),
@@ -133,11 +160,16 @@ class FinancialFactOperationsAsync:
                             ],
                         )
 
-                for fact in facts:
+                for fact, id_val in zip(facts, fact_ids):
                     if fact.abstract_key or fact.parent_key:
-                        id_val = key_id_map.get(fact.key)
-                        parent_id = key_id_map.get(fact.parent_key)
-                        abstract_id = key_id_map.get(fact.abstract_key)
+                        parent_id = copy_for(
+                            key_id_map.get(fact.parent_key), fact.position
+                        )
+                        abstract_id = copy_for(
+                            key_id_map.get(fact.abstract_key),
+                            fact.position,
+                            header=True,
+                        )
 
                         await conn.execute(
                             update(self.financial_facts_table)

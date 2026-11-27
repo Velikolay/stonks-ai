@@ -588,3 +588,32 @@ class TestFinancialFactModelValidation:
             period=PeriodType.Q,
         )
         assert fact_with_period.period == PeriodType.Q
+
+
+class TestCopyFor:
+    """Which copy of a key printed twice in one statement a fact points at."""
+
+    def test_parent_is_the_nearest_copy_after_the_fact(self):
+        from filings.db.financial_facts import copy_for
+
+        # SoFi's cash flow: beginning (57) and end (58) of the period, the
+        # reconciliation's total (62). Its parts at 60 and 61 sum to 62.
+        copies = [(57, 1), (58, 2), (62, 3)]
+        assert copy_for(copies, 60) == 3
+        assert copy_for(copies, 55) == 1
+        assert copy_for(copies, 70) == 3
+
+    def test_header_is_the_nearest_copy_before_the_fact(self):
+        from filings.db.financial_facts import copy_for
+
+        copies = [(10, 1), (40, 2)]
+        assert copy_for(copies, 45, header=True) == 2
+        assert copy_for(copies, 20, header=True) == 1
+        assert copy_for(copies, 5, header=True) == 1
+
+    def test_single_copy_and_missing_positions(self):
+        from filings.db.financial_facts import copy_for
+
+        assert copy_for(None, 3) is None
+        assert copy_for([(None, 7)], 3) == 7
+        assert copy_for([(4, 1), (9, 2)], None) == 2

@@ -1,5 +1,7 @@
 -- Coverage: what has actually been ingested, and which periods are missing.
 -- Run this first: normalization problems are often just missing filings.
+-- Shell-company filings (a SPAC before its merger) are left out of the
+-- refresh, so they are left out here too and listed on their own last.
 
 \echo '--- Filings and facts per company, form and fiscal year ---'
 SELECT
@@ -12,6 +14,7 @@ SELECT
 FROM companies c
 JOIN filings f ON f.company_id = c.id
 LEFT JOIN financial_facts ff ON ff.filing_id = f.id
+WHERE NOT f.is_shell
 GROUP BY c.id, c.name, f.form_type, f.fiscal_year
 ORDER BY c.id, f.form_type, f.fiscal_year;
 
@@ -23,6 +26,7 @@ WITH span AS (
         MAX(fiscal_year) AS last_year
     FROM filings
     WHERE form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
+      AND NOT is_shell
     GROUP BY company_id
 )
 SELECT
@@ -36,6 +40,7 @@ WHERE NOT EXISTS (
     WHERE f.company_id = s.company_id
       AND f.form_type IN ('10-K', '10-K/A', '20-F', '20-F/A')
       AND f.fiscal_year = y.fiscal_year
+      AND NOT f.is_shell
 )
 ORDER BY s.company_id, y.fiscal_year;
 
@@ -49,4 +54,18 @@ SELECT
 FROM filings f
 LEFT JOIN financial_facts ff ON ff.filing_id = f.id
 WHERE ff.id IS NULL
+  AND NOT f.is_shell
+ORDER BY f.company_id, f.fiscal_period_end;
+
+\echo '--- Shell-company filings the refresh skips (dei:EntityShellCompany) ---'
+SELECT
+    f.company_id,
+    f.number AS accession_number,
+    f.form_type,
+    f.fiscal_period_end,
+    COUNT(ff.id) AS facts
+FROM filings f
+LEFT JOIN financial_facts ff ON ff.filing_id = f.id
+WHERE f.is_shell
+GROUP BY f.company_id, f.number, f.form_type, f.fiscal_period_end
 ORDER BY f.company_id, f.fiscal_period_end;
