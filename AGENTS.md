@@ -1236,6 +1236,20 @@ change to the comparative-column rules in `columns.py` shows up on 10-Q
 balance sheets and statements of equity first. Re-ingest with `--override`
 afterwards, since existing rows were written by the old parser.
 
+A re-ingest after a parser change is mostly CPU, not network: edgartools'
+HTTP cache (`~/.edgar/_tcache`) already keeps every filing, and building the
+statement tables (`Statement.to_dataframe` with its dimension metadata) costs
+about two thirds of the time. The parser caches those tables per filing in
+`~/.edgar/_frames` ([frame_cache.py](filings/parsers/sec_xbrl/frame_cache.py)),
+so the second re-ingest of a filing runs only our rules: Palantir's 19 10-Qs
+in 11 seconds instead of 24, with identical facts. A table depends only on
+the filing, edgartools and the functions that build it, never on our rules,
+so the file name carries the edgartools version and a hash of those
+functions' source (`BUILDERS`): changing them or upgrading misses the cache
+by itself. Tables are stored serialized, so a parse cannot alter what the
+next one reads, and tests run with the cache off (`tests/conftest.py`).
+`FILINGS_FRAME_CACHE=0` turns it off, and a path moves it.
+
 **Bad SEC data.** Companies do restate, mistag and occasionally invert signs.
 Confirm against the filing HTML, or the instance with `make xbrl-facts`,
 before concluding this. The fix is a narrowly
